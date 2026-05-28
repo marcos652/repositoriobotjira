@@ -154,7 +154,7 @@ export default function NovaDemandaPage() {
         setHistory([{ texto: texto.trim().slice(0, 120), time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), status: 'success', response: data }, ...history]);
         setTexto(''); setNomeCliente(''); setUrlsImagens([]); setReferencia('Painel Externo'); setShowMeta(false);
       } else {
-        setResult({ success: false, error: data.error || data.details?.detail?.[0]?.msg || 'Erro desconhecido' });
+        setResult({ success: false, error: data.error || data.detail || data.details?.detail?.[0]?.msg || 'Erro desconhecido' });
         setHistory([{ texto: texto.trim().slice(0, 120), time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), status: 'error' }, ...history]);
       }
     } catch {
