@@ -158,7 +158,7 @@ export default function NovaDemandaPage() {
         setHistory([{ texto: texto.trim().slice(0, 120), time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), status: 'error' }, ...history]);
       }
     } catch {
-      setResult({ success: false, error: 'Não foi possível conectar ao bot em localhost:8000' });
+      setResult({ success: false, error: 'Não foi possível conectar ao bot de criar demanda' });
     } finally {
       setLoading(false);
     }
@@ -461,8 +461,8 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
                   <Bot size={15} color="#fff" />
                 </div>
                 <div>
-                  <p className="nd-connection-name">Gemini CLI Bot</p>
-                  <p className="nd-connection-url">localhost:8000</p>
+                  <p className="nd-connection-name">API Bot Jira</p>
+                  <p className="nd-connection-url">apibotjira.vercel.app</p>
                 </div>
                 <div className="nd-connection-status">
                   <div className="nd-pulse-sm" />
