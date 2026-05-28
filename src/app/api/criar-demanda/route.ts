@@ -5,8 +5,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const botUrl = process.env.BOT_API_URL || 'http://localhost:8000';
+    const botPath = process.env.BOT_API_URL ? '/api/criar-demanda' : '/criar-demanda';
 
-    const res = await fetch(`${botUrl}/criar-demanda`, {
+    const res = await fetch(`${botUrl}${botPath}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
