@@ -16,7 +16,7 @@ export async function GET(
     }
 
     const res = await fetchWithRetry(
-      `${JIRABOT_CONFIG.BASE_URL}/api/demanda/${issueKey}`,
+      `${JIRABOT_CONFIG.BASE_URL}/api/issue/${issueKey}`,
       { method: 'GET' }
     );
 
@@ -29,22 +29,27 @@ export async function GET(
       );
     }
 
+    // Extract fields from Jira response format
+    const f = data?.fields || data;
+
     // Return normalized response
     return NextResponse.json({
       success: true,
-      issue_key: issueKey,
-      summary: data?.summary || null,
-      texto: data?.texto || null,
-      nome_cliente: data?.nome_cliente || null,
+      issue_key: data?.key || issueKey,
+      summary: f?.summary || data?.summary || null,
+      texto: f?.description || data?.texto || null,
+      nome_cliente: f?.customfield_10062 || data?.nome_cliente || null,
       referencia: data?.referencia || null,
       urls_imagens: data?.urls_imagens || [],
-      status: data?.status || null,
-      issuetype: data?.issuetype || data?.issue_type || null,
-      priority: data?.priority || null,
-      assignee: data?.assignee || null,
-      created: data?.created || null,
-      updated: data?.updated || null,
-      url: `https://movingpay.atlassian.net/browse/${issueKey}`,
+      status: f?.status?.name || data?.status || null,
+      issuetype: f?.issuetype?.name || data?.issuetype || null,
+      priority: f?.priority?.name || data?.priority || null,
+      assignee: f?.assignee?.displayName || data?.assignee || null,
+      reporter: f?.reporter?.displayName || null,
+      created: f?.created || data?.created || null,
+      updated: f?.updated || data?.updated || null,
+      labels: f?.labels || [],
+      url: `https://movingpay.atlassian.net/browse/${data?.key || issueKey}`,
       raw: data,
     });
   } catch (error: any) {
