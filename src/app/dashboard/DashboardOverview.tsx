@@ -145,8 +145,13 @@ export default function DashboardOverview() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <Loader2 size={36} className="animate-spin text-gradient" style={{ color: 'var(--accent-blue)' }} />
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-5">
+        <div className="relative">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'var(--accent-blue-light)' }}>
+            <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
+          </div>
+          <div className="absolute inset-0 rounded-2xl animate-ping" style={{ background: 'var(--accent-blue-light)', opacity: 0.3 }} />
+        </div>
         <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando dados da Visão Geral...</p>
       </div>
     );
@@ -160,10 +165,10 @@ export default function DashboardOverview() {
             <WifiOff size={28} style={{ color: 'var(--accent-rose)' }} />
           </div>
           <div>
-            <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Erro de conexão</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>{error || 'Não foi possível carregar os dados'}</p>
+            <p className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Erro de conexão</p>
+            <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>{error || 'Não foi possível carregar os dados'}</p>
           </div>
-          <button onClick={() => fetchData()} className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-105" style={{ background: 'var(--gradient-primary)', color: '#fff' }}>
+          <button onClick={() => fetchData()} className="px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg" style={{ background: 'var(--gradient-primary)', color: '#fff', boxShadow: 'var(--shadow-glow-blue)' }}>
             Tentar novamente
           </button>
         </div>
@@ -206,8 +211,8 @@ export default function DashboardOverview() {
       case 'suporte_module':
         return (
           <Link href="/dashboard/suporte" className="block group h-full">
-            <div className="rounded-2xl border transition-all duration-300 hover:shadow-xl overflow-hidden h-full flex flex-col justify-between"
-              style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+            <div className="overflow-hidden h-full flex flex-col justify-between transition-all duration-300 hover:shadow-xl"
+              style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(var(--glass-blur))', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)' }}>
               {/* Header */}
               <div className="flex items-center justify-between p-7 pb-5">
                 <div className="flex items-center gap-4">
@@ -250,8 +255,8 @@ export default function DashboardOverview() {
       case 'dev_module':
         return (
           <Link href="/dashboard/dev" className="block group h-full">
-            <div className="rounded-2xl border transition-all duration-300 hover:shadow-xl overflow-hidden h-full flex flex-col justify-between"
-              style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+            <div className="overflow-hidden h-full flex flex-col justify-between transition-all duration-300 hover:shadow-xl"
+              style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(var(--glass-blur))', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)' }}>
               {/* Header */}
               <div className="flex items-center justify-between p-7 pb-5">
                 <div className="flex items-center gap-4">
@@ -347,28 +352,28 @@ export default function DashboardOverview() {
   };
 
   return (
-    <div className="space-y-16 animate-fade-in">
+    <div className="space-y-10 animate-fade-in">
 
-      {/* ═══ HEADER BAR (Jira-style, clean) ═══ */}
+      {/* ═══ HEADER BAR — Premium Glass ═══ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         style={{
-          padding: '16px 20px',
-          borderRadius: '4px',
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-default)',
+          padding: '18px 24px',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--glass-bg)',
+          backdropFilter: 'blur(var(--glass-blur))',
+          border: '1px solid var(--glass-border)',
+          boxShadow: 'var(--shadow-sm)',
         }}>
         <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold" style={{ color: 'var(--text-primary)', margin: 0 }}>
+          <h2 className="text-base font-bold tracking-tight" style={{ color: 'var(--text-primary)', margin: 0 }}>
             Visão Geral
           </h2>
           {totalCritical > 0 && (
             <span
-              className="text-xs font-bold"
+              className="text-[11px] font-bold px-2.5 py-0.5 rounded-full"
               style={{
-                background: '#FFEBE6',
-                color: '#BF2600',
-                padding: '2px 8px',
-                borderRadius: '3px',
+                background: 'var(--accent-rose-light)',
+                color: 'var(--accent-rose)',
               }}
             >
               {totalCritical} {totalCritical === 1 ? 'item crítico' : 'itens críticos'}
@@ -377,13 +382,13 @@ export default function DashboardOverview() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={() => fetchData(true)} disabled={refreshing}
-            className="flex items-center gap-1.5 text-xs font-medium transition-colors active:scale-95"
+            className="flex items-center gap-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 hover:border-blue-500/30 cursor-pointer"
             style={{
-              padding: '6px 12px',
-              borderRadius: '3px',
-              background: 'var(--bg-secondary)',
+              padding: '8px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'rgba(15, 23, 42, 0.5)',
               color: 'var(--text-secondary)',
-              border: '1px solid var(--border-default)',
+              border: '1px solid var(--border-primary)',
             }}>
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             Atualizar
@@ -394,15 +399,15 @@ export default function DashboardOverview() {
 
       {/* Edit mode banner hint */}
       {editMode && (
-        <div className="flex items-center gap-3 px-5 py-3 rounded-xl text-sm animate-fade-in -mb-10"
-          style={{ background: 'var(--accent-blue-light)', color: 'var(--accent-blue)', border: '1px solid var(--accent-blue)' }}>
+        <div className="flex items-center gap-3 px-5 py-3.5 text-sm animate-fade-in -mb-4"
+          style={{ background: 'var(--accent-blue-light)', color: 'var(--accent-blue)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: 'var(--radius-lg)' }}>
           <ArrowRight className="animate-pulse" size={18} />
           <span><strong>Modo organização ativo</strong> — Arraste as alças para reordenar qualquer card no painel livremente. Clique em &quot;Concluir&quot; para salvar.</span>
         </div>
       )}
 
       {/* ═══════ FLAT CARD GRID (6 columns) ═══════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-6 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
         {drag.order.map((cardId, i) => {
           const content = renderCardContent(cardId, i);
           if (!content) return null;

@@ -45,7 +45,7 @@ export default function ChartCard({
     },
     theme: { mode: 'dark' },
     grid: {
-      borderColor: 'var(--border-secondary)',
+      borderColor: 'rgba(148, 163, 184, 0.06)',
       strokeDashArray: 3,
       padding: { left: 8, right: 8 },
     },
@@ -54,6 +54,7 @@ export default function ChartCard({
         style: {
           colors: 'var(--text-tertiary)',
           fontSize: '11px',
+          fontWeight: 500,
         },
       },
       axisBorder: { show: false },
@@ -77,19 +78,19 @@ export default function ChartCard({
       fontWeight: 500,
     },
     dataLabels: { enabled: false },
-    stroke: { curve: 'smooth', width: 2 },
+    stroke: { curve: 'smooth', width: 2.5 },
     fill: {
       type: 'gradient',
       gradient: {
         shadeIntensity: 1,
-        opacityFrom: 0.4,
-        opacityTo: 0.05,
+        opacityFrom: 0.35,
+        opacityTo: 0.02,
         stops: [0, 100],
       },
     },
     colors: [
       '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B',
-      '#EF4444', '#06B6D4', '#EC4899', '#6366F1',
+      '#F43F5E', '#06B6D4', '#EC4899', '#6366F1',
     ],
     series,
     ...options,
@@ -174,10 +175,13 @@ export default function ChartCard({
 
   return (
     <div
-      className={`rounded-2xl border overflow-hidden transition-all duration-300 hover:shadow-lg ${className}`}
+      className={`overflow-hidden transition-all duration-300 hover:shadow-xl group ${className}`}
       style={{
-        background: 'var(--bg-card)',
-        borderColor: 'var(--border-primary)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(var(--glass-blur))',
+        WebkitBackdropFilter: 'blur(var(--glass-blur))',
+        border: '1px solid var(--glass-border)',
+        borderRadius: 'var(--radius-lg)',
         boxShadow: 'var(--shadow-sm)',
       }}
     >
@@ -185,11 +189,11 @@ export default function ChartCard({
       <div className="px-7 pt-6 pb-5">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-[1rem] font-bold" style={{ color: 'var(--text-primary)' }}>
+            <h3 className="text-[1rem] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
               {title}
             </h3>
             {subtitle && (
-              <p className="text-xs mt-2" style={{ color: 'var(--text-tertiary)' }}>
+              <p className="text-xs mt-1.5 font-medium" style={{ color: 'var(--text-tertiary)' }}>
                 {subtitle}
               </p>
             )}
@@ -197,8 +201,12 @@ export default function ChartCard({
         </div>
       </div>
 
-      {/* Divider */}
-      <div style={{ height: '1px', background: 'var(--border-primary)', margin: '0 1.75rem' }} />
+      {/* Gradient Divider */}
+      <div style={{
+        height: '1px',
+        margin: '0 1.75rem',
+        background: 'linear-gradient(90deg, transparent 0%, var(--border-primary) 20%, var(--border-primary) 80%, transparent 100%)',
+      }} />
 
       {/* Chart */}
       <div className="px-4 pt-2 pb-4">

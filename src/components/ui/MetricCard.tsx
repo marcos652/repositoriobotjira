@@ -26,36 +26,34 @@ export default function MetricCard({
     <div
       className="metric-card animate-fade-in-up group"
       style={{
-        animationDelay: `${index * 0.07}s`,
+        animationDelay: `${index * 0.08}s`,
         '--card-accent': accentColor,
         '--card-accent-bg': accentBg,
       } as React.CSSProperties}
     >
-      {/* Accent top bar */}
-      <div
-        className="absolute top-0 left-0 right-0 h-[3px] group-hover:h-1 transition-all duration-300"
-        style={{ background: accentColor, opacity: 0.6 }}
-      />
-
-      {/* Icon — top right */}
-      <div className="flex items-start justify-between mb-5">
-        <p className="text-[11px] font-semibold uppercase tracking-widest"
+      {/* Icon & Title row */}
+      <div className="flex items-start justify-between mb-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em]"
           style={{ color: 'var(--text-tertiary)', lineHeight: '1.4' }}
         >
           {title}
         </p>
         <div
-          className="w-11 h-11 rounded flex items-center justify-center flex-shrink-0 ml-3"
-          style={{ background: accentBg, color: accentColor }}
+          className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg"
+          style={{
+            background: accentBg,
+            color: accentColor,
+            boxShadow: `0 0 0 0 ${accentColor}00`,
+          }}
         >
           {icon}
         </div>
       </div>
 
       {/* Value — big and bold */}
-      <div className="flex items-baseline gap-2 mt-auto">
-        <span className="text-3xl font-extrabold tabular-nums"
-          style={{ color: 'var(--text-primary)', lineHeight: '1.1' }}
+      <div className="flex items-baseline gap-2 mt-auto relative z-10">
+        <span className="text-[2rem] font-extrabold tabular-nums tracking-tight"
+          style={{ color: 'var(--text-primary)', lineHeight: '1' }}
         >
           {typeof value === 'number' ? value.toLocaleString('pt-BR') : value}
         </span>
@@ -68,15 +66,15 @@ export default function MetricCard({
 
       {/* Change indicator */}
       {change !== undefined && (
-        <div className="flex items-center gap-2 mt-4 pt-4"
-          style={{ borderTop: '1px solid var(--border-secondary)' }}>
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold"
+        <div className="flex items-center gap-2.5 mt-5 pt-4 relative z-10"
+          style={{ borderTop: '1px solid var(--border-primary)' }}>
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold"
             style={{
               background: isPositive
                 ? 'var(--accent-emerald-light)'
                 : isNegative
                   ? 'var(--accent-rose-light)'
-                  : 'var(--bg-secondary)',
+                  : 'rgba(100,116,139,0.1)',
               color: isPositive
                 ? 'var(--accent-emerald)'
                 : isNegative
