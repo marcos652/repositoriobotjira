@@ -146,7 +146,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         }}
       >
         {navItems.map((section, sIdx) => (
-          <div key={section.section} className={sIdx > 0 ? 'mt-4' : ''}>
+          <div key={section.section} className={sIdx > 0 ? 'mt-5' : ''}>
             {/* Section label */}
             {!collapsed && (
               <p className="text-[9px] font-bold tracking-[0.15em] mb-1.5 px-3 uppercase"
@@ -162,7 +162,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 }} />
             )}
 
-            <div className="space-y-[4px]">
+            <div className="space-y-[8px]">
               {section.items.map((item) => {
                 const active = isActive(item.href);
                 const Icon = item.icon;
@@ -174,7 +174,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     title={collapsed ? item.label : undefined}
                     className={`
                       relative flex items-center text-[13px] font-semibold group
-                      ${collapsed ? 'justify-center py-2.5 px-0' : 'gap-2.5 px-3 py-[9px]'}
+                      ${collapsed ? 'justify-center py-2.5 px-0' : 'gap-2.5 px-3 py-[11px]'}
                     `}
                     style={{
                       borderRadius: '12px',
