@@ -89,6 +89,9 @@ export async function POST(request: NextRequest) {
       const normalized = {
         success: true,
         issue_key: issueKey || null,
+        summary: data?.summary || data?.raw?.summary || data?.result?.summary || null,
+        issuetype: data?.issuetype || data?.issue_type || data?.raw?.issuetype || null,
+        url: data?.url || (issueKey ? `https://movingpay.atlassian.net/browse/${issueKey}` : null),
         message: issueKey
           ? `Demanda ${issueKey} criada com sucesso!`
           : 'Demanda criada, mas não foi possível identificar o número.',

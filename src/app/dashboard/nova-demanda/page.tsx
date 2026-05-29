@@ -512,43 +512,123 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
         </div>
       </div>
 
-      {/* Toast */}
-      {result && (
+      {/* ── Success Result Card ── */}
+      {result && result.success && result.data?.issue_key && (
+        <div className="animate-fade-in" style={{
+          position: 'fixed', bottom: '24px', right: '24px', zIndex: 100,
+          width: '400px', maxWidth: 'calc(100vw - 48px)',
+          borderRadius: '20px', overflow: 'hidden',
+          background: 'linear-gradient(145deg, #0F172A 0%, #1E1B4B 50%, #0F172A 100%)',
+          border: '1px solid rgba(99,102,241,0.2)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(99,102,241,0.1)',
+        }}>
+          {/* Top gradient bar */}
+          <div style={{ height: '3px', background: 'linear-gradient(90deg, #22C55E, #3B82F6, #8B5CF6)' }} />
+
+          {/* Header */}
+          <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{
+                width: '32px', height: '32px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.05))',
+                border: '1px solid rgba(34,197,94,0.15)',
+              }}>
+                <CheckCircle2 size={16} style={{ color: '#4ADE80' }} />
+              </div>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#4ADE80' }}>Demanda criada!</span>
+            </div>
+            <button onClick={() => setResult(null)} style={{
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '8px', padding: '6px', cursor: 'pointer', color: 'rgba(148,163,184,0.5)',
+              transition: 'all 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(148,163,184,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            ><X size={14} /></button>
+          </div>
+
+          {/* Issue Key — Big Badge */}
+          <div style={{ padding: '16px 24px 12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{
+              fontSize: '24px', fontWeight: 900, letterSpacing: '-0.03em',
+              background: 'linear-gradient(135deg, #60A5FA, #A78BFA)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>
+              {result.data.issue_key}
+            </span>
+            {result.data.issuetype && (
+              <span style={{
+                padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.05em',
+                background: result.data.issuetype === 'Bug' ? 'rgba(244,63,94,0.12)' : result.data.issuetype === 'Story' ? 'rgba(34,197,94,0.12)' : 'rgba(59,130,246,0.12)',
+                color: result.data.issuetype === 'Bug' ? '#FB7185' : result.data.issuetype === 'Story' ? '#4ADE80' : '#60A5FA',
+                border: `1px solid ${result.data.issuetype === 'Bug' ? 'rgba(244,63,94,0.15)' : result.data.issuetype === 'Story' ? 'rgba(34,197,94,0.15)' : 'rgba(59,130,246,0.15)'}`,
+              }}>
+                {result.data.issuetype}
+              </span>
+            )}
+          </div>
+
+          {/* Summary */}
+          {result.data.summary && (
+            <div style={{ padding: '0 24px 16px' }}>
+              <p style={{
+                fontSize: '13px', fontWeight: 500, lineHeight: '1.5',
+                color: 'rgba(226,232,240,0.7)', margin: 0,
+              }}>
+                {result.data.summary}
+              </p>
+            </div>
+          )}
+
+          {/* Action bar */}
+          <div style={{
+            padding: '14px 24px',
+            borderTop: '1px solid rgba(255,255,255,0.04)',
+            display: 'flex', alignItems: 'center', gap: '10px',
+          }}>
+            <a
+              href={result.data.url || `https://movingpay.atlassian.net/browse/${result.data.issue_key}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                padding: '10px 16px', borderRadius: '12px', fontSize: '12px', fontWeight: 700,
+                background: 'linear-gradient(135deg, #3B82F6, #6366F1)',
+                color: '#fff', textDecoration: 'none',
+                boxShadow: '0 4px 16px rgba(59,130,246,0.25)',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(59,130,246,0.35)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(59,130,246,0.25)'; }}
+            >
+              Abrir no Jira
+              <ArrowUpRight size={14} />
+            </a>
+            <button
+              onClick={() => setResult(null)}
+              style={{
+                padding: '10px 16px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                color: 'rgba(226,232,240,0.6)', cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(226,232,240,0.6)'; }}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Success without key / Error Toast ── */}
+      {result && (!result.success || (result.success && !result.data?.issue_key)) && (
         <div className={`nd-toast ${result.success ? 'success' : 'error'} animate-fade-in`}>
           {result.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
           <div className="nd-toast-content">
-            {result.success && result.data?.issue_key ? (
-              <>
-                <p className="nd-toast-title">✨ Demanda criada com sucesso!</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '4px',
-                    padding: '4px 12px', borderRadius: '8px', fontSize: '16px', fontWeight: 800,
-                    background: 'rgba(34,197,94,0.12)', color: '#4ADE80', letterSpacing: '-0.02em',
-                  }}>
-                    {result.data.issue_key}
-                  </span>
-                  <a href={`https://movingpay.atlassian.net/browse/${result.data.issue_key}`}
-                    target="_blank" rel="noopener noreferrer"
-                    style={{ fontSize: '11px', color: '#60A5FA', fontWeight: 600, textDecoration: 'underline' }}>
-                    Abrir no Jira →
-                  </a>
-                </div>
-              </>
-            ) : result.success ? (
-              <>
-                <p className="nd-toast-title">✨ Demanda criada!</p>
-                <p className="nd-toast-desc">{result.data?.message || 'Criada mas o número não foi identificado.'}</p>
-                {result.data?.raw && (
-                  <pre className="nd-toast-json">{JSON.stringify(result.data.raw, null, 2)}</pre>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="nd-toast-title">Falha ao criar</p>
-                {result.error && <p className="nd-toast-desc">{result.error}</p>}
-              </>
-            )}
+            <p className="nd-toast-title">{result.success ? '✨ Demanda criada!' : 'Falha ao criar'}</p>
+            {result.error && <p className="nd-toast-desc">{result.error}</p>}
+            {result.success && result.data?.message && <p className="nd-toast-desc">{result.data.message}</p>}
           </div>
           <button onClick={() => setResult(null)} className="nd-toast-close"><X size={16} /></button>
         </div>
