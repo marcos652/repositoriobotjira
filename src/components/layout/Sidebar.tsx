@@ -7,7 +7,8 @@ import {
   LayoutDashboard, Headphones, Code2, Settings, BarChart3,
   Users, GitBranch, Zap, ChevronLeft, ChevronRight, HelpCircle,
   Kanban, CalendarDays, ClipboardList, Bell, Shield,
-  Bot, BookOpen, ScrollText, Building2, FileBarChart, Sparkles
+  Bot, BookOpen, ScrollText, Building2, FileBarChart, Sparkles,
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -19,45 +20,45 @@ const navItems = [
   {
     section: 'MENU',
     items: [
-      { label: 'Nova Demanda', href: '/dashboard/nova-demanda', icon: Sparkles },
-      { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-      { label: 'Suporte', href: '/dashboard/suporte', icon: Headphones },
-      { label: 'Desenvolvimento', href: '/dashboard/dev', icon: Code2 },
+      { label: 'Nova Demanda', href: '/dashboard/nova-demanda', icon: Sparkles, accent: '#A78BFA' },
+      { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, accent: '#3B82F6' },
+      { label: 'Suporte', href: '/dashboard/suporte', icon: Headphones, accent: '#3B82F6' },
+      { label: 'Desenvolvimento', href: '/dashboard/dev', icon: Code2, accent: '#8B5CF6' },
     ],
   },
   {
     section: 'PLANEJAMENTO',
     items: [
-      { label: 'Backlog', href: '/dashboard/backlog', icon: ClipboardList },
-      { label: 'Kanban Board', href: '/dashboard/kanban', icon: Kanban },
-      { label: 'Calendário', href: '/dashboard/calendario', icon: CalendarDays },
+      { label: 'Backlog', href: '/dashboard/backlog', icon: ClipboardList, accent: '#3B82F6' },
+      { label: 'Kanban Board', href: '/dashboard/kanban', icon: Kanban, accent: '#8B5CF6' },
+      { label: 'Calendário', href: '/dashboard/calendario', icon: CalendarDays, accent: '#06B6D4' },
     ],
   },
   {
     section: 'ANÁLISE',
     items: [
-      { label: 'Métricas', href: '/dashboard/metricas', icon: BarChart3 },
-      { label: 'Relatórios', href: '/dashboard/relatorios', icon: FileBarChart },
-      { label: 'SLA / Contratos', href: '/dashboard/sla', icon: Shield },
-      { label: 'Equipe', href: '/dashboard/equipe', icon: Users },
-      { label: 'Releases', href: '/dashboard/releases', icon: GitBranch },
+      { label: 'Métricas', href: '/dashboard/metricas', icon: BarChart3, accent: '#10B981' },
+      { label: 'Relatórios', href: '/dashboard/relatorios', icon: FileBarChart, accent: '#10B981' },
+      { label: 'SLA / Contratos', href: '/dashboard/sla', icon: Shield, accent: '#F59E0B' },
+      { label: 'Equipe', href: '/dashboard/equipe', icon: Users, accent: '#06B6D4' },
+      { label: 'Releases', href: '/dashboard/releases', icon: GitBranch, accent: '#8B5CF6' },
     ],
   },
   {
     section: 'GESTÃO',
     items: [
-      { label: 'Clientes', href: '/dashboard/clientes', icon: Building2 },
-      { label: 'Base de Conhecimento', href: '/dashboard/knowledge', icon: BookOpen },
-      { label: 'Automações', href: '/dashboard/automacoes', icon: Bot },
+      { label: 'Clientes', href: '/dashboard/clientes', icon: Building2, accent: '#F59E0B' },
+      { label: 'Base de Conhecimento', href: '/dashboard/knowledge', icon: BookOpen, accent: '#06B6D4' },
+      { label: 'Automações', href: '/dashboard/automacoes', icon: Bot, accent: '#F43F5E' },
     ],
   },
   {
     section: 'SISTEMA',
     items: [
-      { label: 'Integrações', href: '/dashboard/integracoes', icon: Zap },
-      { label: 'Logs / Auditoria', href: '/dashboard/logs', icon: ScrollText },
-      { label: 'Notificações', href: '/dashboard/notificacoes', icon: Bell },
-      { label: 'Configurações', href: '/dashboard/configuracoes', icon: Settings },
+      { label: 'Integrações', href: '/dashboard/integracoes', icon: Zap, accent: '#F59E0B' },
+      { label: 'Logs / Auditoria', href: '/dashboard/logs', icon: ScrollText, accent: '#64748B' },
+      { label: 'Notificações', href: '/dashboard/notificacoes', icon: Bell, accent: '#F43F5E' },
+      { label: 'Configurações', href: '/dashboard/configuracoes', icon: Settings, accent: '#64748B' },
     ],
   },
 ];
@@ -74,41 +75,41 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <aside
       className="sidebar-modern fixed left-0 top-0 h-screen flex flex-col z-40"
       style={{
-        width: collapsed ? '76px' : '264px',
+        width: collapsed ? '76px' : '272px',
         transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       {/* ─── Logo Area ─── */}
       <div
-        className="flex items-center h-[64px] flex-shrink-0"
+        className="flex items-center h-[68px] flex-shrink-0"
         style={{
-          padding: collapsed ? '0 18px' : '0 22px',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          padding: collapsed ? '0 18px' : '0 24px',
+          borderBottom: '1px solid rgba(255,255,255,0.04)',
         }}
       >
-        <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden">
+        <Link href="/dashboard" className="flex items-center gap-3.5 overflow-hidden">
           <div className="sidebar-logo-icon relative flex-shrink-0">
             <div
-              className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center"
+              className="w-[38px] h-[38px] rounded-[12px] flex items-center justify-center"
               style={{
-                background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #A78BFA 100%)',
-                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
+                background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #A78BFA 100%)',
+                boxShadow: '0 4px 16px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255,255,255,0.2)',
               }}
             >
-              <Zap size={17} color="#fff" strokeWidth={2.5} />
+              <Zap size={18} color="#fff" strokeWidth={2.5} />
             </div>
           </div>
           {!collapsed && (
             <div className="sidebar-fade-in overflow-hidden">
               <p
-                className="text-[15px] font-bold leading-none whitespace-nowrap"
+                className="text-[16px] font-extrabold leading-none whitespace-nowrap tracking-tight"
                 style={{ color: '#F1F5F9' }}
               >
                 Jira<span style={{ color: '#A78BFA' }}>Ops</span>
               </p>
               <p
-                className="text-[10px] mt-1 whitespace-nowrap font-medium"
-                style={{ color: 'rgba(148, 163, 184, 0.7)' }}
+                className="text-[10px] mt-1.5 whitespace-nowrap font-medium"
+                style={{ color: 'rgba(148, 163, 184, 0.5)' }}
               >
                 Dashboard v2.0
               </p>
@@ -121,16 +122,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav
         className="flex-1 overflow-y-auto overflow-x-hidden sidebar-scroll"
         style={{
-          padding: collapsed ? '16px 10px' : '16px 14px',
+          padding: collapsed ? '14px 10px' : '14px 12px',
         }}
       >
         {navItems.map((section, sIdx) => (
-          <div key={section.section} className={sIdx > 0 ? 'mt-7' : ''}>
+          <div key={section.section} className={sIdx > 0 ? 'mt-6' : ''}>
             {/* Section label */}
             {!collapsed && (
               <p
-                className="text-[10px] font-semibold tracking-[0.15em] mb-2 px-3"
-                style={{ color: 'rgba(148, 163, 184, 0.45)' }}
+                className="text-[10px] font-bold tracking-[0.15em] mb-2 px-3 uppercase"
+                style={{ color: 'rgba(148, 163, 184, 0.3)' }}
               >
                 {section.section}
               </p>
@@ -139,14 +140,14 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <div
                 className="my-4 mx-auto"
                 style={{
-                  width: '24px',
+                  width: '28px',
                   height: '1px',
-                  background: 'rgba(255,255,255,0.06)',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)',
                 }}
               />
             )}
 
-            <div className="space-y-[2px]">
+            <div className="space-y-[3px]">
               {section.items.map((item) => {
                 const active = isActive(item.href);
                 const Icon = item.icon;
@@ -158,23 +159,24 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     title={collapsed ? item.label : undefined}
                     className={`
                       sidebar-nav-item relative flex items-center text-[13px] font-medium group
-                      ${collapsed ? 'justify-center py-2.5 px-0' : 'gap-3 px-3 py-[9px]'}
+                      ${collapsed ? 'justify-center py-2.5 px-0' : 'gap-3 px-3 py-[10px]'}
                       ${active ? 'sidebar-nav-active' : ''}
                     `}
                     style={{
-                      borderRadius: '8px',
-                      transition: 'all 0.15s ease',
+                      borderRadius: '10px',
+                      transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
                       background: active
-                        ? 'rgba(99, 102, 241, 0.12)'
+                        ? `linear-gradient(135deg, ${item.accent}18, ${item.accent}08)`
                         : 'transparent',
-                      color: active ? '#A78BFA' : 'rgba(203, 213, 225, 0.7)',
+                      color: active ? item.accent : 'rgba(203, 213, 225, 0.6)',
+                      boxShadow: active ? `0 0 20px ${item.accent}08` : 'none',
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
                         (e.currentTarget as HTMLAnchorElement).style.background =
-                          'rgba(255, 255, 255, 0.04)';
+                          'rgba(255, 255, 255, 0.03)';
                         (e.currentTarget as HTMLAnchorElement).style.color =
-                          'rgba(241, 245, 249, 0.95)';
+                          'rgba(241, 245, 249, 0.9)';
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -182,42 +184,44 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         (e.currentTarget as HTMLAnchorElement).style.background =
                           'transparent';
                         (e.currentTarget as HTMLAnchorElement).style.color =
-                          'rgba(203, 213, 225, 0.7)';
+                          'rgba(203, 213, 225, 0.6)';
                       }
                     }}
                   >
-                    {/* Active pill indicator */}
+                    {/* Active pill indicator — left side glow bar */}
                     {active && !collapsed && (
                       <div
                         className="absolute left-0 top-1/2 -translate-y-1/2"
                         style={{
                           width: '3px',
-                          height: '18px',
-                          borderRadius: '0 4px 4px 0',
-                          background: 'linear-gradient(180deg, #8B5CF6, #6366F1)',
-                          boxShadow: '0 0 8px rgba(139, 92, 246, 0.5)',
+                          height: '20px',
+                          borderRadius: '0 6px 6px 0',
+                          background: item.accent,
+                          boxShadow: `0 0 12px ${item.accent}60`,
                         }}
                       />
                     )}
 
-                    {/* Icon */}
+                    {/* Icon with subtle glow when active */}
                     <div
                       className="flex items-center justify-center flex-shrink-0"
                       style={{
-                        width: '22px',
-                        height: '22px',
-                        transition: 'transform 0.15s ease',
+                        width: collapsed ? '36px' : '24px',
+                        height: collapsed ? '36px' : '24px',
+                        borderRadius: collapsed ? '10px' : '0',
+                        background: collapsed && active ? `${item.accent}15` : 'transparent',
+                        transition: 'all 0.2s ease',
                       }}
                     >
                       <Icon
-                        size={17}
+                        size={collapsed ? 18 : 17}
                         strokeWidth={active ? 2.2 : 1.7}
                       />
                     </div>
 
                     {/* Label */}
                     {!collapsed && (
-                      <span className="whitespace-nowrap">{item.label}</span>
+                      <span className="whitespace-nowrap truncate">{item.label}</span>
                     )}
 
                     {/* Active dot for collapsed */}
@@ -226,10 +230,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         className="absolute -right-0.5 top-1/2 -translate-y-1/2"
                         style={{
                           width: '3px',
-                          height: '18px',
-                          borderRadius: '4px 0 0 4px',
-                          background: 'linear-gradient(180deg, #8B5CF6, #6366F1)',
-                          boxShadow: '0 0 8px rgba(139, 92, 246, 0.5)',
+                          height: '20px',
+                          borderRadius: '6px 0 0 6px',
+                          background: item.accent,
+                          boxShadow: `0 0 12px ${item.accent}60`,
                         }}
                       />
                     )}
@@ -242,16 +246,18 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           translate-x-1 group-hover:translate-x-0
                           transition-all duration-150 pointer-events-none whitespace-nowrap z-50"
                         style={{
-                          background: '#1E293B',
+                          background: 'rgba(17, 24, 39, 0.95)',
                           color: '#F1F5F9',
-                          borderRadius: '8px',
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(255,255,255,0.06)',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)',
+                          backdropFilter: 'blur(12px)',
                         }}
                       >
                         {item.label}
                         <div
                           className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent"
-                          style={{ borderRightColor: '#1E293B' }}
+                          style={{ borderRightColor: 'rgba(17, 24, 39, 0.95)' }}
                         />
                       </div>
                     )}
@@ -267,31 +273,31 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div
         className="flex-shrink-0"
         style={{
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          padding: collapsed ? '12px 10px' : '14px',
+          borderTop: '1px solid rgba(255,255,255,0.04)',
+          padding: collapsed ? '12px 10px' : '14px 12px',
         }}
       >
         {/* Help link */}
         {!collapsed && (
           <Link
             href="#"
-            className="sidebar-nav-item flex items-center gap-3 px-3 py-[9px] text-[12px] font-medium mb-3 group"
+            className="sidebar-nav-item flex items-center gap-3 px-3 py-[9px] text-[12px] font-medium mb-2 group"
             style={{
-              borderRadius: '8px',
-              color: 'rgba(148, 163, 184, 0.6)',
-              transition: 'all 0.15s ease',
+              borderRadius: '10px',
+              color: 'rgba(148, 163, 184, 0.45)',
+              transition: 'all 0.2s ease',
             }}
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLAnchorElement).style.background =
-                'rgba(255, 255, 255, 0.04)';
+                'rgba(255, 255, 255, 0.03)';
               (e.currentTarget as HTMLAnchorElement).style.color =
-                'rgba(241, 245, 249, 0.9)';
+                'rgba(241, 245, 249, 0.8)';
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLAnchorElement).style.background =
                 'transparent';
               (e.currentTarget as HTMLAnchorElement).style.color =
-                'rgba(148, 163, 184, 0.6)';
+                'rgba(148, 163, 184, 0.45)';
             }}
           >
             <HelpCircle size={16} strokeWidth={1.7} />
@@ -302,21 +308,23 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* User + collapse toggle */}
         {!collapsed ? (
           <div className="flex items-center gap-2">
-            {/* User card */}
+            {/* User card — glass style */}
             <div
-              className="flex items-center gap-2.5 flex-1 min-w-0 px-3 py-2.5"
+              className="flex items-center gap-3 flex-1 min-w-0 px-3 py-3"
               style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255,255,255,0.04)',
+                borderRadius: '12px',
+                transition: 'all 0.2s ease',
               }}
             >
               <div className="relative flex-shrink-0">
                 <div
-                  className="w-[30px] h-[30px] rounded-[8px] flex items-center justify-center text-[11px] font-bold"
+                  className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-[11px] font-bold"
                   style={{
-                    background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                    background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
                     color: '#fff',
+                    boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
                   }}
                 >
                   MV
@@ -326,52 +334,71 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   className="absolute -bottom-0.5 -right-0.5 w-[10px] h-[10px] rounded-full"
                   style={{
                     background: '#22C55E',
-                    border: '2px solid #0F172A',
-                    boxShadow: '0 0 6px rgba(34, 197, 94, 0.5)',
+                    border: '2px solid #070B14',
+                    boxShadow: '0 0 8px rgba(34, 197, 94, 0.5)',
                   }}
                 />
               </div>
               <div className="min-w-0 flex-1">
                 <p
-                  className="text-[12px] font-semibold truncate"
+                  className="text-[12px] font-bold truncate"
                   style={{ color: '#E2E8F0' }}
                 >
                   Marcos Vinicius
                 </p>
                 <p
                   className="text-[10px] truncate"
-                  style={{ color: 'rgba(148, 163, 184, 0.5)' }}
+                  style={{ color: 'rgba(148, 163, 184, 0.4)' }}
                 >
                   Administrador
                 </p>
               </div>
+              {/* Logout icon */}
+              <button
+                className="flex-shrink-0 p-1 rounded-md transition-colors cursor-pointer"
+                style={{ color: 'rgba(148,163,184,0.3)' }}
+                title="Sair"
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = '#F43F5E';
+                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(244,63,94,0.08)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color = 'rgba(148,163,184,0.3)';
+                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                }}
+              >
+                <LogOut size={14} />
+              </button>
             </div>
 
             {/* Collapse button */}
             <button
               onClick={onToggle}
-              className="sidebar-collapse-btn flex items-center justify-center flex-shrink-0"
+              className="sidebar-collapse-btn flex items-center justify-center flex-shrink-0 cursor-pointer"
               style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                color: 'rgba(148, 163, 184, 0.6)',
-                transition: 'all 0.15s ease',
-                cursor: 'pointer',
+                width: '34px',
+                height: '34px',
+                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255,255,255,0.04)',
+                color: 'rgba(148, 163, 184, 0.4)',
+                transition: 'all 0.2s ease',
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.background =
-                  'rgba(255, 255, 255, 0.08)';
+                  'rgba(255, 255, 255, 0.06)';
                 (e.currentTarget as HTMLButtonElement).style.color =
                   '#F1F5F9';
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  'rgba(255,255,255,0.08)';
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.background =
-                  'rgba(255, 255, 255, 0.04)';
+                  'rgba(255, 255, 255, 0.02)';
                 (e.currentTarget as HTMLButtonElement).style.color =
-                  'rgba(148, 163, 184, 0.6)';
+                  'rgba(148, 163, 184, 0.4)';
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  'rgba(255,255,255,0.04)';
               }}
               title="Recolher menu"
             >
@@ -383,10 +410,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {/* Mini user avatar */}
             <div className="relative">
               <div
-                className="w-[30px] h-[30px] rounded-[8px] flex items-center justify-center text-[10px] font-bold"
+                className="w-[34px] h-[34px] rounded-[10px] flex items-center justify-center text-[10px] font-bold"
                 style={{
-                  background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                  background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
                   color: '#fff',
+                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)',
                 }}
               >
                 MV
@@ -395,7 +423,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 className="absolute -bottom-0.5 -right-0.5 w-[9px] h-[9px] rounded-full"
                 style={{
                   background: '#22C55E',
-                  border: '2px solid #0F172A',
+                  border: '2px solid #070B14',
                 }}
               />
             </div>
@@ -403,28 +431,27 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {/* Expand button */}
             <button
               onClick={onToggle}
-              className="sidebar-collapse-btn flex items-center justify-center"
+              className="sidebar-collapse-btn flex items-center justify-center cursor-pointer"
               style={{
                 width: '100%',
-                height: '30px',
-                borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                color: 'rgba(148, 163, 184, 0.6)',
-                transition: 'all 0.15s ease',
-                cursor: 'pointer',
+                height: '32px',
+                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255,255,255,0.04)',
+                color: 'rgba(148, 163, 184, 0.4)',
+                transition: 'all 0.2s ease',
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.background =
-                  'rgba(255, 255, 255, 0.08)';
+                  'rgba(255, 255, 255, 0.06)';
                 (e.currentTarget as HTMLButtonElement).style.color =
                   '#F1F5F9';
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.background =
-                  'rgba(255, 255, 255, 0.04)';
+                  'rgba(255, 255, 255, 0.02)';
                 (e.currentTarget as HTMLButtonElement).style.color =
-                  'rgba(148, 163, 184, 0.6)';
+                  'rgba(148, 163, 184, 0.4)';
               }}
               title="Expandir menu"
             >
