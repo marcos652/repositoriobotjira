@@ -16,16 +16,16 @@ const mockBacklog = [
 ];
 
 const priorityStyle: Record<string, { bg: string; color: string }> = {
-  'Crítica': { bg: '#FFEBE6', color: '#BF2600' },
-  'Alta': { bg: '#FFF0B3', color: '#974F0C' },
-  'Média': { bg: '#DEEBFF', color: '#0747A6' },
-  'Baixa': { bg: '#E3FCEF', color: '#006644' },
+  'Crítica': { bg: 'var(--accent-rose-light)', color: 'var(--accent-rose)' },
+  'Alta': { bg: 'var(--accent-amber-light)', color: 'var(--accent-amber)' },
+  'Média': { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue)' },
+  'Baixa': { bg: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' },
 };
 
 const typeStyle: Record<string, { bg: string; color: string }> = {
-  'Story': { bg: '#E3FCEF', color: '#006644' },
-  'Bug': { bg: '#FFEBE6', color: '#BF2600' },
-  'Task': { bg: '#DEEBFF', color: '#0747A6' },
+  'Story': { bg: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' },
+  'Bug': { bg: 'var(--accent-rose-light)', color: 'var(--accent-rose)' },
+  'Task': { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue)' },
 };
 
 export default function BacklogPage() {

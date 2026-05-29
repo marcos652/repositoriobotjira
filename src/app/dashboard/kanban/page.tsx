@@ -6,7 +6,7 @@ import IssueDetailPanel from '@/components/ui/IssueDetailPanel';
 
 const columns = [
   {
-    title: 'TO DO', color: '#6B7280', bgColor: 'rgba(107,114,128,0.08)',
+    title: 'TO DO', color: 'var(--text-secondary)', bgColor: 'rgba(100,116,139,0.06)',
     items: [
       { id: 'DSMM-142', title: 'Implementar autenticação SSO', type: 'Story', assignee: 'LS' },
       { id: 'DSMM-139', title: 'Corrigir bug no envio de e-mails', type: 'Bug', assignee: 'AP' },
@@ -14,27 +14,27 @@ const columns = [
     ],
   },
   {
-    title: 'IN PROGRESS', color: '#0052CC', bgColor: 'rgba(0,82,204,0.06)',
+    title: 'IN PROGRESS', color: 'var(--accent-blue)', bgColor: 'var(--accent-blue-light)',
     items: [
       { id: 'DSMM-118', title: 'Migração para TypeScript 5', type: 'Task', assignee: 'CM' },
       { id: 'DSMM-115', title: 'Redesign da tela de login', type: 'Story', assignee: 'MV' },
     ],
   },
   {
-    title: 'CODE REVIEW', color: '#5243AA', bgColor: 'rgba(82,67,170,0.06)',
+    title: 'CODE REVIEW', color: 'var(--accent-violet)', bgColor: 'var(--accent-violet-light)',
     items: [
       { id: 'DSMM-110', title: 'Feature de exportação CSV', type: 'Story', assignee: 'AP' },
     ],
   },
   {
-    title: 'QA', color: '#FF991F', bgColor: 'rgba(255,153,31,0.06)',
+    title: 'QA', color: 'var(--accent-amber)', bgColor: 'var(--accent-amber-light)',
     items: [
       { id: 'DSMM-108', title: 'Validação de formulário de cadastro', type: 'Bug', assignee: 'JR' },
       { id: 'DSMM-105', title: 'Integração com gateway de pagamento', type: 'Story', assignee: 'LS' },
     ],
   },
   {
-    title: 'DONE', color: '#00875A', bgColor: 'rgba(0,135,90,0.06)',
+    title: 'DONE', color: 'var(--accent-emerald)', bgColor: 'var(--accent-emerald-light)',
     items: [
       { id: 'DSMM-100', title: 'Configuração de CI/CD', type: 'Task', assignee: 'CM' },
       { id: 'DSMM-98', title: 'Setup de monitoramento', type: 'Task', assignee: 'MV' },
@@ -44,9 +44,9 @@ const columns = [
 ];
 
 const typeColors: Record<string, { bg: string; color: string }> = {
-  Story: { bg: '#E3FCEF', color: '#006644' },
-  Bug: { bg: '#FFEBE6', color: '#BF2600' },
-  Task: { bg: '#DEEBFF', color: '#0747A6' },
+  Story: { bg: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' },
+  Bug: { bg: 'var(--accent-rose-light)', color: 'var(--accent-rose)' },
+  Task: { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue)' },
 };
 
 export default function KanbanPage() {

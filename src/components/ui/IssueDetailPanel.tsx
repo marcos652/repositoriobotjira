@@ -38,28 +38,28 @@ interface IssueDetailPanelProps {
 }
 
 const statusStyle: Record<string, { bg: string; color: string }> = {
-  'new': { bg: '#DEEBFF', color: '#0747A6' },
-  'indeterminate': { bg: '#FFF0B3', color: '#974F0C' },
-  'done': { bg: '#E3FCEF', color: '#006644' },
+  'new': { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue)' },
+  'indeterminate': { bg: 'var(--accent-amber-light)', color: 'var(--accent-amber)' },
+  'done': { bg: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' },
 };
 
 const priorityConfig: Record<string, { color: string; icon: React.ReactNode }> = {
-  'Highest': { color: '#BF2600', icon: <Flag size={13} style={{ color: '#BF2600' }} /> },
-  'High': { color: '#DE350B', icon: <Flag size={13} style={{ color: '#DE350B' }} /> },
-  'Medium': { color: '#FF991F', icon: <Flag size={13} style={{ color: '#FF991F' }} /> },
-  'Low': { color: '#0052CC', icon: <Flag size={13} style={{ color: '#0052CC' }} /> },
-  'Lowest': { color: '#00875A', icon: <Flag size={13} style={{ color: '#00875A' }} /> },
-  'Crítica': { color: '#BF2600', icon: <Flag size={13} style={{ color: '#BF2600' }} /> },
-  'Alta': { color: '#DE350B', icon: <Flag size={13} style={{ color: '#DE350B' }} /> },
-  'Média': { color: '#FF991F', icon: <Flag size={13} style={{ color: '#FF991F' }} /> },
-  'Baixa': { color: '#0052CC', icon: <Flag size={13} style={{ color: '#0052CC' }} /> },
+  'Highest': { color: 'var(--accent-rose)', icon: <Flag size={13} style={{ color: 'var(--accent-rose)' }} /> },
+  'High': { color: 'var(--accent-rose)', icon: <Flag size={13} style={{ color: 'var(--accent-rose)' }} /> },
+  'Medium': { color: 'var(--accent-amber)', icon: <Flag size={13} style={{ color: 'var(--accent-amber)' }} /> },
+  'Low': { color: 'var(--accent-blue)', icon: <Flag size={13} style={{ color: 'var(--accent-blue)' }} /> },
+  'Lowest': { color: 'var(--accent-emerald)', icon: <Flag size={13} style={{ color: 'var(--accent-emerald)' }} /> },
+  'Crítica': { color: 'var(--accent-rose)', icon: <Flag size={13} style={{ color: 'var(--accent-rose)' }} /> },
+  'Alta': { color: 'var(--accent-rose)', icon: <Flag size={13} style={{ color: 'var(--accent-rose)' }} /> },
+  'Média': { color: 'var(--accent-amber)', icon: <Flag size={13} style={{ color: 'var(--accent-amber)' }} /> },
+  'Baixa': { color: 'var(--accent-blue)', icon: <Flag size={13} style={{ color: 'var(--accent-blue)' }} /> },
 };
 
 const typeStyle: Record<string, { bg: string; color: string }> = {
-  'Story': { bg: '#E3FCEF', color: '#006644' },
-  'Bug': { bg: '#FFEBE6', color: '#BF2600' },
-  'Task': { bg: '#DEEBFF', color: '#0747A6' },
-  'Epic': { bg: '#EAE6FF', color: '#5243AA' },
+  'Story': { bg: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' },
+  'Bug': { bg: 'var(--accent-rose-light)', color: 'var(--accent-rose)' },
+  'Task': { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue)' },
+  'Epic': { bg: 'var(--accent-violet-light)', color: 'var(--accent-violet)' },
 };
 
 function formatDate(dateStr: string): string {
@@ -110,7 +110,7 @@ export default function IssueDetailPanel({ issueKey, onClose }: IssueDetailPanel
       {/* Overlay */}
       <div
         className="fixed inset-0 z-50 transition-opacity"
-        style={{ background: 'rgba(9, 30, 66, 0.45)' }}
+        style={{ background: 'var(--bg-overlay)' }}
         onClick={onClose}
       />
 

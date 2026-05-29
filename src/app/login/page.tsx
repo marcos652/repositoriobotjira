@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Zap, Mail, Lock, Eye, EyeOff, ArrowRight, BarChart3, Shield, Users } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,50 +14,87 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate login delay for demo
     await new Promise(resolve => setTimeout(resolve, 1200));
     router.push('/dashboard');
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg-primary)' }}>
-      {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center"
-        style={{ background: 'var(--gradient-primary)' }}>
-        {/* Animated background circles */}
+    <div className="min-h-screen flex" style={{ background: '#050810' }}>
+      {/* Left Panel — Mesh Gradient Branding */}
+      <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden items-center justify-center"
+        style={{
+          background: 'linear-gradient(135deg, #0A0E1A 0%, #111827 50%, #0A0E1A 100%)',
+        }}>
+        {/* Animated orbs */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute w-96 h-96 rounded-full bg-white/5 -top-20 -left-20 animate-float" />
-          <div className="absolute w-64 h-64 rounded-full bg-white/5 bottom-20 right-10" style={{ animationDelay: '1s', animation: 'float 4s ease-in-out infinite 1s' }} />
-          <div className="absolute w-48 h-48 rounded-full bg-white/10 top-1/3 right-1/4" style={{ animation: 'float 5s ease-in-out infinite 0.5s' }} />
+          <div className="absolute w-[500px] h-[500px] rounded-full -top-32 -left-32"
+            style={{
+              background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%)',
+              animation: 'float 8s ease-in-out infinite',
+            }} />
+          <div className="absolute w-[400px] h-[400px] rounded-full bottom-0 right-0"
+            style={{
+              background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)',
+              animation: 'float 10s ease-in-out infinite 1s',
+            }} />
+          <div className="absolute w-[300px] h-[300px] rounded-full top-1/3 right-1/4"
+            style={{
+              background: 'radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)',
+              animation: 'float 12s ease-in-out infinite 2s',
+            }} />
+          {/* Grid overlay */}
+          <div className="absolute inset-0" style={{
+            opacity: 0.03,
+            backgroundImage: 'linear-gradient(rgba(255,255,255,.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.4) 1px, transparent 1px)',
+            backgroundSize: '60px 60px',
+          }} />
         </div>
 
-        <div className="relative z-10 text-center px-12 max-w-lg">
-          <div className="w-20 h-20 rounded-2xl mx-auto mb-8 flex items-center justify-center bg-white/10 backdrop-blur-lg border border-white/20">
-            <Zap size={40} color="#fff" />
+        <div className="relative z-10 text-center px-16 max-w-xl">
+          {/* Logo */}
+          <div className="w-20 h-20 rounded-2xl mx-auto mb-8 flex items-center justify-center"
+            style={{
+              background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #A78BFA 100%)',
+              boxShadow: '0 8px 32px rgba(99, 102, 241, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
+            }}>
+            <Zap size={36} color="#fff" strokeWidth={2} />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-4">
-            JiraOps
+
+          <h1 className="text-4xl font-extrabold tracking-tight mb-3" style={{ color: '#F1F5F9' }}>
+            Jira<span style={{ color: '#A78BFA' }}>Ops</span>
           </h1>
-          <p className="text-lg text-white/80 leading-relaxed">
+          <p className="text-base leading-relaxed mb-12" style={{ color: 'rgba(148,163,184,0.7)' }}>
             Gestão operacional inteligente com métricas em tempo real para times de suporte e desenvolvimento.
           </p>
-          <div className="mt-10 grid grid-cols-3 gap-4">
+
+          {/* Feature cards */}
+          <div className="grid grid-cols-3 gap-4">
             {[
-              { label: 'Projetos', value: '12+' },
-              { label: 'Métricas', value: '50+' },
-              { label: 'Real-time', value: '24/7' },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center p-3 rounded-xl bg-white/10 backdrop-blur-sm">
-                <p className="text-2xl font-bold text-white">{stat.value}</p>
-                <p className="text-xs text-white/60 mt-1">{stat.label}</p>
+              { icon: <BarChart3 size={20} />, label: 'Métricas', desc: 'Tempo real' },
+              { icon: <Shield size={20} />, label: 'SLA', desc: 'Monitoramento' },
+              { icon: <Users size={20} />, label: 'Equipe', desc: 'Performance' },
+            ].map((item) => (
+              <div key={item.label} className="p-4 rounded-xl text-center"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  backdropFilter: 'blur(8px)',
+                }}>
+                <div className="w-10 h-10 rounded-lg mx-auto mb-3 flex items-center justify-center"
+                  style={{ background: 'rgba(139,92,246,0.12)', color: '#A78BFA' }}>
+                  {item.icon}
+                </div>
+                <p className="text-sm font-bold" style={{ color: '#E2E8F0' }}>{item.label}</p>
+                <p className="text-[10px] mt-0.5" style={{ color: 'rgba(148,163,184,0.5)' }}>{item.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      {/* Right Panel — Login Form */}
+      <div className="flex-1 flex items-center justify-center p-8"
+        style={{ background: '#0A0E1A' }}>
         <div className="w-full max-w-md animate-fade-in-up">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10 justify-center">
@@ -65,16 +102,16 @@ export default function LoginPage() {
               style={{ background: 'var(--gradient-primary)' }}>
               <Zap size={24} color="#fff" />
             </div>
-            <span className="text-2xl font-bold">
-              Jira<span className="text-gradient">Ops</span>
+            <span className="text-2xl font-extrabold" style={{ color: '#F1F5F9' }}>
+              Jira<span style={{ color: '#A78BFA' }}>Ops</span>
             </span>
           </div>
 
           <div className="mb-8">
-            <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
+            <h2 className="text-2xl font-extrabold tracking-tight mb-2" style={{ color: '#F1F5F9' }}>
               Bem-vindo de volta
             </h2>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <p className="text-sm" style={{ color: '#64748B' }}>
               Entre com suas credenciais para acessar o dashboard
             </p>
           </div>
@@ -82,56 +119,68 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--text-tertiary)' }}>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] mb-2"
+                style={{ color: '#64748B' }}>
                 Email
               </label>
               <div className="relative">
-                <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2"
-                  style={{ color: 'var(--text-tertiary)' }} />
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2"
+                  style={{ color: '#475569' }} />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com"
-                  className="w-full pl-11 pr-4 py-3 rounded-xl text-sm border transition-all duration-200 focus:outline-none"
+                  className="w-full pl-11 pr-4 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-none"
                   style={{
-                    background: 'var(--bg-input)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    border: '1px solid rgba(148,163,184,0.08)',
+                    color: '#F1F5F9',
                   }}
-                  onFocus={(e) => e.target.style.borderColor = 'var(--accent-blue)'}
-                  onBlur={(e) => e.target.style.borderColor = 'var(--border-primary)'}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#3B82F6';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'rgba(148,163,184,0.08)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
               </div>
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider mb-2"
-                style={{ color: 'var(--text-tertiary)' }}>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] mb-2"
+                style={{ color: '#64748B' }}>
                 Senha
               </label>
               <div className="relative">
-                <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2"
-                  style={{ color: 'var(--text-tertiary)' }} />
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2"
+                  style={{ color: '#475569' }} />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-11 pr-12 py-3 rounded-xl text-sm border transition-all duration-200 focus:outline-none"
+                  className="w-full pl-11 pr-12 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-none"
                   style={{
-                    background: 'var(--bg-input)',
-                    borderColor: 'var(--border-primary)',
-                    color: 'var(--text-primary)',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    border: '1px solid rgba(148,163,184,0.08)',
+                    color: '#F1F5F9',
                   }}
-                  onFocus={(e) => e.target.style.borderColor = 'var(--accent-blue)'}
-                  onBlur={(e) => e.target.style.borderColor = 'var(--border-primary)'}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#3B82F6';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'rgba(148,163,184,0.08)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1"
-                  style={{ color: 'var(--text-tertiary)' }}>
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 cursor-pointer"
+                  style={{ color: '#475569' }}>
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -140,10 +189,11 @@ export default function LoginPage() {
             {/* Remember + Forgot */}
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded" />
-                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Lembrar-me</span>
+                <input type="checkbox" className="w-4 h-4 rounded"
+                  style={{ accentColor: '#3B82F6' }} />
+                <span className="text-sm" style={{ color: '#94A3B8' }}>Lembrar-me</span>
               </label>
-              <button type="button" className="text-sm font-medium" style={{ color: 'var(--accent-blue)' }}>
+              <button type="button" className="text-sm font-medium cursor-pointer" style={{ color: '#3B82F6' }}>
                 Esqueceu a senha?
               </button>
             </div>
@@ -152,9 +202,12 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2
-                transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70"
-              style={{ background: 'var(--gradient-primary)' }}
+              className="w-full py-3.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2
+                transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+              style={{
+                background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
+                boxShadow: '0 4px 16px rgba(59,130,246,0.3)',
+              }}
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" style={{ animation: 'spin 0.8s linear infinite' }} />
@@ -168,21 +221,21 @@ export default function LoginPage() {
           </form>
 
           {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px" style={{ background: 'var(--border-primary)' }} />
-            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>ou</span>
-            <div className="flex-1 h-px" style={{ background: 'var(--border-primary)' }} />
+          <div className="flex items-center gap-4 my-7">
+            <div className="flex-1 h-px" style={{ background: 'rgba(148,163,184,0.08)' }} />
+            <span className="text-xs font-medium" style={{ color: '#475569' }}>ou</span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(148,163,184,0.08)' }} />
           </div>
 
           {/* Google login */}
           <button
             onClick={() => router.push('/dashboard')}
-            className="w-full py-3 rounded-xl text-sm font-medium border flex items-center justify-center gap-3
-              transition-all duration-200 hover:shadow-md"
+            className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-3
+              transition-all duration-200 hover:border-blue-500/20 cursor-pointer"
             style={{
-              background: 'var(--bg-card)',
-              borderColor: 'var(--border-primary)',
-              color: 'var(--text-primary)',
+              background: 'rgba(15, 23, 42, 0.5)',
+              border: '1px solid rgba(148,163,184,0.08)',
+              color: '#E2E8F0',
             }}
           >
             <svg width="18" height="18" viewBox="0 0 18 18">
@@ -194,9 +247,9 @@ export default function LoginPage() {
             Entrar com Google
           </button>
 
-          <p className="text-center text-xs mt-6" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="text-center text-xs mt-7" style={{ color: '#475569' }}>
             Não tem conta?{' '}
-            <button className="font-medium" style={{ color: 'var(--accent-blue)' }}>
+            <button className="font-semibold cursor-pointer" style={{ color: '#3B82F6' }}>
               Solicitar acesso
             </button>
           </p>

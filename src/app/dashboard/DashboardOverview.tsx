@@ -352,7 +352,27 @@ export default function DashboardOverview() {
   };
 
   return (
-    <div className="space-y-10 animate-fade-in">
+    <div className="space-y-8 animate-fade-in">
+
+      {/* ═══ GREETING ═══ */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 18 ? 'Boa tarde' : 'Boa noite'}, Marcos 👋
+          </h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
+            Aqui está o resumo do seu workspace hoje.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="px-4 py-2 rounded-xl text-xs font-bold" style={{ background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' }}>
+            {totalOpen} abertos
+          </div>
+          <div className="px-4 py-2 rounded-xl text-xs font-bold" style={{ background: 'var(--accent-blue-light)', color: 'var(--accent-blue)' }}>
+            {totalResolved} resolvidos
+          </div>
+        </div>
+      </div>
 
       {/* ═══ HEADER BAR — Premium Glass ═══ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
