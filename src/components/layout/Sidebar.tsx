@@ -141,138 +141,119 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav
         className="relative flex-1 overflow-y-auto overflow-x-hidden sidebar-scroll"
         style={{
-          padding: collapsed ? '10px 10px' : '10px 12px',
+          padding: collapsed ? '12px 10px' : '12px 12px',
           zIndex: 1,
         }}
       >
-        {navItems.map((section, sIdx) => (
-          <div key={section.section} className={sIdx > 0 ? 'mt-5' : ''}>
-            {/* Section label */}
-            {!collapsed && (
-              <p className="text-[9px] font-bold tracking-[0.15em] mb-1.5 px-3 uppercase"
-                style={{ color: 'rgba(255,255,255,0.3)' }}>
-                {section.section}
-              </p>
-            )}
-            {collapsed && sIdx > 0 && (
-              <div className="my-3 mx-auto"
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {navItems.flatMap(s => s.items).map((item) => {
+            const active = isActive(item.href);
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                className={`
+                  relative flex items-center text-[13px] font-semibold group
+                  ${collapsed ? 'justify-center py-2.5 px-0' : 'gap-2.5 px-3 py-[11px]'}
+                `}
                 style={{
-                  width: '28px', height: '1px',
-                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)',
-                }} />
-            )}
+                  borderRadius: '12px',
+                  transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
+                  background: active
+                    ? 'rgba(255,255,255,0.22)'
+                    : 'rgba(255,255,255,0.06)',
+                  color: active ? '#fff' : 'rgba(255,255,255,0.65)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: active
+                    ? '1px solid rgba(255,255,255,0.2)'
+                    : '1px solid rgba(255,255,255,0.06)',
+                  boxShadow: active
+                    ? '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 15px rgba(255,255,255,0.05)'
+                    : '0 1px 3px rgba(0,0,0,0.08)',
+                  transform: 'translateY(0) scale(1)',
+                }}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget as HTMLAnchorElement;
+                  if (!active) {
+                    el.style.background = 'rgba(255,255,255,0.14)';
+                    el.style.color = '#fff';
+                    el.style.borderColor = 'rgba(255,255,255,0.14)';
+                    el.style.boxShadow = '0 6px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1), 0 0 12px rgba(255,255,255,0.04)';
+                    el.style.transform = 'translateY(-1px) scale(1.01)';
+                  } else {
+                    el.style.boxShadow = '0 6px 28px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 20px rgba(255,255,255,0.08)';
+                    el.style.transform = 'translateY(-1px) scale(1.01)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget as HTMLAnchorElement;
+                  if (!active) {
+                    el.style.background = 'rgba(255,255,255,0.06)';
+                    el.style.color = 'rgba(255,255,255,0.65)';
+                    el.style.borderColor = 'rgba(255,255,255,0.06)';
+                    el.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+                  } else {
+                    el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 15px rgba(255,255,255,0.05)';
+                  }
+                  el.style.transform = 'translateY(0) scale(1)';
+                }}
+              >
+                {/* Icon container */}
+                <div className="flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: collapsed ? '32px' : '28px',
+                    height: collapsed ? '32px' : '28px',
+                    borderRadius: '8px',
+                    background: active ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    transition: 'all 0.25s ease',
+                  }}>
+                  <Icon size={collapsed ? 17 : 16} strokeWidth={active ? 2.2 : 1.8} />
+                </div>
 
-            <div className="space-y-[8px]">
-              {section.items.map((item) => {
-                const active = isActive(item.href);
-                const Icon = item.icon;
+                {/* Label */}
+                {!collapsed && (
+                  <span className="whitespace-nowrap truncate">{item.label}</span>
+                )}
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={collapsed ? item.label : undefined}
-                    className={`
-                      relative flex items-center text-[13px] font-semibold group
-                      ${collapsed ? 'justify-center py-2.5 px-0' : 'gap-2.5 px-3 py-[11px]'}
-                    `}
+                {/* Active glow dot */}
+                {active && !collapsed && (
+                  <div className="ml-auto flex-shrink-0 w-[6px] h-[6px] rounded-full"
                     style={{
-                      borderRadius: '12px',
-                      transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
-                      background: active
-                        ? 'rgba(255,255,255,0.22)'
-                        : 'rgba(255,255,255,0.06)',
-                      color: active ? '#fff' : 'rgba(255,255,255,0.65)',
-                      backdropFilter: 'blur(8px)',
-                      WebkitBackdropFilter: 'blur(8px)',
-                      border: active
-                        ? '1px solid rgba(255,255,255,0.2)'
-                        : '1px solid rgba(255,255,255,0.06)',
-                      boxShadow: active
-                        ? '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 15px rgba(255,255,255,0.05)'
-                        : '0 1px 3px rgba(0,0,0,0.08)',
-                      transform: 'translateY(0) scale(1)',
-                    }}
-                    onMouseEnter={(e) => {
-                      const el = e.currentTarget as HTMLAnchorElement;
-                      if (!active) {
-                        el.style.background = 'rgba(255,255,255,0.14)';
-                        el.style.color = '#fff';
-                        el.style.borderColor = 'rgba(255,255,255,0.14)';
-                        el.style.boxShadow = '0 6px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1), 0 0 12px rgba(255,255,255,0.04)';
-                        el.style.transform = 'translateY(-1px) scale(1.01)';
-                      } else {
-                        el.style.boxShadow = '0 6px 28px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 20px rgba(255,255,255,0.08)';
-                        el.style.transform = 'translateY(-1px) scale(1.01)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      const el = e.currentTarget as HTMLAnchorElement;
-                      if (!active) {
-                        el.style.background = 'rgba(255,255,255,0.06)';
-                        el.style.color = 'rgba(255,255,255,0.65)';
-                        el.style.borderColor = 'rgba(255,255,255,0.06)';
-                        el.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
-                      } else {
-                        el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 15px rgba(255,255,255,0.05)';
-                      }
-                      el.style.transform = 'translateY(0) scale(1)';
+                      background: '#fff',
+                      boxShadow: '0 0 8px rgba(255,255,255,0.6)',
+                    }} />
+                )}
+
+                {/* Tooltip for collapsed */}
+                {collapsed && (
+                  <div
+                    className="absolute left-full ml-3 px-3 py-2 text-[12px] font-semibold
+                      opacity-0 invisible group-hover:opacity-100 group-hover:visible
+                      translate-x-1 group-hover:translate-x-0
+                      transition-all duration-150 pointer-events-none whitespace-nowrap z-50"
+                    style={{
+                      background: 'rgba(30, 58, 138, 0.95)',
+                      color: '#fff',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                      backdropFilter: 'blur(12px)',
                     }}
                   >
-                    {/* Icon container */}
-                    <div className="flex items-center justify-center flex-shrink-0"
-                      style={{
-                        width: collapsed ? '32px' : '28px',
-                        height: collapsed ? '32px' : '28px',
-                        borderRadius: '8px',
-                        background: active ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                        transition: 'all 0.25s ease',
-                      }}>
-                      <Icon size={collapsed ? 17 : 16} strokeWidth={active ? 2.2 : 1.8} />
-                    </div>
-
-                    {/* Label */}
-                    {!collapsed && (
-                      <span className="whitespace-nowrap truncate">{item.label}</span>
-                    )}
-
-                    {/* Active glow dot */}
-                    {active && !collapsed && (
-                      <div className="ml-auto flex-shrink-0 w-[6px] h-[6px] rounded-full"
-                        style={{
-                          background: '#fff',
-                          boxShadow: '0 0 8px rgba(255,255,255,0.6)',
-                        }} />
-                    )}
-
-                    {/* Tooltip for collapsed */}
-                    {collapsed && (
-                      <div
-                        className="absolute left-full ml-3 px-3 py-2 text-[12px] font-semibold
-                          opacity-0 invisible group-hover:opacity-100 group-hover:visible
-                          translate-x-1 group-hover:translate-x-0
-                          transition-all duration-150 pointer-events-none whitespace-nowrap z-50"
-                        style={{
-                          background: 'rgba(30, 58, 138, 0.95)',
-                          color: '#fff',
-                          borderRadius: '10px',
-                          border: '1px solid rgba(255,255,255,0.12)',
-                          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                          backdropFilter: 'blur(12px)',
-                        }}
-                      >
-                        {item.label}
-                        <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent"
-                          style={{ borderRightColor: 'rgba(30, 58, 138, 0.95)' }} />
-                      </div>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+                    {item.label}
+                    <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent"
+                      style={{ borderRightColor: 'rgba(30, 58, 138, 0.95)' }} />
+                  </div>
+                )}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       {/* ─── Bottom Section ─── */}
