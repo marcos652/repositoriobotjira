@@ -141,28 +141,28 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav
         className="relative flex-1 overflow-y-auto overflow-x-hidden sidebar-scroll"
         style={{
-          padding: collapsed ? '14px 10px' : '14px 12px',
+          padding: collapsed ? '10px 10px' : '10px 12px',
           zIndex: 1,
         }}
       >
         {navItems.map((section, sIdx) => (
-          <div key={section.section} className={sIdx > 0 ? 'mt-6' : ''}>
+          <div key={section.section} className={sIdx > 0 ? 'mt-4' : ''}>
             {/* Section label */}
             {!collapsed && (
-              <p className="text-[10px] font-bold tracking-[0.15em] mb-2 px-3 uppercase"
+              <p className="text-[9px] font-bold tracking-[0.15em] mb-1.5 px-3 uppercase"
                 style={{ color: 'rgba(255,255,255,0.3)' }}>
                 {section.section}
               </p>
             )}
             {collapsed && sIdx > 0 && (
-              <div className="my-4 mx-auto"
+              <div className="my-3 mx-auto"
                 style={{
                   width: '28px', height: '1px',
                   background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)',
                 }} />
             )}
 
-            <div className="space-y-[6px]">
+            <div className="space-y-[4px]">
               {section.items.map((item) => {
                 const active = isActive(item.href);
                 const Icon = item.icon;
@@ -174,10 +174,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     title={collapsed ? item.label : undefined}
                     className={`
                       relative flex items-center text-[13px] font-semibold group
-                      ${collapsed ? 'justify-center py-3 px-0' : 'gap-3 px-3.5 py-[11px]'}
+                      ${collapsed ? 'justify-center py-2.5 px-0' : 'gap-2.5 px-3 py-[9px]'}
                     `}
                     style={{
-                      borderRadius: '14px',
+                      borderRadius: '12px',
                       transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
                       background: active
                         ? 'rgba(255,255,255,0.22)'
@@ -222,9 +222,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     {/* Icon container */}
                     <div className="flex items-center justify-center flex-shrink-0"
                       style={{
-                        width: collapsed ? '34px' : '30px',
-                        height: collapsed ? '34px' : '30px',
-                        borderRadius: '10px',
+                        width: collapsed ? '32px' : '28px',
+                        height: collapsed ? '32px' : '28px',
+                        borderRadius: '8px',
                         background: active ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)',
                         border: '1px solid rgba(255,255,255,0.06)',
                         transition: 'all 0.25s ease',
