@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
-import { existsSync } from 'fs';
+
+const ALLOWED_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv',
+];
+
+const MAX_SIZE = 15 * 1024 * 1024; // 15MB
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,36 +22,37 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate file type
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'Apenas imagens são permitidas' }, { status: 400 });
+    if (!ALLOWED_TYPES.includes(file.type) && !file.type.startsWith('image/')) {
+      return NextResponse.json(
+        { error: `Tipo de arquivo não suportado: ${file.type}. Envie imagens, PDFs, Word ou Excel.` },
+        { status: 400 }
+      );
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: 'Imagem muito grande (máx 10MB)' }, { status: 400 });
+    // Validate file size
+    if (file.size > MAX_SIZE) {
+      return NextResponse.json({ error: 'Arquivo muito grande (máx 15MB)' }, { status: 400 });
     }
 
-    // Create uploads directory if needed
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
+    // Convert to base64 data URL (works on Vercel serverless — no filesystem needed)
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const base64 = buffer.toString('base64');
+    const dataUrl = `data:${file.type};base64,${base64}`;
 
-    // Generate unique filename
-    const ext = file.name.split('.').pop() || 'png';
+    // Generate a display name
+    const ext = file.name.split('.').pop() || 'file';
     const timestamp = Date.now();
     const random = Math.random().toString(36).slice(2, 8);
-    const filename = `img_${timestamp}_${random}.${ext}`;
-    const filepath = path.join(uploadsDir, filename);
+    const filename = `${file.name.replace(/\.[^.]+$/, '')}_${random}.${ext}`;
 
-    // Write file
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(filepath, buffer);
-
-    // Return public URL
-    const url = `/uploads/${filename}`;
-
-    return NextResponse.json({ url, filename, size: file.size });
+    return NextResponse.json({
+      url: dataUrl,
+      filename: file.name,
+      displayName: filename,
+      size: file.size,
+      type: file.type,
+      isImage: file.type.startsWith('image/'),
+    });
   } catch (error: any) {
     console.error('Upload error:', error);
     return NextResponse.json(

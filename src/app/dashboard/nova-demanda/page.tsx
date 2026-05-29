@@ -32,6 +32,8 @@ interface UploadedImage {
   url: string;
   filename: string;
   preview?: string;
+  isImage?: boolean;
+  type?: string;
 }
 
 export default function NovaDemandaPage() {
@@ -76,8 +78,17 @@ export default function NovaDemandaPage() {
   };
 
   // Upload file helper
+  const ALLOWED_TYPES = ['image/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats', 'text/plain', 'text/csv'];
   const uploadFile = async (file: File) => {
-    if (!file.type.startsWith('image/')) return;
+    const isAllowed = ALLOWED_TYPES.some(t => file.type.startsWith(t));
+    if (!isAllowed) {
+      alert(`Tipo de arquivo não suportado: ${file.type}`);
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      alert('Arquivo muito grande (máx 15MB)');
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -85,13 +96,17 @@ export default function NovaDemandaPage() {
       const res = await fetch('/api/upload-image', { method: 'POST', body: formData });
       const data = await res.json();
       if (res.ok) {
-        const preview = URL.createObjectURL(file);
-        const img: UploadedImage = { url: data.url, filename: data.filename, preview };
+        const isImage = file.type.startsWith('image/');
+        const preview = isImage ? URL.createObjectURL(file) : undefined;
+        const img: UploadedImage = { url: data.url, filename: data.filename || file.name, preview, isImage, type: file.type };
         setUploadedImages(prev => [...prev, img]);
         setUrlsImagens(prev => [...prev, data.url]);
+      } else {
+        alert(data.error || 'Erro no upload');
       }
     } catch (err) {
       console.error('Upload failed:', err);
+      alert('Falha no upload do arquivo');
     } finally {
       setUploading(false);
     }
@@ -119,7 +134,7 @@ export default function NovaDemandaPage() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    const files = Array.from(e.dataTransfer.files);
     files.forEach(uploadFile);
   };
 
@@ -280,7 +295,7 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
                   multiple
                   className="hidden"
                   onChange={(e) => {
@@ -301,8 +316,8 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
                       <Upload size={20} />
                     </div>
                     <div>
-                      <p className="nd-dropzone-title">Arraste imagens aqui, cole (Ctrl+V) ou clique para selecionar</p>
-                      <p className="nd-dropzone-hint">PNG, JPG, GIF — até 10MB</p>
+                      <p className="nd-dropzone-title">Arraste arquivos aqui, cole (Ctrl+V) ou clique para selecionar</p>
+                      <p className="nd-dropzone-hint">Imagens, PDF, Word, Excel — até 15MB</p>
                     </div>
                   </div>
                 ) : (
@@ -310,8 +325,12 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
                     <div className="nd-gallery-grid">
                       {uploadedImages.map((img, i) => (
                         <div key={i} className="nd-gallery-item">
-                          {img.preview && (
+                          {img.preview && img.isImage ? (
                             <img src={img.preview} alt={img.filename} className="nd-gallery-thumb" />
+                          ) : (
+                            <div className="nd-gallery-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(99,102,241,0.08)', fontSize: '10px', fontWeight: 700, color: 'var(--accent-violet)', textTransform: 'uppercase' }}>
+                              {(img.type || '').split('/').pop()?.replace('vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx').replace('vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx').slice(0, 4) || 'FILE'}
+                            </div>
                           )}
                           <span className="nd-gallery-name">{img.filename}</span>
                           <button type="button" onClick={() => removeUploadedImage(i)} className="nd-gallery-remove" title="Remover">
@@ -326,7 +345,7 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
                       </button>
                     </div>
                     <p className="nd-gallery-paste-hint">
-                      <Image size={11} /> Cole com Ctrl+V ou arraste mais imagens
+                      <Image size={11} /> Cole com Ctrl+V ou arraste mais arquivos
                     </p>
                   </div>
                 )}
@@ -498,10 +517,37 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
         <div className={`nd-toast ${result.success ? 'success' : 'error'} animate-fade-in`}>
           {result.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
           <div className="nd-toast-content">
-            <p className="nd-toast-title">{result.success ? '✨ Demanda criada!' : 'Falha ao criar'}</p>
-            {result.error && <p className="nd-toast-desc">{result.error}</p>}
-            {result.success && result.data && (
-              <pre className="nd-toast-json">{JSON.stringify(result.data, null, 2)}</pre>
+            {result.success && result.data?.issue_key ? (
+              <>
+                <p className="nd-toast-title">✨ Demanda criada com sucesso!</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    padding: '4px 12px', borderRadius: '8px', fontSize: '16px', fontWeight: 800,
+                    background: 'rgba(34,197,94,0.12)', color: '#4ADE80', letterSpacing: '-0.02em',
+                  }}>
+                    {result.data.issue_key}
+                  </span>
+                  <a href={`https://movingpay.atlassian.net/browse/${result.data.issue_key}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: '11px', color: '#60A5FA', fontWeight: 600, textDecoration: 'underline' }}>
+                    Abrir no Jira →
+                  </a>
+                </div>
+              </>
+            ) : result.success ? (
+              <>
+                <p className="nd-toast-title">✨ Demanda criada!</p>
+                <p className="nd-toast-desc">{result.data?.message || 'Criada mas o número não foi identificado.'}</p>
+                {result.data?.raw && (
+                  <pre className="nd-toast-json">{JSON.stringify(result.data.raw, null, 2)}</pre>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="nd-toast-title">Falha ao criar</p>
+                {result.error && <p className="nd-toast-desc">{result.error}</p>}
+              </>
             )}
           </div>
           <button onClick={() => setResult(null)} className="nd-toast-close"><X size={16} /></button>
