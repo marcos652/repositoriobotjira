@@ -162,7 +162,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 }} />
             )}
 
-            <div className="space-y-[2px]">
+            <div className="space-y-[6px]">
               {section.items.map((item) => {
                 const active = isActive(item.href);
                 const Icon = item.icon;
@@ -174,47 +174,76 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     title={collapsed ? item.label : undefined}
                     className={`
                       relative flex items-center text-[13px] font-semibold group
-                      ${collapsed ? 'justify-center py-2.5 px-0' : 'gap-3 px-3 py-[10px]'}
+                      ${collapsed ? 'justify-center py-3 px-0' : 'gap-3 px-3.5 py-[11px]'}
                     `}
                     style={{
-                      borderRadius: '12px',
-                      transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+                      borderRadius: '14px',
+                      transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
                       background: active
-                        ? 'rgba(255,255,255,0.18)'
-                        : 'transparent',
-                      color: active ? '#fff' : 'rgba(255,255,255,0.6)',
-                      backdropFilter: active ? 'blur(8px)' : 'none',
-                      border: active ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-                      boxShadow: active ? '0 4px 16px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.1)' : 'none',
+                        ? 'rgba(255,255,255,0.22)'
+                        : 'rgba(255,255,255,0.06)',
+                      color: active ? '#fff' : 'rgba(255,255,255,0.65)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      border: active
+                        ? '1px solid rgba(255,255,255,0.2)'
+                        : '1px solid rgba(255,255,255,0.06)',
+                      boxShadow: active
+                        ? '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 15px rgba(255,255,255,0.05)'
+                        : '0 1px 3px rgba(0,0,0,0.08)',
+                      transform: 'translateY(0) scale(1)',
                     }}
                     onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLAnchorElement;
                       if (!active) {
-                        (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.08)';
-                        (e.currentTarget as HTMLAnchorElement).style.color = '#fff';
+                        el.style.background = 'rgba(255,255,255,0.14)';
+                        el.style.color = '#fff';
+                        el.style.borderColor = 'rgba(255,255,255,0.14)';
+                        el.style.boxShadow = '0 6px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1), 0 0 12px rgba(255,255,255,0.04)';
+                        el.style.transform = 'translateY(-1px) scale(1.01)';
+                      } else {
+                        el.style.boxShadow = '0 6px 28px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 20px rgba(255,255,255,0.08)';
+                        el.style.transform = 'translateY(-1px) scale(1.01)';
                       }
                     }}
                     onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLAnchorElement;
                       if (!active) {
-                        (e.currentTarget as HTMLAnchorElement).style.background = 'transparent';
-                        (e.currentTarget as HTMLAnchorElement).style.color = 'rgba(255,255,255,0.6)';
+                        el.style.background = 'rgba(255,255,255,0.06)';
+                        el.style.color = 'rgba(255,255,255,0.65)';
+                        el.style.borderColor = 'rgba(255,255,255,0.06)';
+                        el.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+                      } else {
+                        el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 15px rgba(255,255,255,0.05)';
                       }
+                      el.style.transform = 'translateY(0) scale(1)';
                     }}
                   >
-                    {/* Icon */}
+                    {/* Icon container */}
                     <div className="flex items-center justify-center flex-shrink-0"
                       style={{
-                        width: collapsed ? '36px' : '22px',
-                        height: collapsed ? '36px' : '22px',
-                        borderRadius: collapsed ? '10px' : '0',
-                        background: collapsed && active ? 'rgba(255,255,255,0.15)' : 'transparent',
-                        transition: 'all 0.2s ease',
+                        width: collapsed ? '34px' : '30px',
+                        height: collapsed ? '34px' : '30px',
+                        borderRadius: '10px',
+                        background: active ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                        transition: 'all 0.25s ease',
                       }}>
-                      <Icon size={collapsed ? 18 : 17} strokeWidth={active ? 2.2 : 1.7} />
+                      <Icon size={collapsed ? 17 : 16} strokeWidth={active ? 2.2 : 1.8} />
                     </div>
 
                     {/* Label */}
                     {!collapsed && (
                       <span className="whitespace-nowrap truncate">{item.label}</span>
+                    )}
+
+                    {/* Active glow dot */}
+                    {active && !collapsed && (
+                      <div className="ml-auto flex-shrink-0 w-[6px] h-[6px] rounded-full"
+                        style={{
+                          background: '#fff',
+                          boxShadow: '0 0 8px rgba(255,255,255,0.6)',
+                        }} />
                     )}
 
                     {/* Tooltip for collapsed */}
