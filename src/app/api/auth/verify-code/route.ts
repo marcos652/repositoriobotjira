@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { codeStore, ALLOWED_EMAILS } from '../send-code/route';
+import { codeStore, ALLOWED_EMAILS } from '../_store';
 
 // Simple JWT-like token generation (for session)
 function generateSessionToken(email: string): string {
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     const stored = codeStore.get(normalizedEmail);
+    console.log(`[AUTH] Verify attempt for ${normalizedEmail}: stored=${!!stored}, store size=${codeStore.size}`);
 
     if (!stored) {
       return NextResponse.json(

@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// In-memory store for verification codes
-const codeStore = new Map<string, { code: string; expiresAt: number; attempts: number }>();
-
-// Allowed emails (add all authorized users here)
-const ALLOWED_EMAILS = [
-  'marcos.vinicius@movingpay.com.br',
-  // Add more authorized emails as needed
-];
+import { codeStore, ALLOWED_EMAILS } from '../_store';
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
-
-// Export for use by verify-code route
-export { codeStore, ALLOWED_EMAILS };
 
 // Send verification code via Slack DM (private to the user)
 async function sendSlackCode(email: string, code: string): Promise<void> {
@@ -93,13 +82,14 @@ export async function POST(request: NextRequest) {
 
     // Store the code
     codeStore.set(normalizedEmail, { code, expiresAt, attempts: 0 });
+    console.log(`[AUTH] Code stored for ${normalizedEmail}: ${code} (store size: ${codeStore.size})`);
 
-    // Send code via Slack
+    // Send code via Slack DM
     await sendSlackCode(normalizedEmail, code);
 
     return NextResponse.json({
       success: true,
-      message: 'Código enviado no Slack! Verifique o canal.',
+      message: 'Código enviado no Slack! Verifique suas mensagens diretas.',
     });
   } catch (error: any) {
     console.error('Error sending verification code:', error);
