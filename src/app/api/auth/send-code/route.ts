@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { codeStore, ALLOWED_EMAILS } from '../_store';
+import { ALLOWED_EMAILS } from '../_store';
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Encode code data into a signed cookie value
+function encodeCodeCookie(email: string, code: string): string {
+  const data = { email, code, exp: Date.now() + 5 * 60 * 1000 };
+  return Buffer.from(JSON.stringify(data)).toString('base64');
 }
 
 // Send verification code via Slack DM (private to the user)
@@ -25,7 +31,7 @@ async function sendSlackCode(email: string, code: string): Promise<void> {
 
   const userId = lookupData.user.id;
 
-  // 2. Send DM directly to the user (using user ID as channel)
+  // 2. Send DM directly to the user
   const message = `🔐 *Código de Verificação - JiraOps Dashboard*\n\n` +
     `🔑 Seu código: \`${code}\`\n` +
     `⏱️ Expira em: *5 minutos*\n\n` +
@@ -60,7 +66,6 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check if email is allowed
     if (!ALLOWED_EMAILS.includes(normalizedEmail)) {
       return NextResponse.json(
         { error: 'Email não autorizado. Contate o administrador.' },
@@ -68,29 +73,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Rate limiting: max 1 code per 60 seconds per email
-    const existing = codeStore.get(normalizedEmail);
-    if (existing && existing.expiresAt - Date.now() > 4 * 60 * 1000) {
-      return NextResponse.json(
-        { error: 'Aguarde 60 segundos antes de solicitar outro código.' },
-        { status: 429 }
-      );
-    }
-
     const code = generateCode();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-
-    // Store the code
-    codeStore.set(normalizedEmail, { code, expiresAt, attempts: 0 });
-    console.log(`[AUTH] Code stored for ${normalizedEmail}: ${code} (store size: ${codeStore.size})`);
 
     // Send code via Slack DM
     await sendSlackCode(normalizedEmail, code);
 
-    return NextResponse.json({
+    // Store the code in an httpOnly cookie (not in memory)
+    const cookieValue = encodeCodeCookie(normalizedEmail, code);
+
+    const response = NextResponse.json({
       success: true,
       message: 'Código enviado no Slack! Verifique suas mensagens diretas.',
     });
+
+    response.cookies.set('pending_code', cookieValue, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 5 * 60, // 5 minutes
+      path: '/',
+    });
+
+    return response;
   } catch (error: any) {
     console.error('Error sending verification code:', error);
     return NextResponse.json(
