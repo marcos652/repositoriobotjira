@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ALLOWED_EMAILS, decrypt } from '../_store';
 
-// Simple session token
 function generateSessionToken(email: string): string {
   const payload = {
     email,
     iat: Date.now(),
-    exp: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+    exp: Date.now() + 24 * 60 * 60 * 1000,
   };
   return Buffer.from(JSON.stringify(payload)).toString('base64');
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, code, token: authToken } = await request.json();
+    const body = await request.json();
+    const email = body.email;
+    const code = body.code;
+    const encryptedPayload = body.token;
 
-    if (!email || !code || !authToken) {
+    if (!email || !code || !encryptedPayload) {
       return NextResponse.json({ error: 'Email, código e token são obrigatórios' }, { status: 400 });
     }
 
@@ -25,8 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email não autorizado' }, { status: 403 });
     }
 
-    // Decrypt the token received from the frontend
-    const stored = decrypt<{ email: string; code: string; exp: number }>(authToken);
+    const stored = decrypt<{ email: string; code: string; exp: number }>(encryptedPayload);
 
     if (!stored) {
       return NextResponse.json(
@@ -35,7 +36,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check email matches
     if (stored.email !== normalizedEmail) {
       return NextResponse.json(
         { error: 'Email não corresponde. Solicite um novo código.' },
@@ -43,17 +43,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check expiration
     if (Date.now() > stored.exp) {
-      const response = NextResponse.json(
+      return NextResponse.json(
         { error: 'Código expirado. Solicite um novo.' },
         { status: 400 }
       );
-      response.cookies.delete('pending_code');
-      return response;
     }
 
-    // Verify code
     if (stored.code !== code.trim()) {
       return NextResponse.json(
         { error: 'Código incorreto. Tente novamente.' },
@@ -61,8 +57,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Code is valid — create session
-    const token = generateSessionToken(normalizedEmail);
+    // Success — create session
+    const sessionValue = generateSessionToken(normalizedEmail);
 
     const response = NextResponse.json({
       success: true,
@@ -70,17 +66,13 @@ export async function POST(request: NextRequest) {
       user: { email: normalizedEmail },
     });
 
-    // Set session cookie
-    response.cookies.set('session', token, {
+    response.cookies.set('session', sessionValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60, // 24 hours
+      maxAge: 24 * 60 * 60,
       path: '/',
     });
-
-    // Clear pending code cookie
-    response.cookies.delete('pending_code');
 
     return response;
   } catch (error: any) {
