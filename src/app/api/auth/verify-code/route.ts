@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Code is valid — create session
-    const token = generateSessionToken(normalizedEmail);
+    const sessionToken = generateSessionToken(normalizedEmail);
 
     const response = NextResponse.json({
       success: true,
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Set session cookie
-    response.cookies.set('session', token, {
+    response.cookies.set('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
