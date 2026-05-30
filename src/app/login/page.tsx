@@ -1,21 +1,160 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap, Mail, Lock, Eye, EyeOff, ArrowRight, BarChart3, Shield, Users } from 'lucide-react';
+import { Zap, Mail, ArrowRight, ArrowLeft, Loader2, CheckCircle2, Shield, BarChart3, Users, AlertTriangle } from 'lucide-react';
+
+type Step = 'email' | 'code';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // Countdown timer for resend
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  // Auto-focus first code input when step changes to 'code'
+  useEffect(() => {
+    if (step === 'code') {
+      setTimeout(() => codeRefs.current[0]?.focus(), 100);
+    }
+  }, [step]);
+
+  const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim() || isLoading) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    router.push('/dashboard');
+    setError(null);
+
+    try {
+      const res = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setSuccess('Código enviado! Verifique seu email.');
+        setStep('code');
+        setCountdown(60);
+        setCode(['', '', '', '', '', '']);
+      } else {
+        setError(data.error || 'Erro ao enviar código');
+      }
+    } catch {
+      setError('Erro de conexão');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    const fullCode = code.join('');
+    if (fullCode.length !== 6 || isLoading) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), code: fullCode }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setSuccess('Login realizado! Redirecionando...');
+        setTimeout(() => router.push('/dashboard'), 1000);
+      } else {
+        setError(data.error || 'Código inválido');
+        setCode(['', '', '', '', '', '']);
+        codeRefs.current[0]?.focus();
+      }
+    } catch {
+      setError('Erro de conexão');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCodeInput = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const newCode = [...code];
+    newCode[index] = value.slice(-1);
+    setCode(newCode);
+
+    // Auto-advance to next input
+    if (value && index < 5) {
+      codeRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits filled
+    if (value && index === 5) {
+      const fullCode = newCode.join('');
+      if (fullCode.length === 6) {
+        setTimeout(() => handleVerifyCode(), 200);
+      }
+    }
+  };
+
+  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !code[index] && index > 0) {
+      codeRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleCodePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      setCode(pasted.split(''));
+      codeRefs.current[5]?.focus();
+      setTimeout(() => {
+        const res = fetch('/api/auth/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), code: pasted }),
+        });
+      }, 300);
+    }
+  };
+
+  const handleResend = async () => {
+    if (countdown > 0) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess('Novo código enviado!');
+        setCountdown(60);
+        setCode(['', '', '', '', '', '']);
+        codeRefs.current[0]?.focus();
+      } else {
+        setError(data.error || 'Erro ao reenviar');
+      }
+    } catch {
+      setError('Erro de conexão');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -42,7 +181,6 @@ export default function LoginPage() {
               background: 'radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)',
               animation: 'float 12s ease-in-out infinite 2s',
             }} />
-          {/* Grid overlay */}
           <div className="absolute inset-0" style={{
             opacity: 0.03,
             backgroundImage: 'linear-gradient(rgba(255,255,255,.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.4) 1px, transparent 1px)',
@@ -51,7 +189,6 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 text-center px-16 max-w-xl">
-          {/* Logo */}
           <div className="w-20 h-20 rounded-2xl mx-auto mb-8 flex items-center justify-center"
             style={{
               background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #A78BFA 100%)',
@@ -59,33 +196,27 @@ export default function LoginPage() {
             }}>
             <Zap size={36} color="#fff" strokeWidth={2} />
           </div>
-
-          <h1 className="text-4xl font-extrabold tracking-tight mb-3" style={{ color: '#F1F5F9' }}>
-            Jira<span style={{ color: '#A78BFA' }}>Ops</span>
-          </h1>
-          <p className="text-base leading-relaxed mb-12" style={{ color: 'rgba(148,163,184,0.7)' }}>
-            Gestão operacional inteligente com métricas em tempo real para times de suporte e desenvolvimento.
+          <h1 className="text-4xl font-black mb-4" style={{
+            background: 'linear-gradient(135deg, #F8FAFC 0%, #CBD5E1 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            letterSpacing: '-0.03em',
+          }}>JiraOps Dashboard</h1>
+          <p className="text-base leading-relaxed mb-12" style={{ color: '#64748B' }}>
+            Gestão operacional inteligente com métricas em tempo real, integrado com Jira e IA.
           </p>
 
-          {/* Feature cards */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="flex flex-col gap-4 items-start text-left mx-auto" style={{ maxWidth: '280px' }}>
             {[
-              { icon: <BarChart3 size={20} />, label: 'Métricas', desc: 'Tempo real' },
-              { icon: <Shield size={20} />, label: 'SLA', desc: 'Monitoramento' },
-              { icon: <Users size={20} />, label: 'Equipe', desc: 'Performance' },
-            ].map((item) => (
-              <div key={item.label} className="p-4 rounded-xl text-center"
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  backdropFilter: 'blur(8px)',
-                }}>
-                <div className="w-10 h-10 rounded-lg mx-auto mb-3 flex items-center justify-center"
-                  style={{ background: 'rgba(139,92,246,0.12)', color: '#A78BFA' }}>
+              { icon: <BarChart3 size={16} />, text: 'Métricas em tempo real' },
+              { icon: <Shield size={16} />, text: 'Acesso seguro com verificação' },
+              { icon: <Users size={16} />, text: 'Gestão de equipe integrada' },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-3" style={{ color: '#64748B' }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ background: 'rgba(99,102,241,0.08)', color: '#818CF8' }}>
                   {item.icon}
                 </div>
-                <p className="text-sm font-bold" style={{ color: '#E2E8F0' }}>{item.label}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: 'rgba(148,163,184,0.5)' }}>{item.desc}</p>
+                <span className="text-sm font-medium">{item.text}</span>
               </div>
             ))}
           </div>
@@ -93,168 +224,163 @@ export default function LoginPage() {
       </div>
 
       {/* Right Panel — Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8"
-        style={{ background: '#0A0E1A' }}>
-        <div className="w-full max-w-md animate-fade-in-up">
+      <div className="flex-1 flex items-center justify-center px-6 sm:px-12">
+        <div className="w-full max-w-md">
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-3 mb-10 justify-center">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-              style={{ background: 'var(--gradient-primary)' }}>
-              <Zap size={24} color="#fff" />
+          <div className="lg:hidden flex justify-center mb-10">
+            <div className="w-14 h-14 rounded-xl flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
+                boxShadow: '0 4px 24px rgba(99,102,241,0.4)',
+              }}>
+              <Zap size={28} color="#fff" />
             </div>
-            <span className="text-2xl font-extrabold" style={{ color: '#F1F5F9' }}>
-              Jira<span style={{ color: '#A78BFA' }}>Ops</span>
-            </span>
           </div>
 
+          {/* Header */}
           <div className="mb-8">
-            <h2 className="text-2xl font-extrabold tracking-tight mb-2" style={{ color: '#F1F5F9' }}>
-              Bem-vindo de volta
+            {step === 'code' && (
+              <button onClick={() => { setStep('email'); setError(null); setSuccess(null); }}
+                className="flex items-center gap-2 mb-6 text-sm font-medium transition-colors"
+                style={{ color: '#64748B', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                <ArrowLeft size={14} /> Voltar
+              </button>
+            )}
+            <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8FAFC' }}>
+              {step === 'email' ? 'Entrar no Dashboard' : 'Verificação'}
             </h2>
             <p className="text-sm" style={{ color: '#64748B' }}>
-              Entre com suas credenciais para acessar o dashboard
+              {step === 'email'
+                ? 'Digite seu email corporativo para receber o código de acesso.'
+                : <>Código enviado para <strong style={{ color: '#94A3B8' }}>{email}</strong></>
+              }
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            {/* Email */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] mb-2"
-                style={{ color: '#64748B' }}>
-                Email
-              </label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2"
-                  style={{ color: '#475569' }} />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu@email.com"
-                  className="w-full pl-11 pr-4 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-none"
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(148,163,184,0.08)',
-                    color: '#F1F5F9',
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#3B82F6';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = 'rgba(148,163,184,0.08)';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
-              </div>
+          {/* Error / Success messages */}
+          {error && (
+            <div className="animate-fade-in flex items-center gap-3 mb-6 px-4 py-3 rounded-xl"
+              style={{ background: 'rgba(244,63,94,0.06)', border: '1px solid rgba(244,63,94,0.12)' }}>
+              <AlertTriangle size={16} style={{ color: '#FB7185', flexShrink: 0 }} />
+              <span className="text-xs font-semibold" style={{ color: '#FB7185' }}>{error}</span>
             </div>
+          )}
+          {success && (
+            <div className="animate-fade-in flex items-center gap-3 mb-6 px-4 py-3 rounded-xl"
+              style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)' }}>
+              <CheckCircle2 size={16} style={{ color: '#4ADE80', flexShrink: 0 }} />
+              <span className="text-xs font-semibold" style={{ color: '#4ADE80' }}>{success}</span>
+            </div>
+          )}
 
-            {/* Password */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] mb-2"
-                style={{ color: '#64748B' }}>
-                Senha
-              </label>
-              <div className="relative">
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2"
-                  style={{ color: '#475569' }} />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-11 pr-12 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-none"
+          {/* Step 1: Email */}
+          {step === 'email' && (
+            <form onSubmit={handleSendCode} className="animate-fade-in">
+              <div className="mb-6">
+                <label className="block text-xs font-bold uppercase tracking-wider mb-2"
+                  style={{ color: '#475569' }}>Email corporativo</label>
+                <div className="flex items-center gap-3 px-4 rounded-xl h-13"
                   style={{
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(148,163,184,0.08)',
-                    color: '#F1F5F9',
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#3B82F6';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = 'rgba(148,163,184,0.08)';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
-                <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 cursor-pointer"
-                  style={{ color: '#475569' }}>
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    background: '#0F172A', border: '1px solid #1E293B',
+                    transition: 'border-color 0.2s',
+                  }}>
+                  <Mail size={16} style={{ color: '#475569', flexShrink: 0 }} />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="nome@movingpay.com.br"
+                    required
+                    autoFocus
+                    className="flex-1 bg-transparent border-none outline-none text-sm font-medium py-4"
+                    style={{ color: '#F8FAFC' }}
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading || !email.trim()}
+                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl text-sm font-bold transition-all"
+                style={{
+                  background: isLoading ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #3B82F6, #6366F1)',
+                  color: '#fff', border: 'none', cursor: isLoading ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 24px rgba(59,130,246,0.3)',
+                }}>
+                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Enviar código <ArrowRight size={16} /></>}
+              </button>
+            </form>
+          )}
+
+          {/* Step 2: Code verification */}
+          {step === 'code' && (
+            <div className="animate-fade-in">
+              <div className="mb-8">
+                <label className="block text-xs font-bold uppercase tracking-wider mb-4"
+                  style={{ color: '#475569' }}>Código de 6 dígitos</label>
+                <div className="flex gap-3 justify-between" onPaste={handleCodePaste}>
+                  {code.map((digit, i) => (
+                    <input
+                      key={i}
+                      ref={el => { codeRefs.current[i] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={e => handleCodeInput(i, e.target.value)}
+                      onKeyDown={e => handleCodeKeyDown(i, e)}
+                      className="w-12 h-14 text-center text-xl font-bold rounded-xl outline-none transition-all"
+                      style={{
+                        background: '#0F172A',
+                        border: digit ? '2px solid #6366F1' : '1px solid #1E293B',
+                        color: '#F8FAFC',
+                        boxShadow: digit ? '0 0 12px rgba(99,102,241,0.15)' : 'none',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={handleVerifyCode}
+                disabled={isLoading || code.join('').length !== 6}
+                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl text-sm font-bold transition-all mb-4"
+                style={{
+                  background: isLoading ? 'rgba(99,102,241,0.3)' : code.join('').length === 6 ? 'linear-gradient(135deg, #22C55E, #16A34A)' : 'rgba(99,102,241,0.15)',
+                  color: '#fff', border: 'none',
+                  cursor: isLoading || code.join('').length !== 6 ? 'default' : 'pointer',
+                  boxShadow: code.join('').length === 6 ? '0 4px 24px rgba(34,197,94,0.3)' : 'none',
+                }}>
+                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Verificar <CheckCircle2 size={16} /></>}
+              </button>
+
+              <div className="text-center">
+                <button
+                  onClick={handleResend}
+                  disabled={countdown > 0}
+                  className="text-xs font-semibold transition-colors"
+                  style={{
+                    color: countdown > 0 ? '#334155' : '#60A5FA',
+                    background: 'none', border: 'none', cursor: countdown > 0 ? 'default' : 'pointer',
+                  }}>
+                  {countdown > 0 ? `Reenviar em ${countdown}s` : 'Reenviar código'}
                 </button>
               </div>
             </div>
+          )}
 
-            {/* Remember + Forgot */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded"
-                  style={{ accentColor: '#3B82F6' }} />
-                <span className="text-sm" style={{ color: '#94A3B8' }}>Lembrar-me</span>
-              </label>
-              <button type="button" className="text-sm font-medium cursor-pointer" style={{ color: '#3B82F6' }}>
-                Esqueceu a senha?
-              </button>
-            </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2
-                transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
-              style={{
-                background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)',
-                boxShadow: '0 4px 16px rgba(59,130,246,0.3)',
-              }}
-            >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" style={{ animation: 'spin 0.8s linear infinite' }} />
-              ) : (
-                <>
-                  Entrar
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-7">
-            <div className="flex-1 h-px" style={{ background: 'rgba(148,163,184,0.08)' }} />
-            <span className="text-xs font-medium" style={{ color: '#475569' }}>ou</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(148,163,184,0.08)' }} />
-          </div>
-
-          {/* Google login */}
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-3
-              transition-all duration-200 hover:border-blue-500/20 cursor-pointer"
-            style={{
-              background: 'rgba(15, 23, 42, 0.5)',
-              border: '1px solid rgba(148,163,184,0.08)',
-              color: '#E2E8F0',
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18">
-              <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-              <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
-              <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-              <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 2.58 9 2.58z"/>
-            </svg>
-            Entrar com Google
-          </button>
-
-          <p className="text-center text-xs mt-7" style={{ color: '#475569' }}>
-            Não tem conta?{' '}
-            <button className="font-semibold cursor-pointer" style={{ color: '#3B82F6' }}>
-              Solicitar acesso
-            </button>
+          {/* Footer */}
+          <p className="mt-10 text-center text-[10px]" style={{ color: '#334155' }}>
+            JiraOps Dashboard © {new Date().getFullYear()} — Acesso restrito
           </p>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50% { transform: translateY(-20px) scale(1.05); }
+        }
+      `}</style>
     </div>
   );
 }

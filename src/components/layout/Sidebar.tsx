@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Headphones, Code2, Settings, BarChart3,
   Users, GitBranch, Zap, ChevronLeft, ChevronRight, HelpCircle,
@@ -66,6 +66,12 @@ const navItems = [
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/session', { method: 'DELETE' });
+    router.push('/login');
+  };
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard';
@@ -325,6 +331,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 className="flex-shrink-0 p-1.5 rounded-lg transition-all duration-200 cursor-pointer"
                 style={{ color: 'rgba(255,255,255,0.3)' }}
                 title="Sair"
+                onClick={handleLogout}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.color = '#FCA5A5';
                   (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)';
