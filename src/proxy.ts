@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public routes that don't need auth
@@ -18,7 +18,6 @@ export function middleware(request: NextRequest) {
   const session = request.cookies.get('session')?.value;
 
   if (!session) {
-    // Redirect to login
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
@@ -26,7 +25,6 @@ export function middleware(request: NextRequest) {
   try {
     const payload = JSON.parse(Buffer.from(session, 'base64').toString());
 
-    // Check expiration
     if (Date.now() > payload.exp) {
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
@@ -43,7 +41,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all routes except static files and API
     '/((?!_next/static|_next/image|favicon.ico|uploads).*)',
   ],
 };
