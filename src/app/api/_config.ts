@@ -1,7 +1,7 @@
 // Shared API configuration for the JiraBot backend
 export const JIRABOT_CONFIG = {
   BASE_URL: 'https://apibotjira.vercel.app',
-  AUTH_TOKEN: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwcm9qZWN0IjoiSmlyYUJvdCBNVlBheSIsInVzZXIiOiJNYXJjb3NWaW5pY2l1cyIsImlhdCI6MTc4MDAwMDAwMH0.ZXlKaGJHY2lPaUpJVXpVMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SndjbTkuY29t',
+  AUTH_TOKEN: `Bearer ${process.env.API_SECRET_KEY || 'jiraops-api-key-2024-secure'}`,
   TIMEOUT_MS: 30000,
   MAX_RETRIES: 2,
 };

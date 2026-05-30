@@ -140,25 +140,26 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       style={{
         width: collapsed ? '76px' : '272px',
         transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        background: 'linear-gradient(165deg, #1E3A8A 0%, #3730A3 25%, #5B21B6 55%, #7C3AED 80%, #6D28D9 100%)',
-        boxShadow: '4px 0 32px rgba(91, 33, 182, 0.25)',
+        background: 'linear-gradient(165deg, #0A0F1E 0%, #0F1629 25%, #131B35 55%, #171F3D 80%, #0D1225 100%)',
+        boxShadow: '4px 0 32px rgba(0, 0, 0, 0.45)',
+        borderRight: '1px solid rgba(255,255,255,0.04)',
       }}
     >
       {/* ── Decorative orbs ── */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
         <div className="absolute w-[300px] h-[300px] rounded-full"
           style={{
-            background: 'radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)',
             top: '-80px', right: '-100px',
           }} />
         <div className="absolute w-[200px] h-[200px] rounded-full"
           style={{
-            background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 70%)',
             bottom: '10%', left: '-60px',
           }} />
         <div className="absolute w-[150px] h-[150px] rounded-full"
           style={{
-            background: 'radial-gradient(circle, rgba(168,85,247,0.1) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(139,92,246,0.04) 0%, transparent 70%)',
             top: '40%', right: '-40px',
           }} />
       </div>
