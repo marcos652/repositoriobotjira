@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
+  const [authToken, setAuthToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
@@ -46,7 +47,8 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setSuccess('Código enviado no Slack! Verifique o canal.');
+        setAuthToken(data.token);
+        setSuccess('Código enviado no Slack! Verifique suas DMs.');
         setStep('code');
         setCountdown(60);
         setCode(['', '', '', '', '', '']);
@@ -70,7 +72,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/verify-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), code: fullCode }),
+        body: JSON.stringify({ email: email.trim(), code: fullCode, token: authToken }),
       });
       const data = await res.json();
 
@@ -121,13 +123,7 @@ export default function LoginPage() {
     if (pasted.length === 6) {
       setCode(pasted.split(''));
       codeRefs.current[5]?.focus();
-      setTimeout(() => {
-        const res = fetch('/api/auth/verify-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim(), code: pasted }),
-        });
-      }, 300);
+      setTimeout(() => handleVerifyCode(), 300);
     }
   };
 
@@ -142,7 +138,8 @@ export default function LoginPage() {
         body: JSON.stringify({ email: email.trim() }),
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.success) {
+        setAuthToken(data.token);
         setSuccess('Novo código enviado!');
         setCountdown(60);
         setCode(['', '', '', '', '', '']);

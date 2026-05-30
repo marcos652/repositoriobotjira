@@ -77,23 +77,14 @@ export async function POST(request: NextRequest) {
     // Send code via Slack DM
     await sendSlackCode(normalizedEmail, code);
 
-    // Store the code in an httpOnly cookie (not in memory)
-    const cookieValue = encodeCodeCookie(normalizedEmail, code);
+    // Encrypt the code into a token (returned to frontend, sent back on verify)
+    const token = encodeCodeCookie(normalizedEmail, code);
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       message: 'Código enviado no Slack! Verifique suas mensagens diretas.',
+      token, // AES-256-GCM encrypted — unreadable without server key
     });
-
-    response.cookies.set('pending_code', cookieValue, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 5 * 60, // 5 minutes
-      path: '/',
-    });
-
-    return response;
   } catch (error: any) {
     console.error('Error sending verification code:', error);
     return NextResponse.json(

@@ -13,10 +13,10 @@ function generateSessionToken(email: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, code } = await request.json();
+    const { email, code, token } = await request.json();
 
-    if (!email || !code) {
-      return NextResponse.json({ error: 'Email e código são obrigatórios' }, { status: 400 });
+    if (!email || !code || !token) {
+      return NextResponse.json({ error: 'Email, código e token são obrigatórios' }, { status: 400 });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -25,21 +25,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email não autorizado' }, { status: 403 });
     }
 
-    // Read and decrypt the pending code from the httpOnly cookie
-    const pendingCookie = request.cookies.get('pending_code')?.value;
-
-    if (!pendingCookie) {
-      return NextResponse.json(
-        { error: 'Nenhum código encontrado. Solicite um novo.' },
-        { status: 400 }
-      );
-    }
-
-    const stored = decrypt<{ email: string; code: string; exp: number }>(pendingCookie);
+    // Decrypt the token received from the frontend
+    const stored = decrypt<{ email: string; code: string; exp: number }>(token);
 
     if (!stored) {
       return NextResponse.json(
-        { error: 'Código inválido ou adulterado. Solicite um novo.' },
+        { error: 'Token inválido ou adulterado. Solicite um novo código.' },
         { status: 400 }
       );
     }
