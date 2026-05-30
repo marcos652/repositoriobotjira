@@ -40,8 +40,11 @@ export default function ConsultarDemandaPage() {
   const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const handleSearch = async () => {
-    const key = searchKey.trim().toUpperCase();
+    let key = searchKey.trim();
     if (!key) return;
+    // Auto-prepend DSMM- if user typed just a number
+    if (/^\d+$/.test(key)) key = `DSMM-${key}`;
+    key = key.toUpperCase();
 
     setLoading(true);
     setError(null);
@@ -133,7 +136,7 @@ export default function ConsultarDemandaPage() {
               Consultar & Editar Demanda
             </h1>
             <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>
-              Busque por chave (ex: DSMM-86) para visualizar e atualizar
+              Digite o número da demanda (ex: 86) para visualizar e atualizar
             </p>
           </div>
         </div>
@@ -151,12 +154,13 @@ export default function ConsultarDemandaPage() {
           transition: 'border-color 0.2s',
         }}>
           <Search size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-tertiary)', flexShrink: 0 }}>DSMM-</span>
           <input
             type="text"
             value={searchKey}
-            onChange={e => setSearchKey(e.target.value.toUpperCase())}
+            onChange={e => setSearchKey(e.target.value.replace(/[^0-9]/g, ''))}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            placeholder="DSMM-86"
+            placeholder="86"
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
               color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600,
@@ -470,10 +474,10 @@ export default function ConsultarDemandaPage() {
             <Search size={28} style={{ color: 'rgba(129,140,248,0.4)' }} />
           </div>
           <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 4px' }}>
-            Digite a chave da demanda acima
+            Digite o número da demanda acima
           </p>
           <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-            Ex: DSMM-86, DSMM-84
+            Ex: 86, 84, 47
           </p>
         </div>
       )}
