@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 // Encryption key (32 bytes for AES-256)
 const ENCRYPTION_KEY = (() => {
@@ -46,10 +48,9 @@ export function decrypt<T = any>(encryptedBase64: string): T | null {
 }
 
 // ═══════════════════════════════════════════
-//  SECURE EMAIL STORAGE
-//  - Emails stored as SHA-256 hashes (for verification)
-//  - Encrypted copies stored (for admin listing only)
-//  - Even if someone dumps memory, they see only hashes
+//  SECURE EMAIL STORAGE — File-Persisted
+//  Uses globalThis to share across Next.js routes
+//  Persists to JSON file so emails survive restarts
 // ═══════════════════════════════════════════
 
 function hashEmail(email: string): string {
@@ -67,66 +68,129 @@ function decryptEmail(encrypted: string): string | null {
   return data?.email || null;
 }
 
-// Storage: hash → encrypted email
 interface SecureEmail {
   hash: string;
-  encrypted: string; // AES-256-GCM encrypted email
+  encrypted: string;
   addedAt: string;
   addedBy?: string;
 }
 
 const DEFAULT_EMAILS = ['marcos.vinicius@movingpay.com.br'];
 
-// Initialize with default + env var emails
-const _emailStore = new Map<string, SecureEmail>();
+// ── File persistence ──
+function getDataFilePath(): string {
+  // Try project data dir first, then /tmp for Vercel
+  const projectPath = path.join(process.cwd(), 'data', 'emails.json');
+  const tmpPath = '/tmp/jiraops-emails.json';
 
-function initializeEmails() {
-  // Add defaults
-  for (const email of DEFAULT_EMAILS) {
-    const hash = hashEmail(email);
-    if (!_emailStore.has(hash)) {
-      _emailStore.set(hash, {
-        hash,
-        encrypted: encryptEmail(email),
-        addedAt: new Date().toISOString(),
-        addedBy: 'system',
-      });
+  // Check if project data dir is writable
+  try {
+    const dataDir = path.dirname(projectPath);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
     }
-  }
-
-  // Add from env var
-  const envEmails = (process.env.ALLOWED_EMAILS || '')
-    .split(',')
-    .map(e => e.trim().toLowerCase())
-    .filter(e => e.length > 0 && e.includes('@'));
-
-  for (const email of envEmails) {
-    const hash = hashEmail(email);
-    if (!_emailStore.has(hash)) {
-      _emailStore.set(hash, {
-        hash,
-        encrypted: encryptEmail(email),
-        addedAt: new Date().toISOString(),
-        addedBy: 'env',
-      });
-    }
+    // Test write
+    fs.accessSync(dataDir, fs.constants.W_OK);
+    return projectPath;
+  } catch {
+    return tmpPath;
   }
 }
 
-initializeEmails();
+function loadEmailsFromFile(): Map<string, SecureEmail> {
+  const store = new Map<string, SecureEmail>();
+
+  try {
+    const filePath = getDataFilePath();
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      if (Array.isArray(data)) {
+        for (const entry of data) {
+          if (entry.hash && entry.encrypted) {
+            store.set(entry.hash, entry);
+          }
+        }
+      }
+      console.log(`[Auth] Loaded ${store.size} emails from ${filePath}`);
+    }
+  } catch (e: any) {
+    console.warn(`[Auth] Could not load emails file: ${e.message}`);
+  }
+
+  return store;
+}
+
+function saveEmailsToFile(store: Map<string, SecureEmail>): void {
+  try {
+    const filePath = getDataFilePath();
+    const dataDir = path.dirname(filePath);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const data = Array.from(store.values());
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (e: any) {
+    console.warn(`[Auth] Could not save emails file: ${e.message}`);
+  }
+}
+
+// ── Use globalThis to share across Next.js API routes ──
+const GLOBAL_KEY = '__jiraops_email_store__';
+
+function getStore(): Map<string, SecureEmail> {
+  const g = globalThis as any;
+  if (!g[GLOBAL_KEY]) {
+    // Load from file first
+    const fileStore = loadEmailsFromFile();
+    g[GLOBAL_KEY] = fileStore.size > 0 ? fileStore : new Map<string, SecureEmail>();
+
+    // Always ensure defaults are present
+    for (const email of DEFAULT_EMAILS) {
+      const hash = hashEmail(email);
+      if (!g[GLOBAL_KEY].has(hash)) {
+        g[GLOBAL_KEY].set(hash, {
+          hash,
+          encrypted: encryptEmail(email),
+          addedAt: new Date().toISOString(),
+          addedBy: 'system',
+        });
+      }
+    }
+
+    // Also load from env var
+    const envEmails = (process.env.ALLOWED_EMAILS || '')
+      .split(',')
+      .map((e: string) => e.trim().toLowerCase())
+      .filter((e: string) => e.length > 0 && e.includes('@'));
+
+    for (const email of envEmails) {
+      const hash = hashEmail(email);
+      if (!g[GLOBAL_KEY].has(hash)) {
+        g[GLOBAL_KEY].set(hash, {
+          hash,
+          encrypted: encryptEmail(email),
+          addedAt: new Date().toISOString(),
+          addedBy: 'env',
+        });
+      }
+    }
+
+    // Save initial state
+    saveEmailsToFile(g[GLOBAL_KEY]);
+  }
+  return g[GLOBAL_KEY];
+}
 
 // ── Public API ──
 export const ALLOWED_EMAILS = {
-  /** Check if email is allowed (hash comparison — never exposes email) */
   includes: (email: string): boolean => {
     const hash = hashEmail(email);
-    return _emailStore.has(hash);
+    return getStore().has(hash);
   },
 
-  /** List emails (decrypted — admin only) */
   list: (): Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean }> => {
     const result: Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean }> = [];
-    for (const entry of _emailStore.values()) {
+    for (const entry of getStore().values()) {
       const email = decryptEmail(entry.encrypted);
       if (email) {
         result.push({
@@ -140,36 +204,36 @@ export const ALLOWED_EMAILS = {
     return result;
   },
 
-  /** List hashes only (safe to expose — unreadable) */
-  listHashes: (): string[] => {
-    return Array.from(_emailStore.keys());
-  },
-
-  /** Add a new email (stores hash + encrypted) */
   add: (email: string, addedBy?: string): boolean => {
     const normalized = email.trim().toLowerCase();
     if (!normalized.includes('@')) return false;
     const hash = hashEmail(normalized);
-    if (_emailStore.has(hash)) return false; // already exists
-    _emailStore.set(hash, {
+    const store = getStore();
+    if (store.has(hash)) return false;
+    store.set(hash, {
       hash,
       encrypted: encryptEmail(normalized),
       addedAt: new Date().toISOString(),
       addedBy: addedBy || 'admin',
     });
+    saveEmailsToFile(store); // Persist!
+    console.log(`[Auth] Added email: ${normalized.slice(0, 3)}***`);
     return true;
   },
 
-  /** Remove an email */
   remove: (email: string): boolean => {
     const normalized = email.trim().toLowerCase();
-    // Prevent removing default admin
     if (DEFAULT_EMAILS.includes(normalized)) return false;
-    // Prevent removing last email
-    if (_emailStore.size <= 1) return false;
+    const store = getStore();
+    if (store.size <= 1) return false;
     const hash = hashEmail(normalized);
-    return _emailStore.delete(hash);
+    const removed = store.delete(hash);
+    if (removed) {
+      saveEmailsToFile(store); // Persist!
+      console.log(`[Auth] Removed email: ${normalized.slice(0, 3)}***`);
+    }
+    return removed;
   },
 
-  size: (): number => _emailStore.size,
+  size: (): number => getStore().size,
 };
