@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS } from '../_store';
+import { ALLOWED_EMAILS, decrypt } from '../_store';
 
 // Simple session token
 function generateSessionToken(email: string): string {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email não autorizado' }, { status: 403 });
     }
 
-    // Read the pending code from the httpOnly cookie
+    // Read and decrypt the pending code from the httpOnly cookie
     const pendingCookie = request.cookies.get('pending_code')?.value;
 
     if (!pendingCookie) {
@@ -35,12 +35,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let stored: { email: string; code: string; exp: number };
-    try {
-      stored = JSON.parse(Buffer.from(pendingCookie, 'base64').toString());
-    } catch {
+    const stored = decrypt<{ email: string; code: string; exp: number }>(pendingCookie);
+
+    if (!stored) {
       return NextResponse.json(
-        { error: 'Código inválido. Solicite um novo.' },
+        { error: 'Código inválido ou adulterado. Solicite um novo.' },
         { status: 400 }
       );
     }

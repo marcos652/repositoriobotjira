@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS } from '../_store';
+import { ALLOWED_EMAILS, encrypt } from '../_store';
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Encode code data into a signed cookie value
+// Encrypt code data for the cookie (AES-256-GCM)
 function encodeCodeCookie(email: string, code: string): string {
-  const data = { email, code, exp: Date.now() + 5 * 60 * 1000 };
-  return Buffer.from(JSON.stringify(data)).toString('base64');
+  return encrypt({ email, code, exp: Date.now() + 5 * 60 * 1000 });
 }
 
 // Send verification code via Slack DM (private to the user)
