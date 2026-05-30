@@ -242,6 +242,89 @@ function EmailManagement() {
   );
 }
 
+// ── IP Management Component ──
+function IPManagement() {
+  const [ips, setIps] = useState<Array<{ ip: string; email: string; firstSeen: string; lastSeen: string; blocked: boolean; loginCount: number }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  const loadIPs = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/auth/ips');
+      if (res.ok) {
+        const data = await res.json();
+        setIps(data.ips || []);
+      }
+    } catch {} finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadIPs(); }, []);
+
+  const handleToggleBlock = async (ip: string, currentlyBlocked: boolean) => {
+    setToggling(ip);
+    try {
+      await fetch('/api/auth/ips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip, action: currentlyBlocked ? 'unblock' : 'block' }),
+      });
+      await loadIPs();
+    } catch {} finally { setToggling(null); }
+  };
+
+  return (
+    <div className="em-root">
+      {loading ? (
+        <div className="em-loading"><Loader2 size={16} className="animate-spin" /><span>Carregando IPs...</span></div>
+      ) : ips.length === 0 ? (
+        <div className="em-empty">Nenhum login registrado ainda</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>IP</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Usuário</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Primeiro Acesso</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Último Acesso</th>
+                <th style={{ textAlign: 'center', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Logins</th>
+                <th style={{ textAlign: 'center', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ips.map((entry) => (
+                <tr key={`${entry.email}:${entry.ip}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td style={{ padding: '10px 12px', color: '#F8FAFC', fontFamily: 'monospace', fontWeight: 600 }}>{entry.ip}</td>
+                  <td style={{ padding: '10px 12px', color: '#94A3B8' }}>{entry.email}</td>
+                  <td style={{ padding: '10px 12px', color: '#64748B', fontSize: '11px' }}>{new Date(entry.firstSeen).toLocaleString('pt-BR')}</td>
+                  <td style={{ padding: '10px 12px', color: '#64748B', fontSize: '11px' }}>{new Date(entry.lastSeen).toLocaleString('pt-BR')}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', color: '#94A3B8', fontWeight: 700 }}>{entry.loginCount}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => handleToggleBlock(entry.ip, entry.blocked)}
+                      disabled={toggling === entry.ip}
+                      style={{
+                        padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '10px', fontWeight: 700,
+                        cursor: toggling === entry.ip ? 'wait' : 'pointer',
+                        background: entry.blocked ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
+                        color: entry.blocked ? '#EF4444' : '#22C55E',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      {toggling === entry.ip ? '...' : entry.blocked ? '🚫 Bloqueado' : '✅ Ativo'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ConfiguracoesPage() {
   return (
     <div className="cf-root">
@@ -260,6 +343,16 @@ export default function ConfiguracoesPage() {
           </div>
         </div>
 
+        {/* ── IP Management Section ── */}
+        <div className="cf-section">
+          <div className="cf-section-header">
+            <div className="cf-section-icon" style={{background:'rgba(239,68,68,0.12)',color:'#EF4444'}}><Globe size={18}/></div>
+            <div><p className="cf-section-title">IPs de Acesso</p><p className="cf-section-desc">Monitore e bloqueie IPs que acessam o dashboard.</p></div>
+          </div>
+          <div className="cf-section-body">
+            <IPManagement />
+          </div>
+        </div>
         {sections.map(s=>{const Icon=s.icon;return(
           <div key={s.id} className="cf-section">
             <div className="cf-section-header">

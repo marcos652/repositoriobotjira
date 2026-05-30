@@ -237,3 +237,129 @@ export const ALLOWED_EMAILS = {
 
   size: (): number => getStore().size,
 };
+
+// ═══════════════════════════════════════════
+//  IP TRACKER — Records & blocks IPs
+// ═══════════════════════════════════════════
+
+interface IPEntry {
+  ip: string;
+  email: string;
+  firstSeen: string;
+  lastSeen: string;
+  blocked: boolean;
+  loginCount: number;
+}
+
+const GLOBAL_IP_KEY = '__jiraops_ip_store__';
+
+function getIPFilePath(): string {
+  const projectPath = path.join(process.cwd(), 'data', 'ips.json');
+  const tmpPath = '/tmp/jiraops-ips.json';
+  try {
+    const dataDir = path.dirname(projectPath);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.accessSync(dataDir, fs.constants.W_OK);
+    return projectPath;
+  } catch {
+    return tmpPath;
+  }
+}
+
+function getIPStore(): Map<string, IPEntry> {
+  const g = globalThis as any;
+  if (!g[GLOBAL_IP_KEY]) {
+    g[GLOBAL_IP_KEY] = new Map<string, IPEntry>();
+    try {
+      const filePath = getIPFilePath();
+      if (fs.existsSync(filePath)) {
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        if (Array.isArray(data)) {
+          for (const entry of data) {
+            const key = `${entry.email}:${entry.ip}`;
+            g[GLOBAL_IP_KEY].set(key, entry);
+          }
+        }
+      }
+    } catch {}
+  }
+  return g[GLOBAL_IP_KEY];
+}
+
+function saveIPStore(): void {
+  try {
+    const store = getIPStore();
+    const filePath = getIPFilePath();
+    const dataDir = path.dirname(filePath);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(Array.from(store.values()), null, 2), 'utf-8');
+  } catch {}
+}
+
+export const IP_TRACKER = {
+  /** Record a login from an IP */
+  record: (email: string, ip: string): void => {
+    const normalized = email.trim().toLowerCase();
+    const cleanIP = ip.replace('::ffff:', ''); // Normalize IPv4-mapped IPv6
+    const key = `${normalized}:${cleanIP}`;
+    const store = getIPStore();
+    const existing = store.get(key);
+    if (existing) {
+      existing.lastSeen = new Date().toISOString();
+      existing.loginCount++;
+    } else {
+      store.set(key, {
+        ip: cleanIP,
+        email: normalized,
+        firstSeen: new Date().toISOString(),
+        lastSeen: new Date().toISOString(),
+        blocked: false,
+        loginCount: 1,
+      });
+    }
+    saveIPStore();
+    console.log(`[IP] Recorded login: ${normalized.slice(0, 3)}*** from ${cleanIP}`);
+  },
+
+  /** Check if an IP is blocked */
+  isBlocked: (ip: string): boolean => {
+    const cleanIP = ip.replace('::ffff:', '');
+    for (const entry of getIPStore().values()) {
+      if (entry.ip === cleanIP && entry.blocked) return true;
+    }
+    return false;
+  },
+
+  /** Block an IP */
+  block: (ip: string): boolean => {
+    const cleanIP = ip.replace('::ffff:', '');
+    let found = false;
+    for (const [key, entry] of getIPStore()) {
+      if (entry.ip === cleanIP) {
+        entry.blocked = true;
+        found = true;
+      }
+    }
+    if (found) saveIPStore();
+    return found;
+  },
+
+  /** Unblock an IP */
+  unblock: (ip: string): boolean => {
+    const cleanIP = ip.replace('::ffff:', '');
+    let found = false;
+    for (const [key, entry] of getIPStore()) {
+      if (entry.ip === cleanIP) {
+        entry.blocked = false;
+        found = true;
+      }
+    }
+    if (found) saveIPStore();
+    return found;
+  },
+
+  /** List all IP records */
+  list: (): IPEntry[] => {
+    return Array.from(getIPStore().values());
+  },
+};

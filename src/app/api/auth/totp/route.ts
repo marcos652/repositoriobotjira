@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS, encrypt, decrypt } from '../_store';
+import { ALLOWED_EMAILS, encrypt, decrypt, IP_TRACKER } from '../_store';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
 import fs from 'fs';
@@ -77,6 +77,15 @@ export async function POST(request: NextRequest) {
 
     if (!ALLOWED_EMAILS.includes(normalized)) {
       return NextResponse.json({ error: 'Email não autorizado' }, { status: 403 });
+    }
+
+    // Check if IP is blocked
+    const clientIP = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || '127.0.0.1';
+
+    if (IP_TRACKER.isBlocked(clientIP)) {
+      return NextResponse.json({ error: 'Acesso bloqueado. Contate o administrador.' }, { status: 403 });
     }
 
     const hash = emailToHash(normalized);
@@ -159,6 +168,9 @@ export async function POST(request: NextRequest) {
       });
       saveTOTPStore();
 
+      // Record IP
+      IP_TRACKER.record(normalized, clientIP);
+
       // Create session
       const sessionPayload = {
         email: normalized,
@@ -214,6 +226,9 @@ export async function POST(request: NextRequest) {
       if (delta === null) {
         return NextResponse.json({ error: 'Código incorreto' }, { status: 401 });
       }
+
+      // Record IP
+      IP_TRACKER.record(normalized, clientIP);
 
       // Create session
       const sessionPayload = {
