@@ -4,14 +4,19 @@ import { ALLOWED_EMAILS } from './app/api/auth/_store';
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Block access to sensitive files
+  // Block access to sensitive files and directories
   const blockedPaths = ['.env', '.env.local', '.env.production', '_store.ts', '_config.ts'];
   if (blockedPaths.some(p => pathname.includes(p))) {
     return new NextResponse('Not Found', { status: 404 });
   }
 
-  // Block access to source code directories
-  if (pathname.startsWith('/src/') || pathname.endsWith('.ts') || pathname.endsWith('.tsx')) {
+  // Block access to data directory (encrypted emails, TOTP secrets)
+  if (pathname.startsWith('/data/') || pathname.startsWith('/data')) {
+    return new NextResponse('Not Found', { status: 404 });
+  }
+
+  // Block access to source code directories and sensitive file types
+  if (pathname.startsWith('/src/') || pathname.endsWith('.ts') || pathname.endsWith('.tsx') || pathname.endsWith('.json')) {
     return new NextResponse('Not Found', { status: 404 });
   }
 
