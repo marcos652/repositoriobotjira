@@ -16,18 +16,29 @@ function generateCode(): string {
 // Export for use by verify-code route
 export { codeStore, ALLOWED_EMAILS };
 
-// Send verification code via Slack
+// Send verification code via Slack DM (private to the user)
 async function sendSlackCode(email: string, code: string): Promise<void> {
   const slackToken = process.env.SLACK_TOKEN;
-  const channel = process.env.SLACK_CHANNEL;
 
-  if (!slackToken || !channel) {
+  if (!slackToken) {
     throw new Error('Slack não configurado');
   }
 
+  // 1. Find Slack user ID by email
+  const lookupRes = await fetch(`https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`, {
+    headers: { 'Authorization': `Bearer ${slackToken}` },
+  });
+  const lookupData = await lookupRes.json();
+
+  if (!lookupData.ok) {
+    throw new Error(`Usuário não encontrado no Slack: ${lookupData.error}`);
+  }
+
+  const userId = lookupData.user.id;
+
+  // 2. Send DM directly to the user (using user ID as channel)
   const message = `🔐 *Código de Verificação - JiraOps Dashboard*\n\n` +
-    `👤 Solicitante: *${email}*\n` +
-    `🔑 Código: \`${code}\`\n` +
+    `🔑 Seu código: \`${code}\`\n` +
     `⏱️ Expira em: *5 minutos*\n\n` +
     `_Se você não solicitou este código, ignore esta mensagem._`;
 
@@ -38,7 +49,7 @@ async function sendSlackCode(email: string, code: string): Promise<void> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      channel,
+      channel: userId,
       text: message,
       unfurl_links: false,
     }),
@@ -46,7 +57,7 @@ async function sendSlackCode(email: string, code: string): Promise<void> {
 
   const data = await res.json();
   if (!data.ok) {
-    throw new Error(`Slack error: ${data.error}`);
+    throw new Error(`Slack DM error: ${data.error}`);
   }
 }
 
