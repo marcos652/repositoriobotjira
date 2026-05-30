@@ -227,6 +227,25 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <span className="whitespace-nowrap truncate">{item.label}</span>
                 )}
 
+                {/* Notification badge */}
+                {item.label === 'Notificações' && !collapsed && (
+                  <span className="badge-pulse ml-auto flex-shrink-0 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[9px] font-bold"
+                    style={{
+                      background: 'linear-gradient(135deg, #F43F5E, #E11D48)',
+                      color: '#fff',
+                      boxShadow: '0 0 8px rgba(244, 63, 94, 0.5)',
+                    }}>
+                    3
+                  </span>
+                )}
+                {item.label === 'Notificações' && collapsed && (
+                  <div className="absolute top-1 right-1 w-[8px] h-[8px] rounded-full badge-pulse"
+                    style={{
+                      background: '#F43F5E',
+                      boxShadow: '0 0 6px rgba(244, 63, 94, 0.6)',
+                    }} />
+                )}
+
                 {/* Active glow dot */}
                 {active && !collapsed && (
                   <div className="ml-auto flex-shrink-0 w-[6px] h-[6px] rounded-full"

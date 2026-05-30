@@ -55,6 +55,23 @@ async function sendSlackCode(email: string, code: string): Promise<void> {
   }
 }
 
+// ── Rate limiting: max 5 attempts per email in 15 minutes ──
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+
+function checkRateLimit(email: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(email);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(email, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false;
+  entry.count++;
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json();
@@ -69,6 +86,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Email não autorizado. Contate o administrador.' },
         { status: 403 }
+      );
+    }
+
+    // Rate limiting
+    if (!checkRateLimit(normalizedEmail)) {
+      return NextResponse.json(
+        { error: 'Muitas tentativas. Aguarde 15 minutos.' },
+        { status: 429 }
       );
     }
 

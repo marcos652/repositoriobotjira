@@ -6,6 +6,10 @@ import Header from '@/components/layout/Header';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { FilterProvider } from '@/contexts/FilterContext';
 import { usePathname } from 'next/navigation';
+import ToastProvider from '@/components/ui/ToastProvider';
+import CommandPalette from '@/components/ui/CommandPalette';
+import OnboardingTour from '@/components/ui/OnboardingTour';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': { title: 'Overview', subtitle: 'Visão geral de todos os times' },
@@ -33,29 +37,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
   const pageInfo = pageTitles[pathname] || { title: 'JiraOps', subtitle: '' };
+  useKeyboardShortcuts();
 
   return (
     <ThemeProvider>
       <FilterProvider>
-        <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
-          <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-          <div
-            className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
-            style={{ marginLeft: sidebarCollapsed ? '80px' : '272px' }}
-          >
-            <Header title={pageInfo.title} subtitle={pageInfo.subtitle} />
-            <main
-              className={`flex-1 overflow-y-auto ${
-                ['/dashboard/nova-demanda','/dashboard/metricas','/dashboard/calendario','/dashboard/equipe','/dashboard/relatorios','/dashboard/sla','/dashboard/releases','/dashboard/clientes','/dashboard/knowledge','/dashboard/automacoes','/dashboard/integracoes','/dashboard/logs','/dashboard/notificacoes','/dashboard/configuracoes'].includes(pathname)
-                  ? 'p-4'
-                  : 'px-12 py-12'
-              }`}
-              style={{ background: 'var(--bg-primary)' }}
+        <ToastProvider>
+          <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+            <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+            <div
+              className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
+              style={{ marginLeft: sidebarCollapsed ? '80px' : '272px' }}
             >
-              {children}
-            </main>
+              <Header title={pageInfo.title} subtitle={pageInfo.subtitle} />
+              <main
+                className={`flex-1 overflow-y-auto ${
+                  ['/dashboard/nova-demanda','/dashboard/metricas','/dashboard/calendario','/dashboard/equipe','/dashboard/relatorios','/dashboard/sla','/dashboard/releases','/dashboard/clientes','/dashboard/knowledge','/dashboard/automacoes','/dashboard/integracoes','/dashboard/logs','/dashboard/notificacoes','/dashboard/configuracoes'].includes(pathname)
+                    ? 'p-4'
+                    : 'px-12 py-12'
+                }`}
+                style={{ background: 'var(--bg-primary)' }}
+              >
+                <div key={pathname} className="animate-page-enter">
+                  {children}
+                </div>
+              </main>
+            </div>
+            <CommandPalette />
+            <OnboardingTour />
           </div>
-        </div>
+        </ToastProvider>
       </FilterProvider>
     </ThemeProvider>
   );

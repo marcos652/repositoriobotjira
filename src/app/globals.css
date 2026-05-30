@@ -542,3 +542,214 @@ body {
   0%, 100% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.2); }
   50% { box-shadow: 0 0 24px rgba(59, 130, 246, 0.4); }
 }
+
+/* ============================================
+   PHASE 1 & 2 — Premium Animations & Utilities
+   ============================================ */
+
+/* ── Count-up animation for metric numbers ── */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-count-up {
+  animation: countUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ── Slide-up with stagger for card grids ── */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+.stagger-7 { animation-delay: 0.35s; }
+.stagger-8 { animation-delay: 0.4s; }
+.stagger-9 { animation-delay: 0.45s; }
+.stagger-10 { animation-delay: 0.5s; }
+
+/* ── Page transition ── */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-page-enter {
+  animation: pageEnter 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ── Ripple effect for buttons ── */
+@keyframes rippleEffect {
+  0% { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(4); opacity: 0; }
+}
+
+.ripple-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-container::after {
+  content: '';
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(0);
+  pointer-events: none;
+}
+
+.ripple-container:active::after {
+  animation: rippleEffect 0.6s ease-out;
+}
+
+/* ── Skeleton shimmer loading ── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-card) 25%,
+    rgba(148, 163, 184, 0.08) 50%,
+    var(--bg-card) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+.skeleton-text {
+  height: 14px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.skeleton-title {
+  height: 28px;
+  width: 60%;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+/* ── Card hover with glow ── */
+.card-interactive {
+  transition: transform var(--transition-base),
+              box-shadow var(--transition-base),
+              border-color var(--transition-base);
+  cursor: pointer;
+}
+
+.card-interactive:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: var(--shadow-lg), var(--shadow-glow-blue);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.card-interactive:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* ── Success check animation ── */
+@keyframes successCheck {
+  0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+  50% { transform: scale(1.2) rotate(0deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes successRing {
+  0% { transform: scale(0.8); opacity: 0; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
+}
+
+.animate-success-check {
+  animation: successCheck 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-success-ring {
+  animation: successRing 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ── Tabular numbers for metrics ── */
+.metric-number {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.02em;
+}
+
+/* ── Notification badge pulse ── */
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.badge-pulse {
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+/* ── Online status indicator ── */
+@keyframes onlinePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+}
+
+.online-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-emerald);
+  animation: onlinePulse 2s ease-in-out infinite;
+  border: 2px solid var(--bg-sidebar);
+}
+
+/* ── Toast notifications ── */
+@keyframes toastIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes toastOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+.toast-enter { animation: toastIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.toast-exit { animation: toastOut 0.25s ease-in both; }
+
+/* ── Command palette backdrop ── */
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalScale {
+  from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-backdrop { animation: backdropIn 0.15s ease-out both; }
+.animate-modal { animation: modalScale 0.2s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+/* ── Sparkline glow ── */
+.sparkline-glow {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+/* ── Variation indicator ── */
+.variation-up { color: var(--accent-emerald); }
+.variation-down { color: var(--accent-rose); }
+.variation-neutral { color: var(--text-tertiary); }
+
