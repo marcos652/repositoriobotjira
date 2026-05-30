@@ -1,6 +1,9 @@
 'use client';
-import React from 'react';
-import { Settings, User, Bell, Palette, Shield, Globe, Key, Moon, Sun, Monitor } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Settings, User, Bell, Palette, Shield, Globe, Key, Moon, Sun, Monitor,
+  Mail, Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, Lock, Users
+} from 'lucide-react';
 
 const sections = [
   { id: 'profile', icon: User, title: 'Perfil', desc: 'Nome, email e avatar', color: '#6366F1',
@@ -20,6 +23,225 @@ const sections = [
   },
 ];
 
+// ── Email Management Component ──
+function EmailManagement() {
+  const [emails, setEmails] = useState<Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [newEmail, setNewEmail] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const loadEmails = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/auth/emails');
+      if (res.ok) {
+        const data = await res.json();
+        setEmails(data.emails || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadEmails(); }, []);
+
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
+  const handleAdd = async () => {
+    if (!newEmail.trim() || !newEmail.includes('@')) return;
+    setAdding(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/auth/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newEmail.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: 'success', text: `${newEmail} autorizado! O bot enviará o código via Slack DM.` });
+        setNewEmail('');
+        loadEmails();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Erro ao adicionar' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexão' });
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleRemove = async (email: string) => {
+    setRemoving(email);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/auth/emails', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: 'success', text: `${email} removido` });
+        loadEmails();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Erro ao remover' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexão' });
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const maskEmail = (email: string) => {
+    const [user, domain] = email.split('@');
+    if (user.length <= 3) return `${user[0]}***@${domain}`;
+    return `${user.slice(0, 3)}${'•'.repeat(user.length - 3)}@${domain}`;
+  };
+
+  return (
+    <div className="em-root">
+      {/* Header */}
+      <div className="em-info">
+        <div className="em-info-icon">
+          <Lock size={14} />
+        </div>
+        <p className="em-info-text">
+          Emails são armazenados com <strong>criptografia AES-256-GCM</strong> + hash SHA-256. 
+          Mesmo com acesso ao banco, invasores veem apenas dados criptografados.
+        </p>
+      </div>
+
+      {/* Add new email */}
+      <div className="em-add-row">
+        <div className="em-input-wrapper">
+          <Mail size={14} className="em-input-icon" />
+          <input
+            type="email"
+            value={newEmail}
+            onChange={e => setNewEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            placeholder="novo.usuario@empresa.com"
+            className="em-input"
+          />
+        </div>
+        <button
+          onClick={handleAdd}
+          disabled={adding || !newEmail.includes('@')}
+          className="em-add-btn"
+        >
+          {adding ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+          Autorizar
+        </button>
+      </div>
+
+      {/* Message */}
+      {message && (
+        <div className={`em-msg em-msg-${message.type}`}>
+          {message.type === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+          {message.text}
+        </div>
+      )}
+
+      {/* Email list */}
+      <div className="em-list">
+        {loading ? (
+          <div className="em-loading">
+            <Loader2 size={16} className="animate-spin" />
+            <span>Carregando emails...</span>
+          </div>
+        ) : emails.length === 0 ? (
+          <div className="em-empty">Nenhum email autorizado</div>
+        ) : (
+          emails.map((entry) => (
+            <div key={entry.email} className="em-item">
+              <div className="em-item-avatar">
+                {entry.email[0].toUpperCase()}
+              </div>
+              <div className="em-item-info">
+                <p className="em-item-email">{entry.email}</p>
+                <p className="em-item-meta">
+                  {entry.isDefault && <span className="em-badge">Admin</span>}
+                  <span>Adicionado {entry.addedBy === 'system' ? 'automaticamente' : `por ${entry.addedBy || 'admin'}`}</span>
+                  <span>•</span>
+                  <span>{new Date(entry.addedAt).toLocaleDateString('pt-BR')}</span>
+                </p>
+              </div>
+              {!entry.isDefault && (
+                <button
+                  onClick={() => handleRemove(entry.email)}
+                  disabled={removing === entry.email}
+                  className="em-remove-btn"
+                  title="Remover acesso"
+                >
+                  {removing === entry.email
+                    ? <Loader2 size={14} className="animate-spin" />
+                    : <Trash2 size={14} />
+                  }
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      <style jsx>{`
+        .em-root { display: flex; flex-direction: column; gap: 14px; }
+        .em-info { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.12); }
+        .em-info-icon { width: 28px; height: 28px; border-radius: 8px; background: rgba(59, 130, 246, 0.12); color: var(--accent-blue); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+        .em-info-text { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+        .em-info-text strong { color: var(--accent-blue); }
+
+        .em-add-row { display: flex; gap: 8px; }
+        .em-input-wrapper { flex: 1; position: relative; display: flex; align-items: center; }
+        .em-input-icon { position: absolute; left: 12px; color: var(--text-tertiary); pointer-events: none; }
+        .em-input { width: 100%; padding: 10px 12px 10px 34px; border-radius: 10px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border-primary); color: var(--text-primary); outline: none; font-family: var(--font-sans); transition: border-color 0.2s; }
+        .em-input:focus { border-color: var(--accent-blue); }
+        .em-input::placeholder { color: var(--text-tertiary); }
+
+        .em-add-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 10px; font-size: 12px; font-weight: 700; font-family: var(--font-sans); border: none; cursor: pointer; background: var(--gradient-primary); color: #fff; box-shadow: var(--shadow-glow-blue); transition: all 0.2s; flex-shrink: 0; }
+        .em-add-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .em-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .em-msg { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; font-size: 12px; font-weight: 500; }
+        .em-msg-success { background: rgba(16, 185, 129, 0.08); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.15); }
+        .em-msg-error { background: rgba(244, 63, 94, 0.08); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.15); }
+
+        .em-list { display: flex; flex-direction: column; gap: 2px; }
+        .em-loading, .em-empty { padding: 24px; text-align: center; font-size: 12px; color: var(--text-tertiary); display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+        .em-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; transition: background 0.15s; }
+        .em-item:hover { background: var(--bg-card-hover); }
+
+        .em-item-avatar { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet)); color: #fff; flex-shrink: 0; }
+
+        .em-item-info { flex: 1; min-width: 0; }
+        .em-item-email { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+        .em-item-meta { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-tertiary); margin-top: 2px; flex-wrap: wrap; }
+
+        .em-badge { display: inline-flex; padding: 1px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.12); color: var(--accent-emerald); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .em-remove-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-primary); background: transparent; color: var(--text-tertiary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+        .em-remove-btn:hover:not(:disabled) { background: rgba(244, 63, 94, 0.1); color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.3); }
+        .em-remove-btn:disabled { opacity: 0.5; }
+
+        .animate-spin { animation: spin 1s linear infinite; }
+      `}</style>
+    </div>
+  );
+}
+
 export default function ConfiguracoesPage() {
   return (
     <div className="cf-root">
@@ -27,6 +249,17 @@ export default function ConfiguracoesPage() {
         <div className="cf-hero-content"><div className="cf-hero-left"><div className="cf-hero-icon"><Settings size={24} color="#fff"/></div><div><h1 className="cf-hero-title">Configurações</h1><p className="cf-hero-sub">Preferências e personalização</p></div></div></div>
       </div>
       <div className="cf-body"><div className="cf-main">
+        {/* ── Email Management Section ── */}
+        <div className="cf-section">
+          <div className="cf-section-header">
+            <div className="cf-section-icon" style={{background:'rgba(59,130,246,0.12)',color:'#3B82F6'}}><Users size={18}/></div>
+            <div><p className="cf-section-title">Usuários Autorizados</p><p className="cf-section-desc">Gerencie quem pode acessar o dashboard. O bot envia o código via Slack DM.</p></div>
+          </div>
+          <div className="cf-section-body">
+            <EmailManagement />
+          </div>
+        </div>
+
         {sections.map(s=>{const Icon=s.icon;return(
           <div key={s.id} className="cf-section">
             <div className="cf-section-header">
@@ -49,10 +282,13 @@ export default function ConfiguracoesPage() {
               )}
             </div>
           </div>
-        );})}
-      </div>
+        );})
+      }</div>
       <div className="cf-sidebar"><div className="cf-sb-section"><h3 className="cf-sb-title">Navegação</h3>
-        <div className="cf-nav">{sections.map(s=><a key={s.id} className="cf-nav-item" href={`#${s.id}`}>{s.title}</a>)}</div>
+        <div className="cf-nav">
+          <a className="cf-nav-item cf-nav-active" href="#users">Usuários</a>
+          {sections.map(s=><a key={s.id} className="cf-nav-item" href={`#${s.id}`}>{s.title}</a>)}
+        </div>
       </div><div className="cf-sb-divider"/><div className="cf-sb-section"><h3 className="cf-sb-title">Info</h3>
         <div className="cf-info"><p>Versão: <strong>2.4.1</strong></p><p>Ambiente: <strong>Produção</strong></p><p>Última atualização: <strong>28/05/2026</strong></p></div>
       </div></div></div>
@@ -92,6 +328,7 @@ export default function ConfiguracoesPage() {
         .cf-nav{display:flex;flex-direction:column;gap:4px}
         .cf-nav-item{padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;color:var(--text-secondary);text-decoration:none;transition:all .15s}
         .cf-nav-item:hover{background:var(--bg-secondary);color:var(--text-primary)}
+        .cf-nav-active{background:var(--accent-blue-light);color:var(--accent-blue) !important}
         .cf-info{display:flex;flex-direction:column;gap:6px}.cf-info p{font-size:11px;color:var(--text-tertiary)}.cf-info strong{color:var(--text-primary)}
       `}</style>
     </div>
