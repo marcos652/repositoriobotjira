@@ -13,9 +13,9 @@ function generateSessionToken(email: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, code, token } = await request.json();
+    const { email, code, token: authToken } = await request.json();
 
-    if (!email || !code || !token) {
+    if (!email || !code || !authToken) {
       return NextResponse.json({ error: 'Email, código e token são obrigatórios' }, { status: 400 });
     }
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Decrypt the token received from the frontend
-    const stored = decrypt<{ email: string; code: string; exp: number }>(token);
+    const stored = decrypt<{ email: string; code: string; exp: number }>(authToken);
 
     if (!stored) {
       return NextResponse.json(
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Code is valid — create session
-    const sessionToken = generateSessionToken(normalizedEmail);
+    const token = generateSessionToken(normalizedEmail);
 
     const response = NextResponse.json({
       success: true,
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Set session cookie
-    response.cookies.set('session', sessionToken, {
+    response.cookies.set('session', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
