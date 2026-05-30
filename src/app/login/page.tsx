@@ -46,7 +46,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setSuccess('Código enviado! Verifique seu email.');
+        setSuccess('Código enviado no Slack! Verifique o canal.');
         setStep('code');
         setCountdown(60);
         setCode(['', '', '', '', '', '']);
@@ -251,8 +251,8 @@ export default function LoginPage() {
             </h2>
             <p className="text-sm" style={{ color: '#64748B' }}>
               {step === 'email'
-                ? 'Digite seu email corporativo para receber o código de acesso.'
-                : <>Código enviado para <strong style={{ color: '#94A3B8' }}>{email}</strong></>
+                ? 'Digite seu email corporativo para receber o código no Slack.'
+                : <>Código enviado no Slack para <strong style={{ color: '#94A3B8' }}>{email}</strong></>
               }
             </p>
           </div>
