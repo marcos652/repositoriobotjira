@@ -77,10 +77,13 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
+        setAuthToken(''); // Invalida o token imediatamente
+        setCode(['', '', '', '', '', '']);
         setSuccess('Login realizado! Redirecionando...');
         setTimeout(() => router.push('/dashboard'), 1000);
       } else {
-        setError(data.error || 'Código inválido');
+        setAuthToken(''); // Token usado = expirado
+        setError(data.error || 'Código inválido. Solicite um novo.');
         setCode(['', '', '', '', '', '']);
         codeRefs.current[0]?.focus();
       }
