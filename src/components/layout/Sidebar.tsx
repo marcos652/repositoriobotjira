@@ -88,13 +88,22 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string>('');
+  const [userImage, setUserImage] = useState<string>('');
+  const [authMethod, setAuthMethod] = useState<'google' | 'slack' | ''>('');
 
   useEffect(() => {
+    // Try Auth.js session first (Google SSO)
     fetch('/api/auth/session')
       .then(r => r.json())
       .then(data => {
-        if (data.authenticated && data.user?.email) {
+        if (data.user?.email) {
           setUserEmail(data.user.email);
+          if (data.user.image) setUserImage(data.user.image);
+          setAuthMethod(data.user.image ? 'google' : 'slack');
+        } else if (data.authenticated && data.user?.email) {
+          // Manual session fallback
+          setUserEmail(data.user.email);
+          setAuthMethod('slack');
         }
       })
       .catch(() => {});
@@ -105,6 +114,17 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const role = userEmail ? getRole(userEmail) : '';
 
   const handleLogout = async () => {
+    if (authMethod === 'google') {
+      // Auth.js signout
+      const csrfRes = await fetch('/api/auth/csrf');
+      const { csrfToken } = await csrfRes.json();
+      await fetch('/api/auth/signout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ csrfToken }),
+      });
+    }
+    // Also clear manual session
     await fetch('/api/auth/session', { method: 'DELETE' });
     router.push('/login');
   };

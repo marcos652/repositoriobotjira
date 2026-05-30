@@ -26,7 +26,16 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check session cookie
+  // ── Check Auth.js session (Google SSO) ──
+  const authToken = request.cookies.get('authjs.session-token')?.value
+    || request.cookies.get('__Secure-authjs.session-token')?.value;
+
+  if (authToken) {
+    // Auth.js session exists — allow through (Auth.js handles validation)
+    return NextResponse.next();
+  }
+
+  // ── Check manual session cookie (Slack code login) ──
   const session = request.cookies.get('session')?.value;
 
   if (!session) {
@@ -37,8 +46,6 @@ export function proxy(request: NextRequest) {
   try {
     const payload = JSON.parse(Buffer.from(session, 'base64').toString());
 
-    // ── SECURITY: Validate session integrity ──
-    // Check required fields exist
     if (!payload.email || !payload.iat || !payload.exp) {
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
@@ -46,7 +53,6 @@ export function proxy(request: NextRequest) {
       return response;
     }
 
-    // Check expiration
     if (Date.now() > payload.exp) {
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
@@ -54,7 +60,6 @@ export function proxy(request: NextRequest) {
       return response;
     }
 
-    // ── SECURITY: Verify email is in allowed list ──
     const normalizedEmail = payload.email.trim().toLowerCase();
     if (!ALLOWED_EMAILS.includes(normalizedEmail)) {
       console.warn(`[SECURITY] Blocked forged session for: ${normalizedEmail}`);
@@ -64,7 +69,6 @@ export function proxy(request: NextRequest) {
       return response;
     }
 
-    // ── SECURITY: Validate iat is not from the future ──
     if (payload.iat > Date.now() + 60000) {
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
