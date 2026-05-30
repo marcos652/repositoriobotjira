@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -14,6 +14,26 @@ import {
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+}
+
+function getInitials(email: string): string {
+  const name = email.split('@')[0];
+  const parts = name.split(/[._-]/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+function getDisplayName(email: string): string {
+  const name = email.split('@')[0];
+  return name.split(/[._-]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+}
+
+function getRole(email: string): string {
+  // Primary admin
+  if (email === 'marcos.vinicius@movingpay.com.br') return 'Administrador';
+  return 'Usuário';
 }
 
 const navItems = [
@@ -67,6 +87,22 @@ const navItems = [
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string>('');
+
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then(r => r.json())
+      .then(data => {
+        if (data.authenticated && data.user?.email) {
+          setUserEmail(data.user.email);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const initials = userEmail ? getInitials(userEmail) : '??';
+  const displayName = userEmail ? getDisplayName(userEmail) : 'Carregando...';
+  const role = userEmail ? getRole(userEmail) : '';
 
   const handleLogout = async () => {
     await fetch('/api/auth/session', { method: 'DELETE' });
@@ -331,7 +367,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     color: '#fff',
                     border: '1px solid rgba(255,255,255,0.15)',
                   }}>
-                  MV
+                  {initials}
                 </div>
                 <div className="absolute -bottom-0.5 -right-0.5 w-[10px] h-[10px] rounded-full"
                   style={{
@@ -341,9 +377,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   }} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-bold truncate text-white">Marcos Vinicius</p>
+                <p className="text-[12px] font-bold truncate text-white">{displayName}</p>
                 <p className="text-[10px] truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                  Administrador
+                  {role}
                 </p>
               </div>
               <button
@@ -397,7 +433,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   color: '#fff',
                   border: '1px solid rgba(255,255,255,0.15)',
                 }}>
-                MV
+                {initials}
               </div>
               <div className="absolute -bottom-0.5 -right-0.5 w-[9px] h-[9px] rounded-full"
                 style={{ background: '#4ADE80', border: '2px solid #5B21B6' }} />
