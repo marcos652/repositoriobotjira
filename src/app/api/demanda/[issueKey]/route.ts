@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JIRABOT_CONFIG, fetchWithRetry, parseResponse } from '../../_config';
 
+// Convert Atlassian Document Format (ADF) to plain text
+function adfToText(node: any): string {
+  if (!node) return '';
+  if (typeof node === 'string') return node;
+  if (node.type === 'text') return node.text || '';
+  if (node.type === 'hardBreak') return '\n';
+  if (node.type === 'mention') return node.attrs?.text || '@user';
+
+  let text = '';
+  if (Array.isArray(node.content)) {
+    text = node.content.map((child: any) => adfToText(child)).join('');
+  }
+
+  // Add line breaks after block-level elements
+  if (['paragraph', 'heading', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'rule'].includes(node.type)) {
+    text += '\n';
+  }
+  if (node.type === 'listItem') {
+    text = '• ' + text;
+  }
+
+  return text;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ issueKey: string }> }
@@ -32,12 +56,22 @@ export async function GET(
     // Extract fields from Jira response format
     const f = data?.fields || data;
 
-    // Return normalized response
+    // Convert ADF description to plain text
+    let descriptionText: string | null = null;
+    if (f?.description) {
+      if (typeof f.description === 'string') {
+        descriptionText = f.description;
+      } else if (typeof f.description === 'object') {
+        descriptionText = adfToText(f.description).trim();
+      }
+    }
+
+    // Return normalized response — texto is always a string, never an object
     return NextResponse.json({
       success: true,
       issue_key: data?.key || issueKey,
       summary: f?.summary || data?.summary || null,
-      texto: f?.description || data?.texto || null,
+      texto: descriptionText || data?.texto || null,
       nome_cliente: f?.customfield_10062 || data?.nome_cliente || null,
       referencia: data?.referencia || null,
       urls_imagens: data?.urls_imagens || [],
