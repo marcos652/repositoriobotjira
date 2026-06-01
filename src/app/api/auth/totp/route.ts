@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       || request.headers.get('x-real-ip')
       || '127.0.0.1';
 
-    if (IP_TRACKER.isBlocked(clientIP)) {
+    if (IP_TRACKER.isBlocked(clientIP, normalized)) {
       return NextResponse.json({ error: 'Acesso bloqueado. Contate o administrador.' }, { status: 403 });
     }
 

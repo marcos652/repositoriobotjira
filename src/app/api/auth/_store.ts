@@ -321,37 +321,65 @@ export const IP_TRACKER = {
     console.log(`[IP] Recorded login: ${normalized.slice(0, 3)}*** from ${cleanIP}`);
   },
 
-  /** Check if an IP is blocked */
-  isBlocked: (ip: string): boolean => {
+  /** Check if an IP is blocked for a specific email (or globally if no email given) */
+  isBlocked: (ip: string, email?: string): boolean => {
     const cleanIP = ip.replace('::ffff:', '');
+    if (email) {
+      const key = `${email.trim().toLowerCase()}:${cleanIP}`;
+      const entry = getIPStore().get(key);
+      return entry?.blocked ?? false;
+    }
+    // If no email, check if ANY entry for this IP is blocked
     for (const entry of getIPStore().values()) {
       if (entry.ip === cleanIP && entry.blocked) return true;
     }
     return false;
   },
 
-  /** Block an IP */
-  block: (ip: string): boolean => {
+  /** Block a specific email:ip combination */
+  block: (ip: string, email?: string): boolean => {
     const cleanIP = ip.replace('::ffff:', '');
+    const store = getIPStore();
     let found = false;
-    for (const [key, entry] of getIPStore()) {
-      if (entry.ip === cleanIP) {
+    if (email) {
+      // Block only the specific email:ip combo
+      const key = `${email.trim().toLowerCase()}:${cleanIP}`;
+      const entry = store.get(key);
+      if (entry) {
         entry.blocked = true;
         found = true;
+      }
+    } else {
+      // Legacy: block all entries with this IP
+      for (const [key, entry] of store) {
+        if (entry.ip === cleanIP) {
+          entry.blocked = true;
+          found = true;
+        }
       }
     }
     if (found) saveIPStore();
     return found;
   },
 
-  /** Unblock an IP */
-  unblock: (ip: string): boolean => {
+  /** Unblock a specific email:ip combination */
+  unblock: (ip: string, email?: string): boolean => {
     const cleanIP = ip.replace('::ffff:', '');
+    const store = getIPStore();
     let found = false;
-    for (const [key, entry] of getIPStore()) {
-      if (entry.ip === cleanIP) {
+    if (email) {
+      const key = `${email.trim().toLowerCase()}:${cleanIP}`;
+      const entry = store.get(key);
+      if (entry) {
         entry.blocked = false;
         found = true;
+      }
+    } else {
+      for (const [key, entry] of store) {
+        if (entry.ip === cleanIP) {
+          entry.blocked = false;
+          found = true;
+        }
       }
     }
     if (found) saveIPStore();
@@ -361,5 +389,64 @@ export const IP_TRACKER = {
   /** List all IP records */
   list: (): IPEntry[] => {
     return Array.from(getIPStore().values());
+  },
+
+  /** Add a new IP entry manually */
+  add: (email: string, ip: string): boolean => {
+    const normalized = email.trim().toLowerCase();
+    const cleanIP = ip.replace('::ffff:', '').trim();
+    if (!normalized || !cleanIP) return false;
+    const key = `${normalized}:${cleanIP}`;
+    const store = getIPStore();
+    if (store.has(key)) return false;
+    store.set(key, {
+      ip: cleanIP,
+      email: normalized,
+      firstSeen: new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
+      blocked: false,
+      loginCount: 0,
+    });
+    saveIPStore();
+    console.log(`[IP] Manually added: ${normalized.slice(0, 3)}*** → ${cleanIP}`);
+    return true;
+  },
+
+  /** Update an IP entry (change IP or email) */
+  update: (oldEmail: string, oldIP: string, newEmail?: string, newIP?: string): boolean => {
+    const store = getIPStore();
+    const cleanOldIP = oldIP.replace('::ffff:', '').trim();
+    const oldKey = `${oldEmail.trim().toLowerCase()}:${cleanOldIP}`;
+    const entry = store.get(oldKey);
+    if (!entry) return false;
+
+    const updatedEmail = (newEmail || oldEmail).trim().toLowerCase();
+    const updatedIP = (newIP || oldIP).replace('::ffff:', '').trim();
+    const newKey = `${updatedEmail}:${updatedIP}`;
+
+    // Remove old entry
+    store.delete(oldKey);
+    // Set updated entry
+    store.set(newKey, {
+      ...entry,
+      ip: updatedIP,
+      email: updatedEmail,
+    });
+    saveIPStore();
+    console.log(`[IP] Updated: ${oldKey} → ${newKey}`);
+    return true;
+  },
+
+  /** Remove an IP entry */
+  remove: (email: string, ip: string): boolean => {
+    const store = getIPStore();
+    const cleanIP = ip.replace('::ffff:', '').trim();
+    const key = `${email.trim().toLowerCase()}:${cleanIP}`;
+    const removed = store.delete(key);
+    if (removed) {
+      saveIPStore();
+      console.log(`[IP] Removed: ${key}`);
+    }
+    return removed;
   },
 };

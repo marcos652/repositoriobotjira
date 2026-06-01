@@ -8,7 +8,7 @@ import {
   Users, GitBranch, Zap, ChevronLeft, ChevronRight, HelpCircle,
   Kanban, CalendarDays, ClipboardList, Bell, Shield,
   Bot, BookOpen, ScrollText, Building2, FileBarChart, Sparkles,
-  LogOut, Search, MessageSquare
+  LogOut, Search, MessageSquare, Globe
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -80,6 +80,7 @@ const navItems = [
       { label: 'Integrações', href: '/dashboard/integracoes', icon: Zap },
       { label: 'Logs / Auditoria', href: '/dashboard/logs', icon: ScrollText },
       { label: 'Notificações', href: '/dashboard/notificacoes', icon: Bell },
+      { label: 'Gerenciar IPs', href: '/dashboard/ips', icon: Globe },
       { label: 'Configurações', href: '/dashboard/configuracoes', icon: Settings },
     ],
   },

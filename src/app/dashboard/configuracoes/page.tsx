@@ -261,13 +261,13 @@ function IPManagement() {
 
   useEffect(() => { loadIPs(); }, []);
 
-  const handleToggleBlock = async (ip: string, currentlyBlocked: boolean) => {
-    setToggling(ip);
+  const handleToggleBlock = async (ip: string, email: string, currentlyBlocked: boolean) => {
+    setToggling(`${email}:${ip}`);
     try {
       await fetch('/api/auth/ips', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip, action: currentlyBlocked ? 'unblock' : 'block' }),
+        body: JSON.stringify({ ip, email, action: currentlyBlocked ? 'unblock' : 'block' }),
       });
       await loadIPs();
     } catch {} finally { setToggling(null); }
@@ -302,17 +302,17 @@ function IPManagement() {
                   <td style={{ padding: '10px 12px', textAlign: 'center', color: '#94A3B8', fontWeight: 700 }}>{entry.loginCount}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                     <button
-                      onClick={() => handleToggleBlock(entry.ip, entry.blocked)}
-                      disabled={toggling === entry.ip}
+                      onClick={() => handleToggleBlock(entry.ip, entry.email, entry.blocked)}
+                      disabled={toggling === `${entry.email}:${entry.ip}`}
                       style={{
                         padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '10px', fontWeight: 700,
-                        cursor: toggling === entry.ip ? 'wait' : 'pointer',
+                        cursor: toggling === `${entry.email}:${entry.ip}` ? 'wait' : 'pointer',
                         background: entry.blocked ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
                         color: entry.blocked ? '#EF4444' : '#22C55E',
                         transition: 'all 0.2s',
                       }}
                     >
-                      {toggling === entry.ip ? '...' : entry.blocked ? '🚫 Bloqueado' : '✅ Ativo'}
+                      {toggling === `${entry.email}:${entry.ip}` ? '...' : entry.blocked ? '🚫 Bloqueado' : '✅ Ativo'}
                     </button>
                   </td>
                 </tr>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS, decrypt } from '../_store';
+import { ALLOWED_EMAILS, decrypt, IP_TRACKER } from '../_store';
 
 function generateSessionToken(email: string): string {
   const payload = {
@@ -57,7 +57,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Success — create session
+    // Success — record IP and create session
+    const clientIP = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || '127.0.0.1';
+    IP_TRACKER.record(normalizedEmail, clientIP);
+
     const sessionValue = generateSessionToken(normalizedEmail);
 
     const response = NextResponse.json({
