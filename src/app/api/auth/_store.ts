@@ -81,30 +81,27 @@ const DEFAULT_EMAILS = [
 ];
 
 // ── File persistence ──
-function getDataFilePath(): string {
-  // Try project data dir first, then /tmp for Vercel
-  const projectPath = path.join(process.cwd(), 'data', 'emails.json');
-  const tmpPath = '/tmp/jiraops-emails.json';
+// On Vercel: data/ is read-only (committed), /tmp/ is writable (ephemeral)
+// Strategy: READ from both, MERGE, WRITE to writable path
 
-  // Check if project data dir is writable
+const PROJECT_DATA_PATH = () => path.join(process.cwd(), 'data', 'emails.json');
+const TMP_DATA_PATH = '/tmp/jiraops-emails.json';
+
+function getWritableDataPath(): string {
   try {
+    const projectPath = PROJECT_DATA_PATH();
     const dataDir = path.dirname(projectPath);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    // Test write
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     fs.accessSync(dataDir, fs.constants.W_OK);
     return projectPath;
   } catch {
-    return tmpPath;
+    return TMP_DATA_PATH;
   }
 }
 
-function loadEmailsFromFile(): Map<string, SecureEmail> {
+function loadEmailsFromPath(filePath: string): Map<string, SecureEmail> {
   const store = new Map<string, SecureEmail>();
-
   try {
-    const filePath = getDataFilePath();
     if (fs.existsSync(filePath)) {
       const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       if (Array.isArray(data)) {
@@ -114,18 +111,33 @@ function loadEmailsFromFile(): Map<string, SecureEmail> {
           }
         }
       }
-      console.log(`[Auth] Loaded ${store.size} emails from ${filePath}`);
     }
-  } catch (e: any) {
-    console.warn(`[Auth] Could not load emails file: ${e.message}`);
-  }
-
+  } catch {}
   return store;
+}
+
+function loadEmailsFromFile(): Map<string, SecureEmail> {
+  // 1. Load from committed data/ (baseline)
+  const committed = loadEmailsFromPath(PROJECT_DATA_PATH());
+  
+  // 2. Load from /tmp/ (runtime additions on Vercel)
+  const tmp = loadEmailsFromPath(TMP_DATA_PATH);
+  
+  // 3. Merge: /tmp/ entries override committed ones (newer)
+  const merged = new Map<string, SecureEmail>(committed);
+  for (const [key, value] of tmp) {
+    merged.set(key, value);
+  }
+  
+  if (merged.size > 0) {
+    console.log(`[Auth] Loaded ${merged.size} emails (committed: ${committed.size}, tmp: ${tmp.size})`);
+  }
+  return merged;
 }
 
 function saveEmailsToFile(store: Map<string, SecureEmail>): void {
   try {
-    const filePath = getDataFilePath();
+    const filePath = getWritableDataPath();
     const dataDir = path.dirname(filePath);
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
@@ -133,9 +145,22 @@ function saveEmailsToFile(store: Map<string, SecureEmail>): void {
     const data = Array.from(store.values());
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
     console.log(`[Auth] ✅ Saved ${data.length} emails to ${filePath}`);
+    
+    // Also try to save to /tmp/ as backup on Vercel
+    if (filePath !== TMP_DATA_PATH) {
+      try {
+        fs.writeFileSync(TMP_DATA_PATH, JSON.stringify(data, null, 2), 'utf-8');
+      } catch {}
+    }
   } catch (e: any) {
-    console.error(`[Auth] ❌ FAILED to save emails: ${e.message}`);
-    console.error(e.stack);
+    // If project path fails, try /tmp/
+    try {
+      const data = Array.from(store.values());
+      fs.writeFileSync(TMP_DATA_PATH, JSON.stringify(data, null, 2), 'utf-8');
+      console.log(`[Auth] ✅ Saved ${data.length} emails to ${TMP_DATA_PATH} (fallback)`);
+    } catch (e2: any) {
+      console.error(`[Auth] ❌ FAILED to save emails: ${e.message}, fallback: ${e2.message}`);
+    }
   }
 }
 
@@ -485,23 +510,24 @@ const GLOBAL_TOTP_KEY = '__jiraops_totp_store__';
 const GLOBAL_TOTP_TS = '__jiraops_totp_store_ts__';
 const TOTP_CACHE_TTL = 2000;
 
-function getTOTPFilePath(): string {
-  const projectPath = path.join(process.cwd(), 'data', 'totp.json');
-  const tmpPath = '/tmp/jiraops-totp.json';
+const TOTP_PROJECT_PATH = () => path.join(process.cwd(), 'data', 'totp.json');
+const TOTP_TMP_PATH = '/tmp/jiraops-totp.json';
+
+function getWritableTOTPPath(): string {
   try {
+    const projectPath = TOTP_PROJECT_PATH();
     const dataDir = path.dirname(projectPath);
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     fs.accessSync(dataDir, fs.constants.W_OK);
     return projectPath;
   } catch {
-    return tmpPath;
+    return TOTP_TMP_PATH;
   }
 }
 
-function loadTOTPFromFile(): Map<string, TOTPEntry> {
+function loadTOTPFromPath(filePath: string): Map<string, TOTPEntry> {
   const store = new Map<string, TOTPEntry>();
   try {
-    const filePath = getTOTPFilePath();
     if (fs.existsSync(filePath)) {
       const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       if (Array.isArray(data)) {
@@ -512,10 +538,18 @@ function loadTOTPFromFile(): Map<string, TOTPEntry> {
         }
       }
     }
-  } catch (e: any) {
-    console.warn(`[TOTP] Could not load file: ${e.message}`);
-  }
+  } catch {}
   return store;
+}
+
+function loadTOTPFromFile(): Map<string, TOTPEntry> {
+  const committed = loadTOTPFromPath(TOTP_PROJECT_PATH());
+  const tmp = loadTOTPFromPath(TOTP_TMP_PATH);
+  const merged = new Map<string, TOTPEntry>(committed);
+  for (const [key, value] of tmp) {
+    merged.set(key, value);
+  }
+  return merged;
 }
 
 function getTOTPStore(): Map<string, TOTPEntry> {
@@ -538,15 +572,28 @@ function saveTOTPStore(): void {
   try {
     const store = (globalThis as any)[GLOBAL_TOTP_KEY];
     if (!store) return;
-    const filePath = getTOTPFilePath();
+    const filePath = getWritableTOTPPath();
     const dataDir = path.dirname(filePath);
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(Array.from(store.values()), null, 2), 'utf-8');
-    // Invalidate cache so next read gets fresh data
+    const data = JSON.stringify(Array.from(store.values()), null, 2);
+    fs.writeFileSync(filePath, data, 'utf-8');
     (globalThis as any)[GLOBAL_TOTP_TS] = 0;
     console.log(`[TOTP] ✅ Saved ${store.size} entries to ${filePath}`);
+    // Also save to /tmp/ as backup
+    if (filePath !== TOTP_TMP_PATH) {
+      try { fs.writeFileSync(TOTP_TMP_PATH, data, 'utf-8'); } catch {}
+    }
   } catch (e: any) {
-    console.error(`[TOTP] ❌ Failed to save: ${e.message}`);
+    try {
+      const store = (globalThis as any)[GLOBAL_TOTP_KEY];
+      if (store) {
+        fs.writeFileSync(TOTP_TMP_PATH, JSON.stringify(Array.from(store.values()), null, 2), 'utf-8');
+        (globalThis as any)[GLOBAL_TOTP_TS] = 0;
+        console.log(`[TOTP] ✅ Saved to ${TOTP_TMP_PATH} (fallback)`);
+      }
+    } catch (e2: any) {
+      console.error(`[TOTP] ❌ Failed to save: ${e.message}`);
+    }
   }
 }
 
