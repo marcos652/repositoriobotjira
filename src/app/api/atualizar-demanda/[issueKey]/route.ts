@@ -49,6 +49,7 @@ export async function PUT(
     if (body.priority) jiraPayload.fields.priority = { name: body.priority };
     if (body.assignee) jiraPayload.fields.assignee = { accountId: body.assignee };
     if (body.labels) jiraPayload.fields.labels = body.labels;
+    if (body.cliente !== undefined) jiraPayload.fields.customfield_10062 = body.cliente || null;
 
     // Fetch directly from Jira REST API
     const jiraAuth = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');

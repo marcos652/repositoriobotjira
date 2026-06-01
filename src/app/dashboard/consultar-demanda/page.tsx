@@ -57,6 +57,11 @@ export default function ConsultarDemandaPage() {
   const [editing, setEditing] = useState(false);
   const [editTexto, setEditTexto] = useState('');
   const [editSummary, setEditSummary] = useState('');
+  const [editPriority, setEditPriority] = useState('');
+  const [editAssignee, setEditAssignee] = useState('');
+  const [editAssigneeId, setEditAssigneeId] = useState('');
+  const [editReporter, setEditReporter] = useState('');
+  const [editCliente, setEditCliente] = useState('');
   const [updating, setUpdating] = useState(false);
   const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -69,7 +74,21 @@ export default function ConsultarDemandaPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Jira users for assignee search
+  const [jiraUsers, setJiraUsers] = useState<{ accountId: string; displayName: string }[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+
   useEffect(() => { setSearchHistory(loadHistory()); }, []);
+
+  // Fetch Jira users when editing starts
+  useEffect(() => {
+    if (!editing) return;
+    fetch('/api/jira-users')
+      .then(r => r.json())
+      .then(data => { if (data.users) setJiraUsers(data.users); })
+      .catch(() => {});
+  }, [editing]);
 
   const handleSearch = useCallback(async (keyOverride?: string) => {
     let key = (keyOverride || searchKey).trim();
@@ -87,6 +106,11 @@ export default function ConsultarDemandaPage() {
         setDemanda(data);
         setEditTexto(data.texto || '');
         setEditSummary(data.summary || '');
+        setEditPriority(data.priority || '');
+        setEditAssignee(data.assignee || '');
+        setEditAssigneeId(data.assigneeId || '');
+        setEditReporter(data.reporter || '');
+        setEditCliente(data.nome_cliente || '');
         // Save to search history
         const h = [key, ...loadHistory().filter(k => k !== key)].slice(0, 10);
         saveHistory(h); setSearchHistory(h);
@@ -103,6 +127,9 @@ export default function ConsultarDemandaPage() {
     const body: any = {};
     if (editTexto !== (demanda.texto || '')) body.description = editTexto;
     if (editSummary !== (demanda.summary || '')) body.summary = editSummary;
+    if (editPriority !== (demanda.priority || '')) body.priority = editPriority;
+    if (editAssigneeId !== (demanda.assigneeId || '')) body.assignee = editAssigneeId;
+    if (editCliente !== (demanda.nome_cliente || '')) body.cliente = editCliente;
     if (Object.keys(body).length === 0) { setUpdateResult({ success: false, message: 'Nenhuma alteração' }); setUpdating(false); return; }
     try {
       const res = await fetch(`/api/atualizar-demanda/${demanda.issue_key}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -315,19 +342,82 @@ export default function ConsultarDemandaPage() {
 
                 {/* Info Grid */}
                 <div className="cd-info-grid">
-                  {[
-                    { icon: <Building2 size={11} />, label: 'Cliente', value: demanda.nome_cliente || '—' },
-                    { icon: <Tag size={11} />, label: 'Prioridade', value: demanda.priority || '—' },
-                    { icon: <User size={11} />, label: 'Responsável', value: demanda.assignee || 'Não atribuído' },
-                    { icon: <User size={11} />, label: 'Relator', value: demanda.reporter || '—' },
-                    { icon: <Clock size={11} />, label: 'Criado', value: formatDate(demanda.created) },
-                    { icon: <Clock size={11} />, label: 'Atualizado', value: formatDate(demanda.updated) },
-                  ].map((item, i) => (
-                    <div key={i} style={S.card}>
-                      <label style={S.label}>{item.icon} {item.label}</label>
-                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{item.value}</p>
-                    </div>
-                  ))}
+                  {/* Cliente */}
+                  <div style={S.card}>
+                    <label style={S.label}><Building2 size={11} /> Cliente</label>
+                    {editing ? (
+                      <input value={editCliente} onChange={e => setEditCliente(e.target.value)} placeholder="Nome do cliente" style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+                    ) : (
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.nome_cliente || '—'}</p>
+                    )}
+                  </div>
+
+                  {/* Prioridade */}
+                  <div style={S.card}>
+                    <label style={S.label}><Tag size={11} /> Prioridade</label>
+                    {editing ? (
+                      <select value={editPriority} onChange={e => setEditPriority(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}>
+                        <option value="Highest">Highest</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                        <option value="Lowest">Lowest</option>
+                      </select>
+                    ) : (
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.priority || '—'}</p>
+                    )}
+                  </div>
+
+                  {/* Responsável */}
+                  <div style={{ ...S.card, position: 'relative' }}>
+                    <label style={S.label}><User size={11} /> Responsável</label>
+                    {editing ? (
+                      <>
+                        <input
+                          value={userSearch || editAssignee}
+                          onChange={e => { setUserSearch(e.target.value); setShowUserDropdown(true); }}
+                          onFocus={() => setShowUserDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
+                          placeholder="Buscar usuário..."
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }}
+                        />
+                        {showUserDropdown && jiraUsers.length > 0 && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', maxHeight: '200px', overflow: 'auto', marginTop: '4px' }}>
+                            {jiraUsers
+                              .filter(u => !userSearch || u.displayName.toLowerCase().includes(userSearch.toLowerCase()))
+                              .map(u => (
+                                <button key={u.accountId} onMouseDown={() => { setEditAssignee(u.displayName); setEditAssigneeId(u.accountId); setUserSearch(''); setShowUserDropdown(false); }}
+                                  style={{ display: 'block', width: '100%', padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
+                                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')}
+                                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                                  {u.displayName}
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.assignee || 'Não atribuído'}</p>
+                    )}
+                  </div>
+
+                  {/* Relator */}
+                  <div style={S.card}>
+                    <label style={S.label}><User size={11} /> Relator</label>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.reporter || '—'}</p>
+                  </div>
+
+                  {/* Criado */}
+                  <div style={S.card}>
+                    <label style={S.label}><Clock size={11} /> Criado</label>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{formatDate(demanda.created)}</p>
+                  </div>
+
+                  {/* Atualizado */}
+                  <div style={S.card}>
+                    <label style={S.label}><Clock size={11} /> Atualizado</label>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{formatDate(demanda.updated)}</p>
+                  </div>
                 </div>
 
                 {/* Time Tracking */}
