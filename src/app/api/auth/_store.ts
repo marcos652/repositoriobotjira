@@ -469,7 +469,7 @@ export const IP_TRACKER = {
 
 // ═══════════════════════════════════════════
 //  TOTP STORE — Persisted TOTP secrets
-//  Moved here so it survives Next.js hot reloads
+//  File is source of truth, with 2s in-memory cache
 // ═══════════════════════════════════════════
 
 interface TOTPEntry {
@@ -479,6 +479,8 @@ interface TOTPEntry {
 }
 
 const GLOBAL_TOTP_KEY = '__jiraops_totp_store__';
+const GLOBAL_TOTP_TS = '__jiraops_totp_store_ts__';
+const TOTP_CACHE_TTL = 2000;
 
 function getTOTPFilePath(): string {
   const projectPath = path.join(process.cwd(), 'data', 'totp.json');
@@ -506,7 +508,6 @@ function loadTOTPFromFile(): Map<string, TOTPEntry> {
           }
         }
       }
-      console.log(`[TOTP] Loaded ${store.size} entries from ${filePath}`);
     }
   } catch (e: any) {
     console.warn(`[TOTP] Could not load file: ${e.message}`);
@@ -516,28 +517,33 @@ function loadTOTPFromFile(): Map<string, TOTPEntry> {
 
 function getTOTPStore(): Map<string, TOTPEntry> {
   const g = globalThis as any;
-  if (!g[GLOBAL_TOTP_KEY] || g[GLOBAL_TOTP_KEY].size === 0) {
-    // Always try to load from file if store is empty
-    const fileStore = loadTOTPFromFile();
-    if (fileStore.size > 0) {
-      g[GLOBAL_TOTP_KEY] = fileStore;
-    } else if (!g[GLOBAL_TOTP_KEY]) {
-      g[GLOBAL_TOTP_KEY] = new Map<string, TOTPEntry>();
-    }
+  const now = Date.now();
+
+  // Use cached store if fresh
+  if (g[GLOBAL_TOTP_KEY] && g[GLOBAL_TOTP_KEY].size > 0 && g[GLOBAL_TOTP_TS] && (now - g[GLOBAL_TOTP_TS]) < TOTP_CACHE_TTL) {
+    return g[GLOBAL_TOTP_KEY];
   }
+
+  // Always reload from file (source of truth)
+  const fileStore = loadTOTPFromFile();
+  g[GLOBAL_TOTP_KEY] = fileStore.size > 0 ? fileStore : (g[GLOBAL_TOTP_KEY] || new Map<string, TOTPEntry>());
+  g[GLOBAL_TOTP_TS] = now;
   return g[GLOBAL_TOTP_KEY];
 }
 
 function saveTOTPStore(): void {
   try {
-    const store = getTOTPStore();
+    const store = (globalThis as any)[GLOBAL_TOTP_KEY];
+    if (!store) return;
     const filePath = getTOTPFilePath();
     const dataDir = path.dirname(filePath);
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(Array.from(store.values()), null, 2), 'utf-8');
-    console.log(`[TOTP] Saved ${store.size} entries to ${filePath}`);
+    // Invalidate cache so next read gets fresh data
+    (globalThis as any)[GLOBAL_TOTP_TS] = 0;
+    console.log(`[TOTP] ✅ Saved ${store.size} entries to ${filePath}`);
   } catch (e: any) {
-    console.warn(`[TOTP] Could not save: ${e.message}`);
+    console.error(`[TOTP] ❌ Failed to save: ${e.message}`);
   }
 }
 
@@ -583,3 +589,4 @@ export const TOTP_STORE = {
   /** Get email hash */
   hash: (email: string): string => totpEmailHash(email),
 };
+
