@@ -13,6 +13,45 @@ import {
   ArrowRight, Target, Bug, Loader2, WifiOff, RefreshCw
 } from 'lucide-react';
 
+// Extract first name from email or session
+function useUserName(): string {
+  const [name, setName] = useState('');
+  useEffect(() => {
+    // Try manual session cookie first
+    try {
+      const cookies = document.cookie.split(';').reduce((acc, c) => {
+        const [k, v] = c.trim().split('=');
+        acc[k] = v;
+        return acc;
+      }, {} as Record<string, string>);
+
+      // Manual session (base64 encoded JSON with email)
+      if (cookies['session']) {
+        const payload = JSON.parse(atob(cookies['session']));
+        if (payload.email) {
+          const firstName = payload.email.split('@')[0].split('.')[0];
+          setName(firstName.charAt(0).toUpperCase() + firstName.slice(1));
+          return;
+        }
+      }
+    } catch {}
+
+    // Try Auth.js session API
+    fetch('/api/auth/session')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.user?.name) {
+          setName(data.user.name.split(' ')[0]);
+        } else if (data?.user?.email) {
+          const firstName = data.user.email.split('@')[0].split('.')[0];
+          setName(firstName.charAt(0).toUpperCase() + firstName.slice(1));
+        }
+      })
+      .catch(() => {});
+  }, []);
+  return name;
+}
+
 const DEFAULT_CARDS_ORDER = [
   'open', 'resolved', 'sla', 'avgtime', 'bugs', 'critical',
   'suporte_module', 'dev_module', 'chart_volume', 'chart_burndown'
@@ -62,6 +101,7 @@ interface OverviewData {
 
 export default function DashboardOverview() {
   const { filters } = useFilters();
+  const userName = useUserName();
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -355,7 +395,7 @@ export default function DashboardOverview() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 18 ? 'Boa tarde' : 'Boa noite'}, Marcos 👋
+            {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 18 ? 'Boa tarde' : 'Boa noite'}{userName ? `, ${userName}` : ''} 👋
           </h2>
           <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
             Aqui está o resumo do seu workspace hoje.
