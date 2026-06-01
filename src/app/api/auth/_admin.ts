@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { ALLOWED_EMAILS } from '../_store';
 
 const ADMIN_EMAIL = 'marcos.vinicius@movingpay.com.br';
 
