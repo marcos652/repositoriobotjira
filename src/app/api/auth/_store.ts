@@ -78,6 +78,7 @@ interface SecureEmail {
 const DEFAULT_EMAILS = [
   'marcos.vinicius@movingpay.com.br',
   'breno.martins@movingpay.com.br',
+  'gustavo.barbosa@movingpay.com.br',
 ];
 
 // ── File persistence ──
