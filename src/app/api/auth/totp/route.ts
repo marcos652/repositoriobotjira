@@ -1,70 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS, encrypt, decrypt, IP_TRACKER } from '../_store';
+import { ALLOWED_EMAILS, encrypt, decrypt, IP_TRACKER, TOTP_STORE } from '../_store';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
-import fs from 'fs';
-import path from 'path';
 
-// ── TOTP Secret Storage (file-persisted + globalThis) ──
-const GLOBAL_TOTP_KEY = '__jiraops_totp_store__';
-
-interface TOTPEntry {
-  emailHash: string;
-  encryptedSecret: string;
-  createdAt: string;
-}
-
-function getTOTPFilePath(): string {
-  const projectPath = path.join(process.cwd(), 'data', 'totp.json');
-  const tmpPath = '/tmp/jiraops-totp.json';
-  try {
-    const dataDir = path.dirname(projectPath);
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.accessSync(dataDir, fs.constants.W_OK);
-    return projectPath;
-  } catch {
-    return tmpPath;
-  }
-}
-
-function getTOTPStore(): Map<string, TOTPEntry> {
-  const g = globalThis as any;
-  if (!g[GLOBAL_TOTP_KEY]) {
-    g[GLOBAL_TOTP_KEY] = new Map<string, TOTPEntry>();
-    // Load from file
-    try {
-      const filePath = getTOTPFilePath();
-      if (fs.existsSync(filePath)) {
-        const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        if (Array.isArray(data)) {
-          for (const entry of data) {
-            g[GLOBAL_TOTP_KEY].set(entry.emailHash, entry);
-          }
-        }
-      }
-    } catch {}
-  }
-  return g[GLOBAL_TOTP_KEY];
-}
-
-function saveTOTPStore(): void {
-  try {
-    const store = getTOTPStore();
-    const filePath = getTOTPFilePath();
-    const dataDir = path.dirname(filePath);
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(Array.from(store.values()), null, 2), 'utf-8');
-  } catch {}
-}
-
-function emailToHash(email: string): string {
-  const crypto = require('crypto');
-  return crypto.createHash('sha256').update(email.trim().toLowerCase() + ':totp-salt').digest('hex');
-}
-
-// ── POST: Setup TOTP (generate secret + QR code) ──
-// Body: { email }
-// Returns: { qrCode (base64 image), secret (for manual entry), setupToken }
+// ── POST: Setup / Verify / Confirm TOTP ──
 export async function POST(request: NextRequest) {
   try {
     const { email, action, code, setupToken } = await request.json();
@@ -88,13 +27,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Acesso bloqueado. Contate o administrador.' }, { status: 403 });
     }
 
-    const hash = emailToHash(normalized);
-    const store = getTOTPStore();
-
     // ── ACTION: setup — Generate new TOTP secret ──
     if (action === 'setup' || !action) {
-      // Check if already has TOTP configured
-      if (store.has(hash)) {
+      // Check if already has TOTP configured (uses centralized persisted store)
+      if (TOTP_STORE.has(normalized)) {
         return NextResponse.json({
           configured: true,
           message: 'Authenticator já configurado. Digite o código.',
@@ -160,13 +96,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Código incorreto. Tente novamente.' }, { status: 401 });
       }
 
-      // Save the secret (encrypted)
-      store.set(hash, {
-        emailHash: hash,
-        encryptedSecret: encrypt({ secret: tokenData.secret }),
-        createdAt: new Date().toISOString(),
-      });
-      saveTOTPStore();
+      // Save the secret using centralized store (persisted to file!)
+      TOTP_STORE.set(normalized, encrypt({ secret: tokenData.secret }));
 
       // Record IP
       IP_TRACKER.record(normalized, clientIP);
@@ -202,7 +133,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Código obrigatório' }, { status: 400 });
       }
 
-      const entry = store.get(hash);
+      const entry = TOTP_STORE.get(normalized);
       if (!entry) {
         return NextResponse.json({ error: 'Authenticator não configurado' }, { status: 400 });
       }

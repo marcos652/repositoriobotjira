@@ -450,3 +450,120 @@ export const IP_TRACKER = {
     return removed;
   },
 };
+
+// ═══════════════════════════════════════════
+//  TOTP STORE — Persisted TOTP secrets
+//  Moved here so it survives Next.js hot reloads
+// ═══════════════════════════════════════════
+
+interface TOTPEntry {
+  emailHash: string;
+  encryptedSecret: string;
+  createdAt: string;
+}
+
+const GLOBAL_TOTP_KEY = '__jiraops_totp_store__';
+
+function getTOTPFilePath(): string {
+  const projectPath = path.join(process.cwd(), 'data', 'totp.json');
+  const tmpPath = '/tmp/jiraops-totp.json';
+  try {
+    const dataDir = path.dirname(projectPath);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.accessSync(dataDir, fs.constants.W_OK);
+    return projectPath;
+  } catch {
+    return tmpPath;
+  }
+}
+
+function loadTOTPFromFile(): Map<string, TOTPEntry> {
+  const store = new Map<string, TOTPEntry>();
+  try {
+    const filePath = getTOTPFilePath();
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      if (Array.isArray(data)) {
+        for (const entry of data) {
+          if (entry.emailHash) {
+            store.set(entry.emailHash, entry);
+          }
+        }
+      }
+      console.log(`[TOTP] Loaded ${store.size} entries from ${filePath}`);
+    }
+  } catch (e: any) {
+    console.warn(`[TOTP] Could not load file: ${e.message}`);
+  }
+  return store;
+}
+
+function getTOTPStore(): Map<string, TOTPEntry> {
+  const g = globalThis as any;
+  if (!g[GLOBAL_TOTP_KEY] || g[GLOBAL_TOTP_KEY].size === 0) {
+    // Always try to load from file if store is empty
+    const fileStore = loadTOTPFromFile();
+    if (fileStore.size > 0) {
+      g[GLOBAL_TOTP_KEY] = fileStore;
+    } else if (!g[GLOBAL_TOTP_KEY]) {
+      g[GLOBAL_TOTP_KEY] = new Map<string, TOTPEntry>();
+    }
+  }
+  return g[GLOBAL_TOTP_KEY];
+}
+
+function saveTOTPStore(): void {
+  try {
+    const store = getTOTPStore();
+    const filePath = getTOTPFilePath();
+    const dataDir = path.dirname(filePath);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(Array.from(store.values()), null, 2), 'utf-8');
+    console.log(`[TOTP] Saved ${store.size} entries to ${filePath}`);
+  } catch (e: any) {
+    console.warn(`[TOTP] Could not save: ${e.message}`);
+  }
+}
+
+function totpEmailHash(email: string): string {
+  return crypto.createHash('sha256').update(email.trim().toLowerCase() + ':totp-salt').digest('hex');
+}
+
+export const TOTP_STORE = {
+  /** Check if user has TOTP configured */
+  has: (email: string): boolean => {
+    const hash = totpEmailHash(email);
+    return getTOTPStore().has(hash);
+  },
+
+  /** Get TOTP entry for user */
+  get: (email: string): TOTPEntry | undefined => {
+    const hash = totpEmailHash(email);
+    return getTOTPStore().get(hash);
+  },
+
+  /** Save TOTP secret for user */
+  set: (email: string, encryptedSecret: string): void => {
+    const hash = totpEmailHash(email);
+    const store = getTOTPStore();
+    store.set(hash, {
+      emailHash: hash,
+      encryptedSecret,
+      createdAt: new Date().toISOString(),
+    });
+    saveTOTPStore();
+    console.log(`[TOTP] Configured for ${email.slice(0, 3)}***`);
+  },
+
+  /** Remove TOTP for user (reset) */
+  remove: (email: string): boolean => {
+    const hash = totpEmailHash(email);
+    const store = getTOTPStore();
+    const removed = store.delete(hash);
+    if (removed) saveTOTPStore();
+    return removed;
+  },
+
+  /** Get email hash */
+  hash: (email: string): string => totpEmailHash(email),
+};
