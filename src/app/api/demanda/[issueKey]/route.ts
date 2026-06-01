@@ -168,11 +168,15 @@ export async function GET(
       timeSpent: f.timetracking.timeSpent || null,
     } : null;
 
+    // Get rendered HTML from Jira
+    const rendered = data.renderedFields || {};
+
     return NextResponse.json({
       success: true,
       issue_key: data.key || issueKey,
       summary: f.summary || null,
       texto: descriptionText || null,
+      textoHtml: rendered.description || null,
       nome_cliente: f.customfield_10062 ? (typeof f.customfield_10062 === 'string' ? f.customfield_10062 : adfToText(f.customfield_10062).trim()) : null,
       status: f.status?.name || null,
       statusCategory: f.status?.statusCategory?.key || null,

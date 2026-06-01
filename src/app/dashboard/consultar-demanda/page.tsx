@@ -22,7 +22,7 @@ interface SprintData { id: number; name: string; state: string; startDate: strin
 interface TimeTrackingData { originalEstimate: string | null; remainingEstimate: string | null; timeSpent: string | null; }
 
 interface DemandaData {
-  success: boolean; issue_key: string; summary: string | null; texto: string | null;
+  success: boolean; issue_key: string; summary: string | null; texto: string | null; textoHtml: string | null;
   nome_cliente: string | null; status: string | null; statusCategory: string | null;
   issuetype: string | null; priority: string | null; assignee: string | null;
   assigneeId: string | null; reporter: string | null; created: string | null; updated: string | null;
@@ -333,6 +333,9 @@ export default function ConsultarDemandaPage() {
                   <label style={S.label}><Sparkles size={12} /> Descrição</label>
                   {editing ? (
                     <textarea value={editTexto} onChange={e => setEditTexto(e.target.value)} rows={6} style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '13px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', lineHeight: 1.6, fontFamily: 'inherit' }} />
+                  ) : demanda.textoHtml ? (
+                    <div className="jira-description" style={{ padding: '18px 22px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', maxHeight: '600px', overflow: 'auto' }}
+                      dangerouslySetInnerHTML={{ __html: demanda.textoHtml }} />
                   ) : (
                     <div style={{ padding: '14px 18px', borderRadius: '12px', fontSize: '13px', lineHeight: 1.7, background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '400px', overflow: 'auto' }}>
                       {demanda.texto || 'Sem descrição'}
@@ -657,6 +660,34 @@ export default function ConsultarDemandaPage() {
         .cd-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
         @media (max-width: 900px) { .cd-info-grid { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 640px) { .cd-root { padding: 4px 0; } .cd-info-grid { grid-template-columns: 1fr; } }
+
+        /* Jira description rich formatting */
+        .jira-description { font-size: 13px; line-height: 1.8; color: var(--text-secondary); word-break: break-word; }
+        .jira-description h1 { font-size: 20px; font-weight: 800; color: var(--text-primary); margin: 20px 0 10px; }
+        .jira-description h2 { font-size: 17px; font-weight: 700; color: var(--text-primary); margin: 18px 0 8px; }
+        .jira-description h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 16px 0 6px; }
+        .jira-description h4, .jira-description h5, .jira-description h6 { font-size: 13px; font-weight: 700; color: var(--text-primary); margin: 14px 0 4px; }
+        .jira-description p { margin: 8px 0; }
+        .jira-description ul, .jira-description ol { margin: 8px 0; padding-left: 24px; }
+        .jira-description li { margin: 4px 0; }
+        .jira-description ul li { list-style: disc; }
+        .jira-description ol li { list-style: decimal; }
+        .jira-description a { color: #818CF8; text-decoration: none; font-weight: 600; }
+        .jira-description a:hover { text-decoration: underline; }
+        .jira-description strong, .jira-description b { font-weight: 700; color: var(--text-primary); }
+        .jira-description em, .jira-description i { font-style: italic; }
+        .jira-description code { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 2px 6px; border-radius: 4px; background: rgba(99,102,241,0.08); color: #A78BFA; }
+        .jira-description pre { background: rgba(0,0,0,0.2); border: 1px solid var(--border-secondary); border-radius: 8px; padding: 14px 18px; overflow-x: auto; margin: 12px 0; }
+        .jira-description pre code { background: none; padding: 0; color: var(--text-secondary); }
+        .jira-description blockquote { margin: 12px 0; padding: 10px 16px; border-left: 3px solid #818CF8; background: rgba(99,102,241,0.04); border-radius: 0 8px 8px 0; }
+        .jira-description table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; }
+        .jira-description th { background: rgba(99,102,241,0.08); padding: 10px 14px; text-align: left; font-weight: 700; color: var(--text-primary); border: 1px solid var(--border-secondary); }
+        .jira-description td { padding: 8px 14px; border: 1px solid var(--border-secondary); }
+        .jira-description tr:nth-child(even) td { background: rgba(0,0,0,0.05); }
+        .jira-description img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+        .jira-description hr { border: none; border-top: 1px solid var(--border-secondary); margin: 16px 0; }
+        .jira-description .panel { padding: 12px 16px; border-radius: 8px; margin: 10px 0; border: 1px solid var(--border-secondary); background: rgba(99,102,241,0.03); }
+        .jira-description .user-hover { color: #818CF8; font-weight: 600; }
       `}</style>
     </div>
   );
