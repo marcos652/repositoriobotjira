@@ -129,8 +129,10 @@ function saveEmailsToFile(store: Map<string, SecureEmail>): void {
     }
     const data = Array.from(store.values());
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    console.log(`[Auth] ✅ Saved ${data.length} emails to ${filePath}`);
   } catch (e: any) {
-    console.warn(`[Auth] Could not save emails file: ${e.message}`);
+    console.error(`[Auth] ❌ FAILED to save emails: ${e.message}`);
+    console.error(e.stack);
   }
 }
 

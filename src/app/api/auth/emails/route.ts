@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ALLOWED_EMAILS } from '../_store';
-
-// Only admin (first email) can manage users
-function isAdmin(request: NextRequest): boolean {
-  const session = request.cookies.get('session')?.value;
-  if (!session) return false;
-  try {
-    const payload = JSON.parse(Buffer.from(session, 'base64').toString());
-    return payload.email === 'marcos.vinicius@movingpay.com.br';
-  } catch {
-    return false;
-  }
-}
+import { isAdmin } from '../_admin';
 
 // GET — List all allowed emails
 export async function GET(request: NextRequest) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
@@ -28,12 +17,15 @@ export async function GET(request: NextRequest) {
 
 // POST — Add a new email
 export async function POST(request: NextRequest) {
-  if (!isAdmin(request)) {
+  console.log('[Emails API] POST received');
+  if (!(await isAdmin(request))) {
+    console.log('[Emails API] ❌ Not admin');
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
   try {
     const { email } = await request.json();
+    console.log(`[Emails API] Adding email: ${email}`);
 
     if (!email || typeof email !== 'string') {
       return NextResponse.json({ error: 'Email é obrigatório' }, { status: 400 });
@@ -46,10 +38,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (ALLOWED_EMAILS.includes(normalized)) {
+      console.log(`[Emails API] Email already exists: ${normalized}`);
       return NextResponse.json({ error: 'Email já está autorizado' }, { status: 409 });
     }
 
     const added = ALLOWED_EMAILS.add(normalized);
+    console.log(`[Emails API] add() returned: ${added}`);
 
     if (!added) {
       return NextResponse.json({ error: 'Falha ao adicionar email' }, { status: 500 });
@@ -68,7 +62,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE — Remove an email
 export async function DELETE(request: NextRequest) {
-  if (!isAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 

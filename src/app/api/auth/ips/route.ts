@@ -1,34 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { IP_TRACKER } from '../_store';
-
-// ── Helper: Check admin session ──
-function checkAdmin(request: NextRequest): { authorized: boolean; error?: NextResponse } {
-  const session = request.cookies.get('session')?.value;
-  if (!session) {
-    return { authorized: false, error: NextResponse.json({ error: 'Não autorizado' }, { status: 403 }) };
-  }
-  try {
-    const payload = JSON.parse(Buffer.from(session, 'base64').toString());
-    if (payload.email !== 'marcos.vinicius@movingpay.com.br') {
-      return { authorized: false, error: NextResponse.json({ error: 'Apenas administradores' }, { status: 403 }) };
-    }
-  } catch {
-    return { authorized: false, error: NextResponse.json({ error: 'Sessão inválida' }, { status: 403 }) };
-  }
-  return { authorized: true };
-}
+import { isAdmin } from '../_admin';
 
 // GET: List all IP records
 export async function GET(request: NextRequest) {
-  const auth = checkAdmin(request);
-  if (!auth.authorized) return auth.error;
+  if (!(await isAdmin(request))) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
+  }
   return NextResponse.json({ ips: IP_TRACKER.list() });
 }
 
 // POST: Block/Unblock/Add/Update/Remove IP
 export async function POST(request: NextRequest) {
-  const auth = checkAdmin(request);
-  if (!auth.authorized) return auth.error;
+  if (!(await isAdmin(request))) {
+    return NextResponse.json({ error: 'Apenas administradores' }, { status: 403 });
+  }
 
   const body = await request.json();
   const { action } = body;
