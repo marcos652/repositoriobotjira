@@ -173,7 +173,7 @@ export async function GET(
       issue_key: data.key || issueKey,
       summary: f.summary || null,
       texto: descriptionText || null,
-      nome_cliente: f.customfield_10062 || null,
+      nome_cliente: f.customfield_10062 ? (typeof f.customfield_10062 === 'string' ? f.customfield_10062 : adfToText(f.customfield_10062).trim()) : null,
       status: f.status?.name || null,
       statusCategory: f.status?.statusCategory?.key || null,
       issuetype: f.issuetype?.name || null,
