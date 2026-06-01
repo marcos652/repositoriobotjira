@@ -3,5 +3,10 @@
     "emailHash": "004b4704e51e4f36380c3642ef30117e83077fd6feededc50c372eebf3e55fd4",
     "encryptedSecret": "rs7gWHd23llmnGrMaBkmbpBDBw27gU9Awq5knQSks/IYSmHQlcn5kGaP/KUWBeEMTuS/JlTTlkKL8I96c+XCQq3Ygit9En0idjJO0x8=",
     "createdAt": "2026-06-01T13:17:44.471Z"
+  },
+  {
+    "emailHash": "388816e3c25b109659d9f6d08472108f0afd08e80592e301839d4ae9393d6bd4",
+    "encryptedSecret": "1DRTqvVUzCk8i5fJ8g1veI5GlVyHFXlLsDlb1sA06Wp0eg2gyFaSco3jGewAGJ+x5aXvXkjI+qVV6JC4sHLU1N8yO05tq+X4Axf7bqc=",
+    "createdAt": "2026-06-01T19:56:44.340Z"
   }
 ]
