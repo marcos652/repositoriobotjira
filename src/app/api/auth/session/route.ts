@@ -49,10 +49,10 @@ export async function PUT(request: NextRequest) {
       return response;
     }
 
-    // Renew session: extend by 24h
+    // Renew session: extend by 30 days
     const newPayload = {
       ...payload,
-      exp: Date.now() + 24 * 60 * 60 * 1000,
+      exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
       renewedAt: new Date().toISOString(),
     };
 
@@ -66,7 +66,7 @@ export async function PUT(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60,
+      maxAge: 30 * 24 * 60 * 60,
       path: '/',
     });
 

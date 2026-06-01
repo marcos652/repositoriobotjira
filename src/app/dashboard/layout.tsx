@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -10,6 +10,19 @@ import ToastProvider from '@/components/ui/ToastProvider';
 import CommandPalette from '@/components/ui/CommandPalette';
 import OnboardingTour from '@/components/ui/OnboardingTour';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+
+// Auto-refresh session every 4 hours to keep it alive
+function useSessionAutoRefresh() {
+  useEffect(() => {
+    const refresh = () => {
+      fetch('/api/auth/session', { method: 'PUT' }).catch(() => {});
+    };
+    // Refresh immediately on mount, then every 4 hours
+    refresh();
+    const interval = setInterval(refresh, 4 * 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+}
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': { title: 'Overview', subtitle: 'Visão geral de todos os times' },
@@ -38,6 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const pageInfo = pageTitles[pathname] || { title: 'JiraOps', subtitle: '' };
   useKeyboardShortcuts();
+  useSessionAutoRefresh();
 
   return (
     <ThemeProvider>

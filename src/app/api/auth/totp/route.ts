@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       const sessionPayload = {
         email: normalized,
         iat: Date.now(),
-        exp: Date.now() + 24 * 60 * 60 * 1000,
+        exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
       };
       const sessionValue = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
 
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 24 * 60 * 60,
+        maxAge: 30 * 24 * 60 * 60,
         path: '/',
       });
 
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       const sessionPayload = {
         email: normalized,
         iat: Date.now(),
-        exp: Date.now() + 24 * 60 * 60 * 1000,
+        exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
       };
       const sessionValue = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
 
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 24 * 60 * 60,
+        maxAge: 30 * 24 * 60 * 60,
         path: '/',
       });
 
