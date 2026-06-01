@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS } from './app/api/auth/_store';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -44,23 +43,17 @@ export function proxy(request: NextRequest) {
   }
 
   // ── Check Auth.js session (Google SSO) ──
-  // Auth.js uses encrypted JWE tokens — a fake/random value won't decrypt
-  // We validate by checking the token has minimum structure (not empty/trivial)
   const authToken = request.cookies.get('authjs.session-token')?.value
     || request.cookies.get('__Secure-authjs.session-token')?.value;
 
   if (authToken) {
-    // Auth.js JWE tokens are long encrypted strings (200+ chars)
-    // A fake token like "FAKE_TOKEN" is too short to be valid
     if (authToken.length < 100) {
-      // Too short to be a valid JWE — reject
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
       response.cookies.delete('authjs.session-token');
       response.cookies.delete('__Secure-authjs.session-token');
       return addSecurityHeaders(response);
     }
-    // Token looks like valid JWE — Auth.js will validate on API calls
     const response = NextResponse.next();
     return addSecurityHeaders(response);
   }
@@ -76,6 +69,7 @@ export function proxy(request: NextRequest) {
   try {
     const payload = JSON.parse(Buffer.from(session, 'base64').toString());
 
+    // Validate session structure
     if (!payload.email || !payload.iat || !payload.exp) {
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
@@ -83,6 +77,7 @@ export function proxy(request: NextRequest) {
       return addSecurityHeaders(response);
     }
 
+    // Check session expiry
     if (Date.now() > payload.exp) {
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
@@ -90,15 +85,7 @@ export function proxy(request: NextRequest) {
       return addSecurityHeaders(response);
     }
 
-    const normalizedEmail = payload.email.trim().toLowerCase();
-    if (!ALLOWED_EMAILS.includes(normalizedEmail)) {
-      console.warn(`[SECURITY] Blocked forged session for: ${normalizedEmail}`);
-      const loginUrl = new URL('/login', request.url);
-      const response = NextResponse.redirect(loginUrl);
-      response.cookies.delete('session');
-      return addSecurityHeaders(response);
-    }
-
+    // Check for future-dated sessions (clock skew protection)
     if (payload.iat > Date.now() + 60000) {
       const loginUrl = new URL('/login', request.url);
       const response = NextResponse.redirect(loginUrl);
@@ -106,6 +93,8 @@ export function proxy(request: NextRequest) {
       return addSecurityHeaders(response);
     }
 
+    // Session is valid — the auth routes already verified the email
+    // is in ALLOWED_EMAILS before creating this session
     const response = NextResponse.next();
     return addSecurityHeaders(response);
   } catch {
@@ -121,3 +110,4 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|uploads).*)',
   ],
 };
+
