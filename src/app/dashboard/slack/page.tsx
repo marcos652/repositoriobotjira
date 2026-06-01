@@ -314,7 +314,7 @@ export default function SlackPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                         {msg.userAvatar ? <img src={msg.userAvatar} alt="" style={{ width: 32, height: 32, borderRadius: 8 }} /> : (
                           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #E01E5A, #36C5F0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                            {(msg.userName || msg.username || '?').charAt(0).toUpperCase()}
+                            {(msg.userName || msg.botName || '?').charAt(0).toUpperCase()}
                           </div>
                         )}
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>

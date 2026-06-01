@@ -376,7 +376,7 @@ export default function ConsultarDemandaPage() {
                     <label style={S.label}><Link2 size={12} /> Issues Vinculadas ({demanda.linkedIssues.length})</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {demanda.linkedIssues.map((link, i) => (
-                        <a key={i} href={`${JIRA_BASE_URL}/browse/${link.key}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none', transition: 'all 0.15s' }}>
+                        <a key={i} href={`https://movingpay.atlassian.net/browse/${link.key}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none', transition: 'all 0.15s' }}>
                           <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: 600, minWidth: '80px' }}>{link.type}</span>
                           <ArrowRight size={12} style={{ color: 'var(--text-tertiary)' }} />
                           <span style={{ fontSize: '12px', fontWeight: 800, color: '#818CF8' }}>{link.key}</span>
