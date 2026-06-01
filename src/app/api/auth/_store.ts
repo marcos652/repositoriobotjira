@@ -139,12 +139,14 @@ const GLOBAL_KEY = '__jiraops_email_store__';
 
 function getStore(): Map<string, SecureEmail> {
   const g = globalThis as any;
-  if (!g[GLOBAL_KEY]) {
+  // Always reload from file if globalThis store is missing or empty
+  if (!g[GLOBAL_KEY] || g[GLOBAL_KEY].size === 0) {
     // Load from file first
     const fileStore = loadEmailsFromFile();
     g[GLOBAL_KEY] = fileStore.size > 0 ? fileStore : new Map<string, SecureEmail>();
 
     // Always ensure defaults are present
+    let changed = false;
     for (const email of DEFAULT_EMAILS) {
       const hash = hashEmail(email);
       if (!g[GLOBAL_KEY].has(hash)) {
@@ -154,6 +156,7 @@ function getStore(): Map<string, SecureEmail> {
           addedAt: new Date().toISOString(),
           addedBy: 'system',
         });
+        changed = true;
       }
     }
 
@@ -172,11 +175,13 @@ function getStore(): Map<string, SecureEmail> {
           addedAt: new Date().toISOString(),
           addedBy: 'env',
         });
+        changed = true;
       }
     }
 
-    // Save initial state
-    saveEmailsToFile(g[GLOBAL_KEY]);
+    // Save initial state only if we added defaults/env
+    if (changed) saveEmailsToFile(g[GLOBAL_KEY]);
+    console.log(`[Auth] Email store initialized with ${g[GLOBAL_KEY].size} entries`);
   }
   return g[GLOBAL_KEY];
 }
@@ -268,7 +273,7 @@ function getIPFilePath(): string {
 
 function getIPStore(): Map<string, IPEntry> {
   const g = globalThis as any;
-  if (!g[GLOBAL_IP_KEY]) {
+  if (!g[GLOBAL_IP_KEY] || g[GLOBAL_IP_KEY].size === 0) {
     g[GLOBAL_IP_KEY] = new Map<string, IPEntry>();
     try {
       const filePath = getIPFilePath();
@@ -280,6 +285,7 @@ function getIPStore(): Map<string, IPEntry> {
             g[GLOBAL_IP_KEY].set(key, entry);
           }
         }
+        console.log(`[IP] Loaded ${g[GLOBAL_IP_KEY].size} entries from ${filePath}`);
       }
     } catch {}
   }
