@@ -136,53 +136,59 @@ function saveEmailsToFile(store: Map<string, SecureEmail>): void {
 
 // ── Use globalThis to share across Next.js API routes ──
 const GLOBAL_KEY = '__jiraops_email_store__';
+const GLOBAL_KEY_TS = '__jiraops_email_store_ts__';
+const CACHE_TTL = 2000; // 2 second cache
 
 function getStore(): Map<string, SecureEmail> {
   const g = globalThis as any;
-  // Always reload from file if globalThis store is missing or empty
-  if (!g[GLOBAL_KEY] || g[GLOBAL_KEY].size === 0) {
-    // Load from file first
-    const fileStore = loadEmailsFromFile();
-    g[GLOBAL_KEY] = fileStore.size > 0 ? fileStore : new Map<string, SecureEmail>();
+  const now = Date.now();
 
-    // Always ensure defaults are present
-    let changed = false;
-    for (const email of DEFAULT_EMAILS) {
-      const hash = hashEmail(email);
-      if (!g[GLOBAL_KEY].has(hash)) {
-        g[GLOBAL_KEY].set(hash, {
-          hash,
-          encrypted: encryptEmail(email),
-          addedAt: new Date().toISOString(),
-          addedBy: 'system',
-        });
-        changed = true;
-      }
-    }
-
-    // Also load from env var
-    const envEmails = (process.env.ALLOWED_EMAILS || '')
-      .split(',')
-      .map((e: string) => e.trim().toLowerCase())
-      .filter((e: string) => e.length > 0 && e.includes('@'));
-
-    for (const email of envEmails) {
-      const hash = hashEmail(email);
-      if (!g[GLOBAL_KEY].has(hash)) {
-        g[GLOBAL_KEY].set(hash, {
-          hash,
-          encrypted: encryptEmail(email),
-          addedAt: new Date().toISOString(),
-          addedBy: 'env',
-        });
-        changed = true;
-      }
-    }
-
-    // Save initial state only if we added defaults/env
-    if (changed) saveEmailsToFile(g[GLOBAL_KEY]);
-    console.log(`[Auth] Email store initialized with ${g[GLOBAL_KEY].size} entries`);
+  // Use cached store if it's fresh (within TTL)
+  if (g[GLOBAL_KEY] && g[GLOBAL_KEY].size > 0 && g[GLOBAL_KEY_TS] && (now - g[GLOBAL_KEY_TS]) < CACHE_TTL) {
+    return g[GLOBAL_KEY];
   }
+
+  // Always reload from file (source of truth)
+  const fileStore = loadEmailsFromFile();
+  g[GLOBAL_KEY] = fileStore.size > 0 ? fileStore : new Map<string, SecureEmail>();
+  g[GLOBAL_KEY_TS] = now;
+
+  // Always ensure defaults are present
+  let changed = false;
+  for (const email of DEFAULT_EMAILS) {
+    const hash = hashEmail(email);
+    if (!g[GLOBAL_KEY].has(hash)) {
+      g[GLOBAL_KEY].set(hash, {
+        hash,
+        encrypted: encryptEmail(email),
+        addedAt: new Date().toISOString(),
+        addedBy: 'system',
+      });
+      changed = true;
+    }
+  }
+
+  // Also load from env var
+  const envEmails = (process.env.ALLOWED_EMAILS || '')
+    .split(',')
+    .map((e: string) => e.trim().toLowerCase())
+    .filter((e: string) => e.length > 0 && e.includes('@'));
+
+  for (const email of envEmails) {
+    const hash = hashEmail(email);
+    if (!g[GLOBAL_KEY].has(hash)) {
+      g[GLOBAL_KEY].set(hash, {
+        hash,
+        encrypted: encryptEmail(email),
+        addedAt: new Date().toISOString(),
+        addedBy: 'env',
+      });
+      changed = true;
+    }
+  }
+
+  // Save only if we added defaults/env
+  if (changed) saveEmailsToFile(g[GLOBAL_KEY]);
   return g[GLOBAL_KEY];
 }
 
@@ -222,6 +228,7 @@ export const ALLOWED_EMAILS = {
       addedBy: addedBy || 'admin',
     });
     saveEmailsToFile(store); // Persist!
+    (globalThis as any)[GLOBAL_KEY_TS] = 0; // Invalidate cache
     console.log(`[Auth] Added email: ${normalized.slice(0, 3)}***`);
     return true;
   },
@@ -235,6 +242,7 @@ export const ALLOWED_EMAILS = {
     const removed = store.delete(hash);
     if (removed) {
       saveEmailsToFile(store); // Persist!
+      (globalThis as any)[GLOBAL_KEY_TS] = 0; // Invalidate cache
       console.log(`[Auth] Removed email: ${normalized.slice(0, 3)}***`);
     }
     return removed;
