@@ -75,7 +75,10 @@ interface SecureEmail {
   addedBy?: string;
 }
 
-const DEFAULT_EMAILS = ['marcos.vinicius@movingpay.com.br'];
+const DEFAULT_EMAILS = [
+  'marcos.vinicius@movingpay.com.br',
+  'breno.martins@movingpay.com.br',
+];
 
 // ── File persistence ──
 function getDataFilePath(): string {
