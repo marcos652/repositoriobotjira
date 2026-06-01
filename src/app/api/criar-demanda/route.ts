@@ -42,14 +42,28 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando de forma muito res
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+    },
   });
 
   let text = response.text?.trim() || '';
-  if (text.startsWith('```json')) text = text.slice(7);
-  else if (text.startsWith('```')) text = text.slice(3);
-  if (text.endsWith('```')) text = text.slice(0, -3);
+  
+  // Remove markdown code fences if present
+  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    text = jsonMatch[1].trim();
+  } else {
+    // Remove leading/trailing ``` in case they're not matched
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
 
-  return JSON.parse(text.trim());
+  try {
+    return JSON.parse(text);
+  } catch (e: any) {
+    console.error('[Gemini] Failed to parse JSON. Raw output:', text.slice(0, 500));
+    throw new Error(`Gemini retornou JSON inválido: ${e.message}`);
+  }
 }
 
 // ─── Jira ───
