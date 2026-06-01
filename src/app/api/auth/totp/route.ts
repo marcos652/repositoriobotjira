@@ -186,9 +186,28 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
+    // ── ACTION: reset — Remove TOTP for re-setup ──
+    if (action === 'reset') {
+      TOTP_STORE.remove(normalized);
+      return NextResponse.json({ success: true, message: 'TOTP resetado. Faça login para configurar novamente.' });
+    }
+
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 });
   } catch (error: any) {
     console.error('TOTP error:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
+}
+
+// DELETE: Admin reset TOTP for a user
+export async function DELETE(request: NextRequest) {
+  const { isAdmin } = await import('../_admin');
+  if (!(await isAdmin(request))) {
+    return NextResponse.json({ error: 'Apenas administradores' }, { status: 403 });
+  }
+  const { email } = await request.json();
+  if (!email) return NextResponse.json({ error: 'Email obrigatório' }, { status: 400 });
+  const normalized = email.trim().toLowerCase();
+  const removed = TOTP_STORE.remove(normalized);
+  return NextResponse.json({ success: removed, message: removed ? `TOTP resetado para ${normalized}` : 'Nenhum TOTP encontrado' });
 }
