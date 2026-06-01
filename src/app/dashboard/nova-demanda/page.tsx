@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Send, Plus, X, Loader2, CheckCircle2, AlertTriangle,
   ImagePlus, User, FileText, Hash, Sparkles, Clock,
   Zap, Bot, MessageSquare, ChevronDown, Wand2, ArrowUpRight,
-  Layers, Target, PenTool, Upload, Image, Trash2
+  Layers, Target, PenTool, Upload, Image, Trash2,
+  Mic, MicOff, Eye, EyeOff, Copy, Shield, RotateCcw, AlertCircle
 } from 'lucide-react';
 
 interface DemandaResult {
@@ -16,16 +17,43 @@ interface DemandaResult {
 
 interface HistoryItem {
   texto: string;
+  nomeCliente?: string;
+  referencia?: string;
+  prioridade?: string;
+  urgencia?: string;
   time: string;
   status: 'success' | 'error';
   response?: any;
 }
 
 const TEMPLATES = [
-  { icon: '🐛', label: 'Bug Report', prompt: 'Encontrei um bug onde...' },
-  { icon: '✨', label: 'Nova Feature', prompt: 'Preciso de uma funcionalidade que...' },
-  { icon: '🔧', label: 'Melhoria', prompt: 'Gostaria de melhorar...' },
-  { icon: '📋', label: 'Task', prompt: 'Precisamos realizar a seguinte tarefa...' },
+  { icon: '🐛', label: 'Bug Report', prompt: 'Encontrei um bug onde...', shortcut: '1' },
+  { icon: '✨', label: 'Nova Feature', prompt: 'Preciso de uma funcionalidade que...', shortcut: '2' },
+  { icon: '🔧', label: 'Melhoria', prompt: 'Gostaria de melhorar...', shortcut: '3' },
+  { icon: '📋', label: 'Task', prompt: 'Precisamos realizar a seguinte tarefa...', shortcut: '4' },
+];
+
+const PRIORITIES = [
+  { value: '', label: 'Auto (IA decide)', color: '#94A3B8' },
+  { value: 'Highest', label: '🔴 Crítica', color: '#EF4444' },
+  { value: 'High', label: '🟠 Alta', color: '#F97316' },
+  { value: 'Medium', label: '🟡 Média', color: '#EAB308' },
+  { value: 'Low', label: '🟢 Baixa', color: '#22C55E' },
+  { value: 'Lowest', label: '⚪ Mínima', color: '#6B7280' },
+];
+
+const URGENCIES = [
+  { value: '', label: 'Normal' },
+  { value: 'urgente', label: '🚨 Urgente' },
+  { value: 'critico', label: '🔥 Crítico — parou produção' },
+];
+
+const PROGRESS_STEPS = [
+  { label: 'Validando dados...', icon: Shield },
+  { label: 'Analisando com IA...', icon: Sparkles },
+  { label: 'Criando no Jira...', icon: Zap },
+  { label: 'Enviando anexos...', icon: Upload },
+  { label: 'Notificando Slack...', icon: MessageSquare },
 ];
 
 interface UploadedImage {
@@ -36,23 +64,45 @@ interface UploadedImage {
   type?: string;
 }
 
+// Load history from localStorage
+function loadHistory(): HistoryItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const saved = localStorage.getItem('jiraops-demanda-history');
+    return saved ? JSON.parse(saved) : [];
+  } catch { return []; }
+}
+
+function saveHistory(history: HistoryItem[]) {
+  try { localStorage.setItem('jiraops-demanda-history', JSON.stringify(history.slice(0, 50))); } catch {}
+}
+
 export default function NovaDemandaPage() {
+  // Core form state
   const [texto, setTexto] = useState('');
   const [nomeCliente, setNomeCliente] = useState('');
   const [referencia, setReferencia] = useState('Painel Externo');
+  const [prioridade, setPrioridade] = useState('');
+  const [urgencia, setUrgencia] = useState('');
   const [urlsImagens, setUrlsImagens] = useState<string[]>([]);
   const [novaUrl, setNovaUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progressStep, setProgressStep] = useState(0);
   const [result, setResult] = useState<DemandaResult | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>(loadHistory);
   const [activeView, setActiveView] = useState<'editor' | 'history'>('editor');
   const [showMeta, setShowMeta] = useState(false);
   const [focusEditor, setFocusEditor] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [validationWarn, setValidationWarn] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-dismiss toast after 5s
   useEffect(() => {
@@ -60,6 +110,29 @@ export default function NovaDemandaPage() {
     const timer = setTimeout(() => setResult(null), 5000);
     return () => clearTimeout(timer);
   }, [result]);
+
+  // Auto-save draft to localStorage
+  useEffect(() => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      if (texto.trim()) {
+        try { localStorage.setItem('jiraops-demanda-draft', JSON.stringify({ texto, nomeCliente, referencia, prioridade, urgencia })); } catch {}
+      }
+    }, 500);
+  }, [texto, nomeCliente, referencia, prioridade, urgencia]);
+
+  // Restore draft on mount
+  useEffect(() => {
+    try {
+      const draft = localStorage.getItem('jiraops-demanda-draft');
+      if (draft) {
+        const d = JSON.parse(draft);
+        if (d.texto) { setTexto(d.texto); setNomeCliente(d.nomeCliente || ''); setReferencia(d.referencia || 'Painel Externo'); setPrioridade(d.prioridade || ''); setUrgencia(d.urgencia || ''); setShowMeta(!!d.nomeCliente || !!d.prioridade || !!d.urgencia); }
+      }
+    } catch {}
+  }, []);
+
+  const clearDraft = () => { try { localStorage.removeItem('jiraops-demanda-draft'); } catch {} };
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -148,13 +221,29 @@ export default function NovaDemandaPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!texto.trim()) return;
+
+    // Validation — min 20 chars
+    if (texto.trim().length < 20) {
+      setValidationWarn('Descreva com pelo menos 20 caracteres para a IA gerar uma demanda de qualidade.');
+      textareaRef.current?.focus();
+      return;
+    }
+    setValidationWarn('');
     setLoading(true);
     setResult(null);
+    setProgressStep(0);
 
     const body: any = { texto: texto.trim() };
     if (nomeCliente.trim()) body.nome_cliente = nomeCliente.trim();
     if (referencia.trim()) body.referencia = referencia.trim();
     if (urlsImagens.length > 0) body.urls_imagens = urlsImagens;
+    if (prioridade) body.prioridade = prioridade;
+    if (urgencia) body.texto = `[${urgencia.toUpperCase()}] ${body.texto}`;
+
+    // Simulate progress steps
+    const stepInterval = setInterval(() => {
+      setProgressStep(prev => (prev < PROGRESS_STEPS.length - 1 ? prev + 1 : prev));
+    }, 2500);
 
     try {
       const res = await fetch('/api/criar-demanda', {
@@ -163,20 +252,95 @@ export default function NovaDemandaPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json();
+      clearInterval(stepInterval);
 
+      const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       if (res.ok) {
         setResult({ success: true, data });
-        setHistory([{ texto: texto.trim().slice(0, 120), time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), status: 'success', response: data }, ...history]);
-        setTexto(''); setNomeCliente(''); setUrlsImagens([]); setReferencia('Painel Externo'); setShowMeta(false);
+        const newHistory = [{ texto: texto.trim().slice(0, 120), nomeCliente, referencia, prioridade, urgencia, time: now, status: 'success' as const, response: data }, ...history];
+        setHistory(newHistory);
+        saveHistory(newHistory);
+        setTexto(''); setNomeCliente(''); setUrlsImagens([]); setReferencia('Painel Externo'); setPrioridade(''); setUrgencia(''); setShowMeta(false);
+        clearDraft();
       } else {
         setResult({ success: false, error: data.error || data.detail || data.details?.detail?.[0]?.msg || 'Erro desconhecido' });
-        setHistory([{ texto: texto.trim().slice(0, 120), time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), status: 'error' }, ...history]);
+        const newHistory = [{ texto: texto.trim().slice(0, 120), time: now, status: 'error' as const }, ...history];
+        setHistory(newHistory);
+        saveHistory(newHistory);
       }
     } catch {
+      clearInterval(stepInterval);
       setResult({ success: false, error: 'Não foi possível conectar ao bot de criar demanda' });
     } finally {
       setLoading(false);
+      setProgressStep(0);
     }
+  };
+
+  // Voice recognition (Web Speech API)
+  const toggleVoice = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { alert('Seu navegador não suporta reconhecimento de voz'); return; }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      if (event.results[event.results.length - 1].isFinal) {
+        setTexto(prev => prev + (prev ? ' ' : '') + transcript);
+      }
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.start();
+    recognitionRef.current = recognition;
+    setIsListening(true);
+  }, [isListening]);
+
+  // Duplicate from history
+  const duplicateFromHistory = (item: HistoryItem) => {
+    setTexto(item.texto);
+    if (item.nomeCliente) setNomeCliente(item.nomeCliente);
+    if (item.referencia) setReferencia(item.referencia);
+    if (item.prioridade) setPrioridade(item.prioridade);
+    if (item.urgencia) setUrgencia(item.urgencia);
+    setActiveView('editor');
+    setShowMeta(!!(item.nomeCliente || item.prioridade || item.urgencia));
+    textareaRef.current?.focus();
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        const num = parseInt(e.key);
+        if (num >= 1 && num <= 4 && !loading) {
+          e.preventDefault();
+          applyTemplate(TEMPLATES[num - 1].prompt);
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [loading]);
+
+  // Simple markdown to HTML
+  const renderMarkdown = (text: string) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`(.*?)`/g, '<code style="background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;font-size:12px">$1</code>')
+      .replace(/^- (.*)/gm, '• $1')
+      .replace(/\n/g, '<br/>');
   };
 
   const charCount = texto.trim().length;
@@ -248,13 +412,14 @@ export default function NovaDemandaPage() {
               {!texto && (
                 <div className="nd-templates">
                   <p className="nd-templates-label">
-                    <Layers size={13} /> Começar com template
+                    <Layers size={13} /> Começar com template <span style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '10px' }}>Ctrl+1~4</span>
                   </p>
                   <div className="nd-templates-grid">
                     {TEMPLATES.map((t) => (
                       <button key={t.label} type="button" onClick={() => applyTemplate(t.prompt)} className="nd-template-card">
                         <span className="nd-template-icon">{t.icon}</span>
                         <span className="nd-template-label">{t.label}</span>
+                        <kbd className="nd-template-kbd">⌃{t.shortcut}</kbd>
                       </button>
                     ))}
                   </div>
@@ -262,27 +427,64 @@ export default function NovaDemandaPage() {
               )}
 
               {/* Editor */}
-              <div className={`nd-editor ${focusEditor ? 'focused' : ''}`}>
+              <div className={`nd-editor ${focusEditor ? 'focused' : ''} ${validationWarn ? 'warn' : ''}`}>
                 <div className="nd-editor-header">
                   <div className="nd-editor-dots">
                     <span /><span /><span />
                   </div>
                   <span className="nd-editor-title">demanda.md</span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
+                    {texto.trim() && (
+                      <span className="nd-draft-badge">
+                        <CheckCircle2 size={9} /> rascunho salvo
+                      </span>
+                    )}
+                    <button type="button" onClick={() => setShowPreview(!showPreview)} className="nd-editor-btn" title="Preview Markdown">
+                      {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                    <button type="button" onClick={toggleVoice} className={`nd-editor-btn ${isListening ? 'recording' : ''}`} title="Voz para texto">
+                      {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                    </button>
+                  </div>
                 </div>
-                <textarea
-                  ref={textareaRef}
-                  value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
-                  onFocus={() => setFocusEditor(true)}
-                  onBlur={() => setFocusEditor(false)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSubmit(e as any); } }}
-                  placeholder="Descreva sua demanda com o máximo de detalhes...
 
-O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridade, descrição e componentes adequados."
-                  className="nd-editor-textarea"
-                  required
-                />
+                {showPreview && texto ? (
+                  <div className="nd-preview" dangerouslySetInnerHTML={{ __html: renderMarkdown(texto) }} />
+                ) : (
+                  <textarea
+                    ref={textareaRef}
+                    value={texto}
+                    onChange={(e) => { setTexto(e.target.value); setValidationWarn(''); }}
+                    onFocus={() => setFocusEditor(true)}
+                    onBlur={() => setFocusEditor(false)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSubmit(e as any); } }}
+                    placeholder="Descreva sua demanda com o máximo de detalhes...
+
+O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridade, descrição e componentes adequados.
+
+💡 Use **negrito**, *itálico* e `código` — suporta Markdown!"
+                    className="nd-editor-textarea"
+                    required
+                  />
+                )}
               </div>
+
+              {/* Validation warning */}
+              {validationWarn && (
+                <div className="nd-validation-warn animate-fade-in">
+                  <AlertCircle size={14} />
+                  <span>{validationWarn}</span>
+                </div>
+              )}
+
+              {/* Voice recording indicator */}
+              {isListening && (
+                <div className="nd-voice-indicator animate-fade-in">
+                  <div className="nd-voice-dot" />
+                  <span>Ouvindo... fale sua demanda</span>
+                  <button type="button" onClick={toggleVoice} className="nd-voice-stop">Parar</button>
+                </div>
+              )}
 
               {/* ── IMAGE DROP ZONE ── */}
               <div
@@ -354,7 +556,7 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
               {/* Meta toggle */}
               <button type="button" onClick={() => setShowMeta(!showMeta)} className="nd-meta-toggle">
                 <Plus size={14} className={`nd-meta-toggle-icon ${showMeta ? 'open' : ''}`} />
-                <span>{showMeta ? 'Ocultar detalhes' : 'Adicionar cliente, referência ou imagens por URL'}</span>
+                <span>{showMeta ? 'Ocultar detalhes' : 'Adicionar cliente, prioridade, urgência'}</span>
                 <ChevronDown size={14} className={`nd-meta-chevron ${showMeta ? 'open' : ''}`} />
               </button>
 
@@ -371,6 +573,20 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
                       <input value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="Painel Externo" />
                     </div>
                     <div className="nd-input-group">
+                      <label><Target size={11} /> Prioridade</label>
+                      <select value={prioridade} onChange={(e) => setPrioridade(e.target.value)} className="nd-select">
+                        {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="nd-meta-row" style={{ marginTop: '10px' }}>
+                    <div className="nd-input-group">
+                      <label><AlertTriangle size={11} /> Urgência</label>
+                      <select value={urgencia} onChange={(e) => setUrgencia(e.target.value)} className="nd-select">
+                        {URGENCIES.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="nd-input-group">
                       <label><ImagePlus size={11} /> Imagem URL</label>
                       <div className="nd-img-row">
                         <input value={novaUrl} onChange={(e) => setNovaUrl(e.target.value)}
@@ -381,6 +597,7 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
                         </button>
                       </div>
                     </div>
+                    <div />
                   </div>
                   {urlsImagens.length > 0 && (
                     <div className="nd-img-pills">
@@ -398,11 +615,25 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
 
               {/* Action bar */}
               <div className="nd-action-bar">
-                <div className="nd-tips">
-                  {['🎯 Seja específico', '📋 Critérios de aceite', '🤖 IA define tipo e prioridade'].map((t) => (
-                    <span key={t} className="nd-tip">{t}</span>
-                  ))}
-                </div>
+                {loading ? (
+                  <div className="nd-progress">
+                    {PROGRESS_STEPS.map((step, i) => {
+                      const StepIcon = step.icon;
+                      return (
+                        <div key={i} className={`nd-progress-step ${i <= progressStep ? 'active' : ''} ${i === progressStep ? 'current' : ''}`}>
+                          <StepIcon size={12} className={i === progressStep ? 'animate-spin' : ''} />
+                          <span>{step.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="nd-tips">
+                    {['🎯 Seja específico', '📋 Critérios de aceite', '🤖 IA define tipo'].map((t) => (
+                      <span key={t} className="nd-tip">{t}</span>
+                    ))}
+                  </div>
+                )}
                 <button type="submit" disabled={loading || !texto.trim()} className="nd-submit-btn">
                   {loading ? (
                     <><Loader2 size={17} className="animate-spin" /> Processando...</>
@@ -418,30 +649,44 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
               {history.length === 0 ? (
                 <div className="nd-history-empty">
                   <div className="nd-history-empty-icon"><Clock size={32} /></div>
-                  <p>Nenhuma demanda enviada nesta sessão</p>
+                  <p>Nenhuma demanda enviada ainda</p>
                 </div>
               ) : (
-                <div className="nd-history-list">
-                  {history.map((h, i) => (
-                    <div key={i} className="nd-history-item">
-                      <div className={`nd-history-dot ${h.status}`}>
-                        {h.status === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                      </div>
-                      <div className="nd-history-content">
-                        <div className="nd-history-meta">
-                          <span className="nd-history-time">{h.time}</span>
-                          <span className={`nd-history-badge ${h.status}`}>
-                            {h.status === 'success' ? 'Criada' : 'Erro'}
-                          </span>
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                    <button type="button" onClick={() => { setHistory([]); saveHistory([]); }} className="nd-clear-history">
+                      <Trash2 size={12} /> Limpar histórico
+                    </button>
+                  </div>
+                  <div className="nd-history-list">
+                    {history.map((h, i) => (
+                      <div key={i} className="nd-history-item">
+                        <div className={`nd-history-dot ${h.status}`}>
+                          {h.status === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
                         </div>
-                        <p className="nd-history-text">{h.texto}</p>
-                        {h.response && (
-                          <pre className="nd-history-json">{JSON.stringify(h.response, null, 2)}</pre>
-                        )}
+                        <div className="nd-history-content">
+                          <div className="nd-history-meta">
+                            <span className="nd-history-time">{h.time}</span>
+                            <span className={`nd-history-badge ${h.status}`}>
+                              {h.status === 'success' ? 'Criada' : 'Erro'}
+                            </span>
+                            {h.prioridade && <span className="nd-history-badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#818CF8' }}>{h.prioridade}</span>}
+                            {h.urgencia && <span className="nd-history-badge" style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171' }}>{h.urgencia}</span>}
+                          </div>
+                          <p className="nd-history-text">{h.texto}</p>
+                          {h.response && (
+                            <pre className="nd-history-json">{JSON.stringify(h.response, null, 2)}</pre>
+                          )}
+                          <div className="nd-history-actions">
+                            <button type="button" onClick={() => duplicateFromHistory(h)} className="nd-history-action" title="Reutilizar esta demanda">
+                              <Copy size={12} /> Duplicar
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -904,6 +1149,104 @@ O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridad
           .nd-templates-grid { grid-template-columns: repeat(2, 1fr); }
           .nd-meta-row { grid-template-columns: 1fr; }
         }
+
+        /* ========== NEW FEATURES STYLES ========== */
+
+        /* Editor buttons */
+        .nd-editor-btn {
+          width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-secondary);
+          background: var(--bg-secondary); color: var(--text-tertiary); cursor: pointer;
+          display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+        }
+        .nd-editor-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: var(--accent-blue-light); }
+        .nd-editor-btn.recording { border-color: #EF4444; color: #EF4444; background: rgba(239,68,68,0.1); animation: ndP 1s ease-in-out infinite; }
+
+        /* Draft saved badge */
+        .nd-draft-badge {
+          display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;
+          font-size: 9px; font-weight: 600; color: var(--accent-emerald); background: rgba(34,197,94,0.06);
+          border: 1px solid rgba(34,197,94,0.1);
+        }
+
+        /* Template kbd hint */
+        .nd-template-kbd {
+          font-size: 9px; font-family: monospace; padding: 1px 5px; border-radius: 3px;
+          background: rgba(255,255,255,0.06); color: var(--text-tertiary); margin-top: 2px;
+        }
+
+        /* Markdown Preview */
+        .nd-preview {
+          padding: 20px; min-height: 220px; font-size: 14px; line-height: 1.85;
+          color: var(--text-primary);
+        }
+        .nd-preview strong { color: var(--accent-blue); }
+        .nd-preview em { color: var(--accent-violet); font-style: italic; }
+
+        /* Validation warning */
+        .nd-editor.warn { border-color: #F59E0B; }
+        .nd-validation-warn {
+          display: flex; align-items: center; gap: 8px; margin: 8px 28px 0;
+          padding: 10px 14px; border-radius: 10px; font-size: 12px; font-weight: 600;
+          background: rgba(245,158,11,0.06); color: #F59E0B;
+          border: 1px solid rgba(245,158,11,0.12);
+        }
+
+        /* Voice indicator */
+        .nd-voice-indicator {
+          display: flex; align-items: center; gap: 10px; margin: 8px 28px 0;
+          padding: 12px 16px; border-radius: 10px; font-size: 12px; font-weight: 600;
+          background: rgba(239,68,68,0.06); color: #F87171;
+          border: 1px solid rgba(239,68,68,0.12);
+        }
+        .nd-voice-dot {
+          width: 10px; height: 10px; border-radius: 50%; background: #EF4444;
+          animation: ndP 1s ease-in-out infinite; box-shadow: 0 0 8px rgba(239,68,68,0.5);
+        }
+        .nd-voice-stop {
+          margin-left: auto; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700;
+          background: rgba(239,68,68,0.15); color: #F87171; border: 1px solid rgba(239,68,68,0.2);
+          cursor: pointer; transition: all 0.15s;
+        }
+        .nd-voice-stop:hover { background: rgba(239,68,68,0.25); }
+
+        /* Select dropdown */
+        .nd-select {
+          width: 100%; padding: 9px 12px; border-radius: 8px; font-size: 12px;
+          background: var(--bg-secondary); border: 1px solid var(--border-primary);
+          color: var(--text-primary); outline: none; transition: border-color 0.15s;
+          cursor: pointer; appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%2394A3B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 12px center;
+        }
+        .nd-select:focus { border-color: var(--accent-blue); }
+        .nd-select option { background: var(--bg-card); color: var(--text-primary); }
+
+        /* Progress steps */
+        .nd-progress { display: flex; gap: 6px; flex-wrap: wrap; }
+        .nd-progress-step {
+          display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;
+          font-size: 10px; font-weight: 600; color: var(--text-tertiary);
+          background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+          transition: all 0.3s;
+        }
+        .nd-progress-step.active { color: var(--accent-emerald); background: rgba(34,197,94,0.06); border-color: rgba(34,197,94,0.15); }
+        .nd-progress-step.current { color: var(--accent-blue); background: var(--accent-blue-light); border-color: rgba(59,130,246,0.15); }
+
+        /* History actions */
+        .nd-history-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .nd-history-action {
+          display: flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 6px;
+          font-size: 10px; font-weight: 700; color: var(--accent-blue);
+          background: var(--accent-blue-light); border: 1px solid rgba(59,130,246,0.1);
+          cursor: pointer; transition: all 0.15s;
+        }
+        .nd-history-action:hover { background: rgba(59,130,246,0.15); transform: translateY(-1px); }
+        .nd-clear-history {
+          display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px;
+          font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+          background: none; border: 1px solid var(--border-secondary); cursor: pointer; transition: all 0.15s;
+        }
+        .nd-clear-history:hover { color: var(--accent-rose); border-color: var(--accent-rose); background: rgba(244,63,94,0.04); }
       `}</style>
     </div>
   );

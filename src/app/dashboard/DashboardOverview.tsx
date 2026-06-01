@@ -32,25 +32,16 @@ const CARD_LABELS: Record<string, string> = {
 };
 
 const DEFAULT_CARD_SIZES: Record<string, number> = {
-  open: 2,
-  resolved: 2,
-  sla: 2,
-  avgtime: 2,
-  bugs: 2,
-  critical: 2,
-  suporte_module: 3,
-  dev_module: 3,
-  chart_volume: 3,
-  chart_burndown: 3,
-};
-
-const SPAN_CLASSES: Record<number, string> = {
-  1: 'lg:col-span-1',
-  2: 'lg:col-span-2',
-  3: 'lg:col-span-3',
-  4: 'lg:col-span-4',
-  5: 'lg:col-span-5',
-  6: 'lg:col-span-6',
+  open: 33.33,
+  resolved: 33.33,
+  sla: 33.33,
+  avgtime: 33.33,
+  bugs: 33.33,
+  critical: 33.33,
+  suporte_module: 50,
+  dev_module: 50,
+  chart_volume: 50,
+  chart_burndown: 50,
 };
 
 function formatMinutes(mins: number): string {
@@ -87,10 +78,16 @@ export default function DashboardOverview() {
     } catch { return {}; }
   });
 
+  const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const updateCardSize = useCallback((id: string, newSize: number) => {
     setCardSizes(prev => {
       const updated = { ...prev, [id]: newSize };
-      try { localStorage.setItem('jiraops-overview-card-sizes', JSON.stringify(updated)); } catch {}
+      // Debounce localStorage write — only persist after resize stops
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        try { localStorage.setItem('jiraops-overview-card-sizes', JSON.stringify(updated)); } catch {}
+      }, 300);
       return updated;
     });
   }, []);
@@ -427,13 +424,12 @@ export default function DashboardOverview() {
       )}
 
       {/* ═══════ FLAT CARD GRID (6 columns) ═══════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
+      <div className="flex flex-wrap" style={{ gap: '1.75rem' }}>
         {drag.order.map((cardId, i) => {
           const content = renderCardContent(cardId, i);
           if (!content) return null;
 
-          const currentSize = cardSizes[cardId] || DEFAULT_CARD_SIZES[cardId] || 2;
-          const spanClass = SPAN_CLASSES[currentSize] || 'lg:col-span-2';
+          const widthPercent = cardSizes[cardId] || DEFAULT_CARD_SIZES[cardId] || 33.33;
 
           return (
             <DraggableItem
@@ -446,10 +442,10 @@ export default function DashboardOverview() {
               onDragStart={drag.onDragStart}
               onDragEnter={drag.onDragEnter}
               onDragEnd={drag.onDragEnd}
-              className={spanClass}
-              currentSize={currentSize}
-              minSize={1}
-              maxSize={6}
+              style={{ width: `calc(${widthPercent}% - 1.75rem)`, minWidth: '200px' }}
+              currentSize={widthPercent}
+              minSize={15}
+              maxSize={100}
               onResizeDirect={(newSize) => updateCardSize(cardId, newSize)}
             >
               {content}

@@ -47,14 +47,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
             <div
               className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
-              style={{ marginLeft: sidebarCollapsed ? '80px' : '272px' }}
+              style={{ marginLeft: sidebarCollapsed ? '92px' : '288px' }}
             >
               <Header title={pageInfo.title} subtitle={pageInfo.subtitle} />
               <main
                 className={`flex-1 overflow-y-auto ${
                   ['/dashboard/nova-demanda','/dashboard/metricas','/dashboard/calendario','/dashboard/equipe','/dashboard/relatorios','/dashboard/sla','/dashboard/releases','/dashboard/clientes','/dashboard/knowledge','/dashboard/automacoes','/dashboard/integracoes','/dashboard/logs','/dashboard/notificacoes','/dashboard/configuracoes'].includes(pathname)
-                    ? 'p-4'
-                    : 'px-12 py-12'
+                    ? 'pl-8 pr-4 py-4'
+                    : 'pl-14 pr-10 py-10'
                 }`}
                 style={{ background: 'var(--bg-primary)' }}
               >

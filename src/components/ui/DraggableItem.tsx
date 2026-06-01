@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { GripVertical } from 'lucide-react';
 
 interface DraggableItemProps {
@@ -23,46 +23,49 @@ interface DraggableItemProps {
 
 export default function DraggableItem({
   id, editMode, draggingId, dragOverId, onDragStart, onDragEnter, onDragEnd, label, children,
-  className = '', style = {}, currentSize, minSize = 1, maxSize = 6, onResizeDirect
+  className = '', style = {}, currentSize, minSize = 15, maxSize = 100, onResizeDirect
 }: DraggableItemProps) {
   const [canDrag, setCanDrag] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
   const isDragging = draggingId === id;
   const isDragOver = dragOverId === id && draggingId !== null && draggingId !== id;
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsResizing(true);
 
     const startX = e.clientX;
-    const startSize = currentSize || 2;
+    const startSize = currentSize || 33.33;
     const element = containerRef.current;
     if (!element) return;
 
-    const rect = element.getBoundingClientRect();
-    const oneColWidth = rect.width / startSize;
-    let lastEmittedSize = startSize;
+    const parentWidth = element.parentElement?.getBoundingClientRect().width || window.innerWidth;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const colChange = Math.round(deltaX / oneColWidth);
-      const targetSize = startSize + colChange;
-      const clampedSize = Math.max(minSize, Math.min(maxSize, targetSize));
-
-      if (clampedSize !== lastEmittedSize && onResizeDirect) {
-        lastEmittedSize = clampedSize;
-        onResizeDirect(clampedSize);
-      }
+      // Use rAF for smooth 60fps updates
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaPercent = (deltaX / parentWidth) * 100;
+        const targetSize = Math.round(startSize + deltaPercent);
+        const clampedSize = Math.max(minSize, Math.min(maxSize, targetSize));
+        if (onResizeDirect) onResizeDirect(clampedSize);
+      });
     };
 
     const handleMouseUp = () => {
+      setIsResizing(false);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
     window.addEventListener('mouseup', handleMouseUp);
-  };
+  }, [currentSize, minSize, maxSize, onResizeDirect]);
 
   return (
     <div
@@ -75,60 +78,61 @@ export default function DraggableItem({
         setCanDrag(false);
       }}
       onDragOver={(e) => e.preventDefault()}
-      className={`relative transition-all duration-300 ${isDragOver && editMode ? 'scale-[0.98] border-[var(--accent-blue)]' : ''} ${className}`}
+      className={`relative ${className}`}
       style={{
-        opacity: isDragging ? 0.35 : 1,
+        opacity: isDragging ? 0.4 : 1,
+        // No transition during resize for instant feedback; smooth transition otherwise
+        transition: isResizing ? 'opacity 0.2s' : 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+        transform: isDragOver && editMode ? 'scale(0.97)' : isDragging ? 'scale(0.95)' : 'scale(1)',
         ...style,
       }}
     >
-      {/* Edit mode overlay with drag handle */}
+      {/* Edit mode overlay — drag handle + size indicator */}
       {editMode && (
         <div
-          className="absolute top-3 right-5 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all select-none"
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold select-none cursor-grab active:cursor-grabbing"
           style={{
-            background: 'var(--bg-card)',
+            background: 'rgba(15,23,42,0.92)',
             color: 'var(--text-secondary)',
-            boxShadow: 'var(--shadow-md)',
-            border: '1px solid var(--border-primary)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+            border: '1px solid rgba(148,163,184,0.15)',
+            backdropFilter: 'blur(12px)',
+            transition: 'transform 0.2s, box-shadow 0.2s',
           }}
+          onMouseDown={() => setCanDrag(true)}
+          onMouseUp={() => setCanDrag(false)}
+          onMouseLeave={() => setCanDrag(false)}
         >
-          {/* Drag Handle block */}
-          <div
-            className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing mr-1"
-            onMouseDown={() => setCanDrag(true)}
-            onMouseUp={() => setCanDrag(false)}
-            onMouseLeave={() => setCanDrag(false)}
-          >
-            <GripVertical size={14} style={{ color: 'var(--text-tertiary)' }} />
-            <span>{label}</span>
-          </div>
-
+          <GripVertical size={14} style={{ color: 'var(--accent-blue)' }} />
+          <span>{label}</span>
           {currentSize !== undefined && (
             <>
-              <div className="w-px h-3 bg-border-primary mx-1.5" style={{ background: 'var(--border-primary)' }} />
-              <span className="text-[10px] font-extrabold text-[var(--accent-blue)]">{currentSize}x</span>
+              <div className="w-px h-3 mx-1" style={{ background: 'rgba(148,163,184,0.2)' }} />
+              <span className="text-[10px] font-extrabold tabular-nums" style={{ color: 'var(--accent-blue)' }}>{Math.round(currentSize)}%</span>
             </>
           )}
         </div>
       )}
 
-      {/* Resize Handle on the right edge */}
+      {/* Resize Handle — right edge */}
       {editMode && onResizeDirect && currentSize !== undefined && (
         <div
-          className="absolute top-0 right-0 h-full w-4 cursor-col-resize z-25 hover:bg-[var(--accent-blue)]/10 transition-all flex items-center justify-center group"
+          className="absolute top-0 right-0 h-full w-6 cursor-col-resize z-25 flex items-center justify-center group"
           onMouseDown={handleMouseDown}
           title="Arraste para redimensionar"
         >
-          <div className="w-1.5 h-12 rounded bg-border-primary group-hover:bg-[var(--accent-blue)] transition-colors opacity-30 group-hover:opacity-100"
-               style={{ background: 'var(--border-primary)' }} />
+          <div
+            className="rounded-full transition-all duration-200"
+            style={{
+              width: isResizing ? '3px' : '2px',
+              height: isResizing ? '80px' : '40px',
+              background: isResizing ? 'var(--accent-blue)' : 'rgba(148,163,184,0.3)',
+              boxShadow: isResizing ? '0 0 12px var(--accent-blue)' : 'none',
+            }}
+          />
         </div>
       )}
 
-      {/* Drop indicator overlay */}
-      {isDragOver && editMode && (
-        <div className="absolute inset-0 z-10 rounded-2xl border-2 border-dashed pointer-events-none animate-pulse"
-          style={{ borderColor: 'var(--accent-blue)', boxShadow: '0 0 15px rgba(59, 130, 246, 0.1)' }} />
-      )}
       {children}
     </div>
   );

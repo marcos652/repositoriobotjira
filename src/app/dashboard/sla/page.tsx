@@ -1,21 +1,99 @@
 'use client';
 
-import React from 'react';
-import { Shield, CheckCircle2, AlertTriangle, Clock, Target } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Shield, CheckCircle2, AlertTriangle, Clock, Target, Loader2, WifiOff, RefreshCw } from 'lucide-react';
 
-const slaData = [
-  { name: 'Tempo de Primeira Resposta', target: '≤ 1h', actual: '45min', compliance: 94, status: 'ok' },
-  { name: 'Tempo de Resolução (P1)', target: '≤ 4h', actual: '3.2h', compliance: 88, status: 'ok' },
-  { name: 'Tempo de Resolução (P2)', target: '≤ 8h', actual: '6.5h', compliance: 91, status: 'ok' },
-  { name: 'Tempo de Resolução (P3)', target: '≤ 24h', actual: '18h', compliance: 96, status: 'ok' },
-  { name: 'Uptime do Sistema', target: '≥ 99.5%', actual: '99.7%', compliance: 100, status: 'ok' },
-  { name: 'Satisfação do Cliente', target: '≥ 85%', actual: '78%', compliance: 78, status: 'warn' },
-];
+interface SlaItem { name: string; target: string; actual: string; compliance: number; status: string; }
 
 const compColor = (c: number) => c >= 90 ? { bg: 'var(--accent-emerald-light)', fg: 'var(--accent-emerald)' } : c >= 80 ? { bg: 'var(--accent-amber-light)', fg: 'var(--accent-amber)' } : { bg: 'var(--accent-rose-light)', fg: 'var(--accent-rose)' };
 
+function formatMins(mins: number) { return mins < 60 ? `${mins}min` : `${(mins / 60).toFixed(1)}h`; }
+
 export default function SlaPage() {
-  const avgCompliance = Math.round(slaData.reduce((s, d) => s + d.compliance, 0) / slaData.length);
+  const [slaData, setSlaData] = useState<SlaItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [mode, setMode] = useState('');
+
+  async function fetchData(isRefresh = false) {
+    try {
+      if (isRefresh) setRefreshing(true); else setLoading(true);
+      const res = await fetch('/api/metrics/support?range=30d');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setMode(data.mode || 'demo');
+
+      const m = data.metrics || {};
+      // Build SLA items from real metrics
+      const items: SlaItem[] = [
+        {
+          name: 'SLA Geral de Resolução',
+          target: '≤ 8h',
+          actual: m.avgResolutionTimeMinutes ? formatMins(m.avgResolutionTimeMinutes) : '—',
+          compliance: m.slaMetPercentage ?? 0,
+          status: (m.slaMetPercentage ?? 0) >= 80 ? 'ok' : 'warn',
+        },
+        {
+          name: 'Chamados dentro do SLA',
+          target: `${m.slaMetCount ?? 0} chamados`,
+          actual: `${m.slaMetCount ?? 0} de ${(m.slaMetCount ?? 0) + (m.slaViolatedCount ?? 0)}`,
+          compliance: m.slaMetPercentage ?? 0,
+          status: (m.slaMetPercentage ?? 0) >= 80 ? 'ok' : 'warn',
+        },
+        {
+          name: 'Chamados SLA Violado',
+          target: '0 violações',
+          actual: `${m.slaViolatedCount ?? 0} violações`,
+          compliance: m.slaViolatedCount === 0 ? 100 : Math.max(0, 100 - (m.slaViolatedCount ?? 0) * 10),
+          status: (m.slaViolatedCount ?? 0) === 0 ? 'ok' : 'warn',
+        },
+        {
+          name: 'Aguardando Cliente',
+          target: '≤ 5 tickets',
+          actual: `${m.waitingClientCount ?? 0} tickets`,
+          compliance: Math.max(0, 100 - (m.waitingClientCount ?? 0) * 10),
+          status: (m.waitingClientCount ?? 0) <= 5 ? 'ok' : 'warn',
+        },
+        {
+          name: 'Aguardando Terceiros',
+          target: '≤ 3 tickets',
+          actual: `${m.waitingThirdPartyCount ?? 0} tickets`,
+          compliance: Math.max(0, 100 - (m.waitingThirdPartyCount ?? 0) * 15),
+          status: (m.waitingThirdPartyCount ?? 0) <= 3 ? 'ok' : 'warn',
+        },
+      ];
+      setSlaData(items);
+      setError(null);
+    } catch (e) { setError(String(e)); }
+    finally { setLoading(false); setRefreshing(false); }
+  }
+
+  useEffect(() => { fetchData(); }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+        <Loader2 size={36} className="animate-spin" style={{ color: 'var(--accent-emerald)' }} />
+        <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando dados de SLA...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <div className="text-center space-y-5 max-w-sm">
+          <WifiOff size={28} style={{ color: '#FB7185' }} />
+          <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Erro ao carregar SLA</p>
+          <button onClick={() => fetchData()} style={{ padding: '8px 20px', borderRadius: '12px', background: 'linear-gradient(135deg, #10B981, #22C55E)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Tentar novamente</button>
+        </div>
+      </div>
+    );
+  }
+
+  const avgCompliance = slaData.length > 0 ? Math.round(slaData.reduce((s, d) => s + d.compliance, 0) / slaData.length) : 0;
+
   return (
     <div className="sla-root">
       <div className="sla-hero">
@@ -23,9 +101,14 @@ export default function SlaPage() {
         <div className="sla-hero-content">
           <div className="sla-hero-left">
             <div className="sla-hero-icon"><Shield size={24} color="#fff" /></div>
-            <div><h1 className="sla-hero-title">SLA / Contratos</h1><p className="sla-hero-sub">Monitoramento de níveis de serviço</p></div>
+            <div><h1 className="sla-hero-title">SLA / Contratos</h1><p className="sla-hero-sub">Dados reais do Jira — {mode === 'live' ? '🟢 Live' : mode === 'cached' ? '🔵 Cache' : '🟡 Demo'}</p></div>
           </div>
-          <div className="sla-pill">{avgCompliance}% média geral</div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button onClick={() => fetchData(true)} disabled={refreshing} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '999px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(148,163,184,0.6)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Atualizar
+            </button>
+            <div className="sla-pill">{avgCompliance}% média geral</div>
+          </div>
         </div>
       </div>
       <div className="sla-body">
@@ -67,7 +150,7 @@ export default function SlaPage() {
         .sla-hero-orb-1{width:250px;height:250px;background:rgba(16,185,129,.2);top:-80px;right:15%;animation:slaO 8s ease-in-out infinite}
         .sla-hero-orb-2{width:180px;height:180px;background:rgba(34,197,94,.14);bottom:-60px;left:25%;animation:slaO 11s ease-in-out infinite reverse}
         @keyframes slaO{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
-        .sla-hero-content{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between}
+        .sla-hero-content{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
         .sla-hero-left{display:flex;align-items:center;gap:16px}
         .sla-hero-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10B981,#22C55E);box-shadow:0 8px 28px rgba(16,185,129,.35),inset 0 1px 0 rgba(255,255,255,.2)}
         .sla-hero-title{font-size:20px;font-weight:800;color:#F1F5F9}.sla-hero-sub{font-size:13px;color:rgba(148,163,184,.65);margin-top:2px}

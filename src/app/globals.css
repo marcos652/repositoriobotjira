@@ -230,32 +230,36 @@ body {
   transform: translateY(-1px);
 }
 
-/* ── Metric Card — Premium glass with accent ── */
+/* ── Metric Card — Modern Premium Glass ── */
 .metric-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem 1.75rem;
+  background: linear-gradient(135deg, rgba(15,23,42,0.65) 0%, rgba(15,23,42,0.45) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(148,163,184,0.08);
+  border-radius: 20px;
+  padding: 1.75rem 2rem;
   position: relative;
   overflow: hidden;
-  transition: all var(--transition-base);
-  box-shadow: var(--shadow-sm);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 4px 24px rgba(0,0,0,0.12),
+    0 1px 4px rgba(0,0,0,0.08),
+    inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
-/* Accent bar — left side gradient */
+/* Accent bar — left side gradient with glow */
 .metric-card::before {
   content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 12px;
+  bottom: 12px;
   left: 0;
   width: 3px;
-  background: var(--card-accent, var(--accent-blue));
-  opacity: 0.7;
-  transition: all var(--transition-base);
-  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, var(--card-accent, var(--accent-blue)) 0%, transparent 100%);
+  opacity: 0.6;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0 6px 6px 0;
+  box-shadow: 0 0 12px var(--card-accent, var(--accent-blue));
 }
 
 /* Subtle glow overlay on hover */
@@ -265,20 +269,26 @@ body {
   inset: 0;
   border-radius: inherit;
   opacity: 0;
-  transition: opacity var(--transition-base);
-  background: radial-gradient(ellipse at 50% 0%, var(--card-accent-bg, rgba(59,130,246,0.06)) 0%, transparent 70%);
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: radial-gradient(ellipse at 50% -20%, var(--card-accent-bg, rgba(59,130,246,0.08)) 0%, transparent 70%);
   pointer-events: none;
 }
 
 .metric-card:hover {
-  box-shadow: var(--shadow-lg);
-  border-color: rgba(148, 163, 184, 0.12);
-  transform: translateY(-2px);
+  box-shadow:
+    0 8px 40px rgba(0,0,0,0.2),
+    0 2px 8px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  border-color: rgba(148, 163, 184, 0.14);
+  transform: translateY(-4px) scale(1.01);
 }
 
 .metric-card:hover::before {
   width: 4px;
   opacity: 1;
+  top: 8px;
+  bottom: 8px;
+  box-shadow: 0 0 20px var(--card-accent, var(--accent-blue));
 }
 
 .metric-card:hover::after {

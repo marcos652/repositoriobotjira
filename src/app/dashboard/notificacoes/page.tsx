@@ -1,84 +1,119 @@
 'use client';
-import React from 'react';
-import { Bell, CheckCircle2, AlertTriangle, Info, Clock, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Bell, Loader2, WifiOff, RefreshCw, MessageCircle, ArrowRight, CheckCircle2, ExternalLink } from 'lucide-react';
 
-const notifications = [
-  { title: 'SLA prestes a ser violado', desc: 'JIRA-1189 está a 30min do limite de resolução', time: '2min atrás', type: 'warn', read: false },
-  { title: 'Deploy v2.4.1 concluído', desc: 'Todos os serviços estão operacionais', time: '15min atrás', type: 'success', read: false },
-  { title: 'Nova issue atribuída a você', desc: 'JIRA-1290 — Bug no módulo de autenticação', time: '30min atrás', type: 'info', read: false },
-  { title: 'Sprint 12 finalizada', desc: '91% de conclusão — relatório disponível', time: '1h atrás', type: 'info', read: true },
-  { title: 'Erro de integração Slack', desc: 'Webhook retornando 503 — tentando reconexão', time: '2h atrás', type: 'error', read: true },
-  { title: 'Novo membro na equipe', desc: 'Julia Ribeiro foi adicionada ao projeto', time: '3h atrás', type: 'info', read: true },
-  { title: 'Release v2.4.0 aprovada', desc: 'QA finalizou todos os testes com sucesso', time: '5h atrás', type: 'success', read: true },
-];
+interface Notification { type: string; issueKey: string; summary: string; author: string; authorAvatar: string | null; date: string; message: string; }
 
-const typeMap: Record<string,{icon:any;color:string;bg:string}> = {
-  warn: { icon: AlertTriangle, color: 'var(--accent-amber)', bg: 'var(--accent-amber-light)' },
-  success: { icon: CheckCircle2, color: 'var(--accent-emerald)', bg: 'var(--accent-emerald-light)' },
-  info: { icon: Info, color: 'var(--accent-blue)', bg: 'var(--accent-blue-light)' },
-  error: { icon: AlertTriangle, color: 'var(--accent-rose)', bg: 'var(--accent-rose-light)' },
+function timeAgo(d: string) {
+  const diff = Date.now() - new Date(d).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m atrás`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h atrás`;
+  return `${Math.floor(hrs / 24)}d atrás`;
+}
+
+const typeConfig: Record<string, { icon: any; color: string; bg: string }> = {
+  comment: { icon: MessageCircle, color: '#3B82F6', bg: 'rgba(59,130,246,0.08)' },
+  status: { icon: ArrowRight, color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
 };
 
 export default function NotificacoesPage() {
-  const unread = notifications.filter(n => !n.read).length;
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filterType, setFilterType] = useState<string>('all');
+
+  async function fetchData(isRefresh = false) {
+    try {
+      if (isRefresh) setRefreshing(true); else setLoading(true);
+      const res = await fetch('/api/jira/team');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setNotifications(data.notifications || []);
+      setError(null);
+    } catch (e) { setError(String(e)); }
+    finally { setLoading(false); setRefreshing(false); }
+  }
+
+  useEffect(() => { fetchData(); }, []);
+
+  const filtered = notifications.filter(n => filterType === 'all' || n.type === filterType);
+  const commentCount = notifications.filter(n => n.type === 'comment').length;
+  const statusCount = notifications.filter(n => n.type === 'status').length;
+
+  if (loading) return <div className="flex flex-col items-center justify-center h-[60vh] gap-4"><Loader2 size={36} className="animate-spin" style={{ color: '#F43F5E' }} /><p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando notificações...</p></div>;
+  if (error) return <div className="flex items-center justify-center h-[60vh]"><div className="text-center space-y-5"><WifiOff size={28} style={{ color: '#FB7185' }} /><p style={{ color: 'var(--text-primary)' }}>Erro</p><button onClick={() => fetchData()} style={{ padding: '8px 20px', borderRadius: '12px', background: 'linear-gradient(135deg, #F43F5E, #EC4899)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Tentar novamente</button></div></div>;
+
   return (
-    <div className="nt-root">
-      <div className="nt-hero"><div className="nt-hero-grid"/><div className="nt-hero-orb nt-hero-orb-1"/><div className="nt-hero-orb nt-hero-orb-2"/>
-        <div className="nt-hero-content"><div className="nt-hero-left"><div className="nt-hero-icon"><Bell size={24} color="#fff"/></div><div><h1 className="nt-hero-title">Notificações</h1><p className="nt-hero-sub">Central de alertas e avisos</p></div></div>
-          <div className="nt-pills">{unread > 0 && <div className="nt-pill-unread">{unread} não lidas</div>}<div className="nt-pill">{notifications.length} total</div></div></div>
-      </div>
-      <div className="nt-body"><div className="nt-main"><div className="nt-list">
-        {notifications.map((n,i)=>{const t=typeMap[n.type];const Icon=t.icon;return(
-          <div key={i} className={`nt-card ${!n.read?'unread':''}`}>
-            <div className="nt-card-icon" style={{background:t.bg,color:t.color}}><Icon size={16}/></div>
-            <div className="nt-card-info"><p className="nt-card-title">{n.title}</p><p className="nt-card-desc">{n.desc}</p>
-              <span className="nt-card-time"><Clock size={10}/>{n.time}</span>
-            </div>
-            {!n.read && <div className="nt-unread-dot"/>}
+    <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.12)' }}>
+            <Bell size={20} style={{ color: '#FB7185' }} />
           </div>
-        );})}
-      </div></div>
-      <div className="nt-sidebar"><div className="nt-sb-section"><h3 className="nt-sb-title">Resumo</h3>
-        <div className="nt-summary">{[{l:'Não lidas',v:unread,c:'var(--accent-blue)'},{l:'Alertas',v:notifications.filter(n=>n.type==='warn'||n.type==='error').length,c:'var(--accent-amber)'},{l:'Sucesso',v:notifications.filter(n=>n.type==='success').length,c:'var(--accent-emerald)'}].map(s=>(
-          <div key={s.l} className="nt-sum-item"><span className="nt-sum-label">{s.l}</span><span className="nt-sum-val" style={{color:s.c}}>{s.v}</span></div>
-        ))}</div>
-      </div><div className="nt-sb-divider"/><div className="nt-sb-section"><h3 className="nt-sb-title">Ações</h3>
-        <button className="nt-action-btn">Marcar todas como lidas</button>
-        <button className="nt-action-btn danger">Limpar notificações</button>
-      </div></div></div>
-      <style jsx>{`
-        .nt-root{display:flex;flex-direction:column;height:100%;border-radius:16px;overflow:hidden;border:1px solid var(--border-primary);background:var(--bg-card)}
-        .nt-hero{position:relative;flex-shrink:0;overflow:hidden;background:linear-gradient(140deg,#080C18,#1A0F25 40%,#0D0B22);border-bottom:1px solid rgba(255,255,255,.05);padding:28px 32px}
-        .nt-hero-grid{position:absolute;inset:0;opacity:.03;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:40px 40px}
-        .nt-hero-orb{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none}
-        .nt-hero-orb-1{width:250px;height:250px;background:rgba(244,63,94,.16);top:-80px;right:15%;animation:ntO 8s ease-in-out infinite}
-        .nt-hero-orb-2{width:180px;height:180px;background:rgba(251,146,60,.12);bottom:-60px;left:25%;animation:ntO 11s ease-in-out infinite reverse}
-        @keyframes ntO{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
-        .nt-hero-content{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between}
-        .nt-hero-left{display:flex;align-items:center;gap:16px}
-        .nt-hero-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#F43F5E,#FB923C);box-shadow:0 8px 28px rgba(244,63,94,.35),inset 0 1px 0 rgba(255,255,255,.2)}
-        .nt-hero-title{font-size:20px;font-weight:800;color:#F1F5F9}.nt-hero-sub{font-size:13px;color:rgba(148,163,184,.65);margin-top:2px}
-        .nt-pills{display:flex;gap:8px}
-        .nt-pill-unread{padding:7px 14px;border-radius:999px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.15);color:#60A5FA;font-size:11px;font-weight:700}
-        .nt-pill{padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:rgba(148,163,184,.6);font-size:11px;font-weight:600}
-        .nt-body{flex:1;display:flex;overflow:hidden}.nt-main{flex:1;overflow-y:auto;padding:24px 28px}
-        .nt-list{display:flex;flex-direction:column;gap:8px}
-        .nt-card{display:flex;align-items:flex-start;gap:14px;padding:16px 20px;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);transition:all .2s;position:relative}
-        .nt-card.unread{background:var(--bg-card);border-color:var(--border-primary)}
-        .nt-card:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.06)}
-        .nt-card-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-        .nt-card-info{flex:1}.nt-card-title{font-size:13px;font-weight:700;color:var(--text-primary)}.nt-card-desc{font-size:11px;color:var(--text-tertiary);margin-top:2px;line-height:1.5}
-        .nt-card-time{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-tertiary);margin-top:6px}
-        .nt-unread-dot{width:8px;height:8px;border-radius:50%;background:var(--accent-blue);flex-shrink:0;margin-top:4px}
-        .nt-sidebar{width:260px;flex-shrink:0;border-left:1px solid var(--border-primary);background:var(--bg-card);overflow-y:auto}
-        .nt-sb-section{padding:20px}.nt-sb-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-tertiary);margin-bottom:14px}
-        .nt-sb-divider{height:1px;margin:0 20px;background:var(--border-secondary)}
-        .nt-summary{display:flex;flex-direction:column;gap:10px}
-        .nt-sum-item{display:flex;justify-content:space-between}.nt-sum-label{font-size:11px;color:var(--text-secondary)}.nt-sum-val{font-size:14px;font-weight:800}
-        .nt-action-btn{display:block;width:100%;padding:9px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border-primary);background:var(--bg-secondary);color:var(--text-secondary);cursor:pointer;margin-bottom:8px;transition:all .15s}
-        .nt-action-btn:hover{border-color:var(--accent-blue);color:var(--accent-blue)}
-        .nt-action-btn.danger:hover{border-color:var(--accent-rose);color:var(--accent-rose)}
-      `}</style>
+          <div>
+            <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Notificações</h1>
+            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>{notifications.length} atividades nos últimos 7 dias</p>
+          </div>
+        </div>
+        <button onClick={() => fetchData(true)} disabled={refreshing} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Atualizar
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        {[
+          { id: 'all', label: `Todas (${notifications.length})` },
+          { id: 'comment', label: `Comentários (${commentCount})` },
+          { id: 'status', label: `Status (${statusCount})` },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setFilterType(tab.id)} style={{ padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: filterType === tab.id ? 'rgba(244,63,94,0.08)' : 'var(--bg-secondary)', color: filterType === tab.id ? '#FB7185' : 'var(--text-tertiary)', borderWidth: 1, borderStyle: 'solid', borderColor: filterType === tab.id ? 'rgba(244,63,94,0.15)' : 'var(--border-primary)' }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Notifications list */}
+      <div style={{ flex: 1, overflow: 'auto', borderRadius: '16px', border: '1px solid var(--border-primary)', background: 'var(--bg-card)' }}>
+        {filtered.length === 0 ? (
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+            <CheckCircle2 size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
+            <p style={{ fontSize: '13px', fontWeight: 600 }}>Nenhuma notificação</p>
+          </div>
+        ) : (
+          <div style={{ padding: '4px' }}>
+            {filtered.map((n, i) => {
+              const cfg = typeConfig[n.type] || typeConfig.status;
+              const Icon = cfg.icon;
+              return (
+                <div key={i} style={{ display: 'flex', gap: '14px', padding: '16px 18px', borderBottom: i < filtered.length - 1 ? '1px solid var(--border-secondary)' : 'none', transition: 'background 0.1s', borderRadius: '12px', margin: '2px' }} onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: cfg.bg, flexShrink: 0 }}>
+                    <Icon size={16} style={{ color: cfg.color }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      {n.authorAvatar ? <img src={n.authorAvatar} alt="" style={{ width: 20, height: 20, borderRadius: 6 }} /> : null}
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{n.author}</span>
+                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'monospace', marginLeft: 'auto' }}>{timeAgo(n.date)}</span>
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 4px' }}>{n.message}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <a href={`https://movingpay.atlassian.net/browse/${n.issueKey}`} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '5px', background: 'rgba(99,102,241,0.08)', color: '#818CF8', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {n.issueKey} <ExternalLink size={10} />
+                      </a>
+                      {n.summary && <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.summary}</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

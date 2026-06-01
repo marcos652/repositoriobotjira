@@ -20,6 +20,7 @@ export function useDragOrder(storageKey: string, defaultIds: string[]) {
   const dragOverItem = useRef<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const throttleRef = useRef<number>(0);
 
   const save = useCallback((newOrder: string[]) => {
     setOrder(newOrder);
@@ -31,27 +32,41 @@ export function useDragOrder(storageKey: string, defaultIds: string[]) {
     setDraggingId(id);
   }, []);
 
+  // Live reorder — throttled to 60fps for smooth animation
   const onDragEnter = useCallback((id: string) => {
     dragOverItem.current = id;
     setDragOverId(id);
+
+    if (!dragItem.current || dragItem.current === id) return;
+
+    // Throttle to prevent jank
+    const now = Date.now();
+    if (now - throttleRef.current < 80) return;
+    throttleRef.current = now;
+
+    const dragged = dragItem.current;
+    setOrder(prev => {
+      const from = prev.indexOf(dragged);
+      const to = prev.indexOf(id);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const newOrder = [...prev];
+      newOrder.splice(from, 1);
+      newOrder.splice(to, 0, dragged);
+      return newOrder;
+    });
   }, []);
 
   const onDragEnd = useCallback(() => {
-    if (dragItem.current && dragOverItem.current && dragItem.current !== dragOverItem.current) {
-      const newOrder = [...order];
-      const from = newOrder.indexOf(dragItem.current);
-      const to = newOrder.indexOf(dragOverItem.current);
-      if (from !== -1 && to !== -1) {
-        newOrder.splice(from, 1);
-        newOrder.splice(to, 0, dragItem.current);
-        save(newOrder);
-      }
-    }
+    // Persist the live-reordered state
+    setOrder(prev => {
+      try { localStorage.setItem(storageKey, JSON.stringify(prev)); } catch { /* */ }
+      return prev;
+    });
     dragItem.current = null;
     dragOverItem.current = null;
     setDraggingId(null);
     setDragOverId(null);
-  }, [order, save]);
+  }, [storageKey]);
 
   const reset = useCallback(() => save(defaultIds), [defaultIds, save]);
 

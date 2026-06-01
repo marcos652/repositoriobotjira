@@ -8,7 +8,7 @@ import {
   Users, GitBranch, Zap, ChevronLeft, ChevronRight, HelpCircle,
   Kanban, CalendarDays, ClipboardList, Bell, Shield,
   Bot, BookOpen, ScrollText, Building2, FileBarChart, Sparkles,
-  LogOut, Search
+  LogOut, Search, MessageSquare
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -45,6 +45,7 @@ const navItems = [
       { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
       { label: 'Suporte', href: '/dashboard/suporte', icon: Headphones },
       { label: 'Desenvolvimento', href: '/dashboard/dev', icon: Code2 },
+      { label: 'Slack', href: '/dashboard/slack', icon: MessageSquare },
     ],
   },
   {

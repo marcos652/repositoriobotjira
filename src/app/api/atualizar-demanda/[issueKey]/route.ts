@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { JIRABOT_CONFIG, fetchWithRetry, parseResponse } from '../../_config';
+
+const JIRA_EMAIL = process.env.JIRA_EMAIL;
+const JIRA_TOKEN = process.env.JIRA_TOKEN;
+const JIRA_BASE_URL = 'https://movingpay.atlassian.net';
 
 export async function PUT(
   request: NextRequest,
@@ -15,18 +18,66 @@ export async function PUT(
       );
     }
 
+    if (!JIRA_EMAIL || !JIRA_TOKEN) {
+      return NextResponse.json(
+        { error: 'Credenciais Jira não configuradas no servidor' },
+        { status: 500 }
+      );
+    }
+
     const body = await request.json();
 
-    const res = await fetchWithRetry(
-      `${JIRABOT_CONFIG.BASE_URL}/api/atualizar-demanda/${issueKey}`,
-      { method: 'PUT', body: JSON.stringify(body) }
+    // Build Jira update payload
+    const jiraPayload: any = { fields: {} };
+
+    if (body.summary) jiraPayload.fields.summary = body.summary;
+    if (body.description) {
+      // If plain text, convert to ADF
+      if (typeof body.description === 'string') {
+        jiraPayload.fields.description = {
+          type: 'doc',
+          version: 1,
+          content: body.description.split('\n').filter(Boolean).map((line: string) => ({
+            type: 'paragraph',
+            content: [{ type: 'text', text: line }],
+          })),
+        };
+      } else {
+        jiraPayload.fields.description = body.description;
+      }
+    }
+    if (body.priority) jiraPayload.fields.priority = { name: body.priority };
+    if (body.assignee) jiraPayload.fields.assignee = { accountId: body.assignee };
+    if (body.labels) jiraPayload.fields.labels = body.labels;
+
+    // Fetch directly from Jira REST API
+    const jiraAuth = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    const res = await fetch(
+      `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${jiraAuth}`,
+        },
+        body: JSON.stringify(jiraPayload),
+        signal: controller.signal,
+      }
     );
 
-    const data = await parseResponse(res);
+    clearTimeout(timeout);
 
     if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      if (res.status === 404) {
+        return NextResponse.json({ error: `Demanda ${issueKey} não encontrada no Jira`, success: false }, { status: 404 });
+      }
       return NextResponse.json(
-        { error: data?.error || data?.detail || data?.message || 'Erro ao atualizar demanda', details: data },
+        { error: `Erro Jira: ${res.status}`, details: errorText, success: false },
         { status: res.status }
       );
     }
@@ -35,8 +86,7 @@ export async function PUT(
       success: true,
       issue_key: issueKey,
       message: `Demanda ${issueKey} atualizada com sucesso!`,
-      url: `https://movingpay.atlassian.net/browse/${issueKey}`,
-      raw: data,
+      url: `${JIRA_BASE_URL}/browse/${issueKey}`,
     });
   } catch (error: any) {
     console.error('Erro ao atualizar demanda:', error);
