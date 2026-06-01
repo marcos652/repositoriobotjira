@@ -165,7 +165,7 @@ export default function ConsultarDemandaPage() {
     }
   };
 
-  const S: Record<string, React.CSSProperties> = {
+  const S: Record<string, React.CSSProperties | ((...args: any[]) => React.CSSProperties)> = {
     label: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' },
     card: { padding: '14px 18px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)' },
     badge: (bg: string, color: string, border: string): React.CSSProperties => ({ padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: bg, color, border: `1px solid ${border}` }),
