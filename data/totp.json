@@ -1,10 +1,5 @@
 [
   {
-    "emailHash": "388816e3c25b109659d9f6d08472108f0afd08e80592e301839d4ae9393d6bd4",
-    "encryptedSecret": "M3zsTGfX3JBZyB3kq3RNHL9R3ccdWkkkOkJCJJXbPSqihf/s55rVRKHXDCXOyViG9OyF5ctEogRhNHX5NQkABQp9z1+vYz+8rgEZuuM=",
-    "createdAt": "2026-05-30T19:58:39.415Z"
-  },
-  {
     "emailHash": "004b4704e51e4f36380c3642ef30117e83077fd6feededc50c372eebf3e55fd4",
     "encryptedSecret": "rs7gWHd23llmnGrMaBkmbpBDBw27gU9Awq5knQSks/IYSmHQlcn5kGaP/KUWBeEMTuS/JlTTlkKL8I96c+XCQq3Ygit9En0idjJO0x8=",
     "createdAt": "2026-06-01T13:17:44.471Z"
