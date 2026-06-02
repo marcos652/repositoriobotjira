@@ -237,7 +237,9 @@ export const ALLOWED_EMAILS = {
 
   list: (): Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user' }> => {
     const result: Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user' }> = [];
-    for (const entry of getStore().values()) {
+    const store = getStore();
+    let corruptedKeys = [];
+    for (const [hash, entry] of store.entries()) {
       const email = decryptEmail(entry.encrypted);
       if (email) {
         result.push({
@@ -247,8 +249,18 @@ export const ALLOWED_EMAILS = {
           isDefault: DEFAULT_EMAILS.includes(email),
           role: entry.role || 'user', // Default existing users to 'user' if not set
         });
+      } else {
+        corruptedKeys.push(hash);
       }
     }
+    
+    // Purge corrupted keys from memory and re-save
+    if (corruptedKeys.length > 0) {
+      for (const k of corruptedKeys) store.delete(k);
+      saveEmailsToFile(store);
+      (globalThis as any)[GLOBAL_KEY_TS] = 0;
+    }
+    
     return result;
   },
 
