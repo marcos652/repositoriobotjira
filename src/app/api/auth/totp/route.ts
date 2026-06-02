@@ -6,13 +6,17 @@ import QRCode from 'qrcode';
 // ── POST: Setup / Verify / Confirm TOTP ──
 export async function POST(request: NextRequest) {
   try {
-    const { email, action, code, setupToken, idToken } = await request.json();
+    const { email: inputEmail, action, code, setupToken, idToken } = await request.json();
 
-    if (!email || !idToken) {
+    if (!inputEmail || !idToken) {
       return NextResponse.json({ error: 'Email e Token obrigatórios' }, { status: 400 });
     }
 
-    const normalized = email.trim().toLowerCase();
+    const normalized = inputEmail.trim().toLowerCase();
+
+    // Sync from Firestore for Vercel persistence
+    await ALLOWED_EMAILS.syncWithFirestore();
+    await TOTP_STORE.syncWithFirestore();
 
     // Verify Firebase ID Token via REST API
     const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY || 'AIzaSyAGFdbWod_EJgh4OC056IvcqT621L9FWUo'}`, {
@@ -113,6 +117,7 @@ export async function POST(request: NextRequest) {
 
       // Save the secret using centralized store (persisted to file!)
       TOTP_STORE.set(normalized, encrypt({ secret: tokenData.secret }));
+      import('@/lib/firebase').then(m => m.saveTotpStoreToFirestore(TOTP_STORE.getRawData()));
 
       // Record IP
       IP_TRACKER.record(normalized, clientIP);
@@ -208,6 +213,7 @@ export async function POST(request: NextRequest) {
     // ── ACTION: reset — Remove TOTP for re-setup ──
     if (action === 'reset') {
       TOTP_STORE.remove(normalized);
+      import('@/lib/firebase').then(m => m.saveTotpStoreToFirestore(TOTP_STORE.getRawData()));
       return NextResponse.json({ success: true, message: 'TOTP resetado. Faça login para configurar novamente.' });
     }
 

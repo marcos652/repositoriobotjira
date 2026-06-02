@@ -23,6 +23,9 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    // Pull latest allowed users from Firestore
+    await ALLOWED_EMAILS.syncWithFirestore();
+
     if (!ALLOWED_EMAILS.includes(normalizedEmail)) {
       return NextResponse.json({ error: 'Email não autorizado' }, { status: 403 });
     }

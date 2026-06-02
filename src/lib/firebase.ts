@@ -108,6 +108,62 @@ export async function getMetricsFromFirestore(type: 'support' | 'dev') {
   return null;
 }
 
+export async function saveAuthStoreToFirestore(data: any) {
+  const db = getDb();
+  if (!db) return;
+  try {
+    const cleanedData = JSON.parse(JSON.stringify(data));
+    await setDoc(doc(db, "system", "auth_store"), {
+      emails: cleanedData,
+      syncedAt: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error(`[Firebase AuthStore] Write error:`, error?.message || error);
+  }
+}
+
+export async function getAuthStoreFromFirestore() {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    const snap = await getDoc(doc(db, "system", "auth_store"));
+    if (snap.exists()) {
+      return snap.data().emails;
+    }
+  } catch (error: any) {
+    console.error(`[Firebase AuthStore] Read error:`, error?.message || error);
+  }
+  return null;
+}
+
+export async function saveTotpStoreToFirestore(data: any) {
+  const db = getDb();
+  if (!db) return;
+  try {
+    const cleanedData = JSON.parse(JSON.stringify(data));
+    await setDoc(doc(db, "system", "totp_store"), {
+      totp: cleanedData,
+      syncedAt: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error(`[Firebase TotpStore] Write error:`, error?.message || error);
+  }
+}
+
+export async function getTotpStoreFromFirestore() {
+  const db = getDb();
+  if (!db) return null;
+  try {
+    const snap = await getDoc(doc(db, "system", "totp_store"));
+    if (snap.exists()) {
+      return snap.data().totp;
+    }
+  } catch (error: any) {
+    console.error(`[Firebase TotpStore] Read error:`, error?.message || error);
+  }
+  return null;
+}
+
 import { getAuth } from "firebase/auth";
 
 export const auth = getAuth(app);

@@ -166,6 +166,8 @@ function saveEmailsToFile(store: Map<string, SecureEmail>): void {
   }
 }
 
+import { saveAuthStoreToFirestore, getAuthStoreFromFirestore } from '@/lib/firebase';
+
 // ── Use globalThis to share across Next.js API routes ──
 const GLOBAL_KEY = '__jiraops_email_store__';
 const GLOBAL_KEY_TS = '__jiraops_email_store_ts__';
@@ -248,6 +250,39 @@ export const ALLOWED_EMAILS = {
       }
     }
     return result;
+  },
+
+  getRawData: (): any[] => {
+    return Array.from(getStore().values());
+  },
+
+  syncWithFirestore: async (): Promise<void> => {
+    try {
+      const data = await getAuthStoreFromFirestore();
+      if (data && Array.isArray(data)) {
+        const store = getStore();
+        let changed = false;
+        for (const entry of data) {
+          if (!store.has(entry.hash)) {
+            store.set(entry.hash, entry);
+            changed = true;
+          } else {
+            // Update role if changed
+            const existing = store.get(entry.hash);
+            if (existing && existing.role !== entry.role) {
+              existing.role = entry.role;
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          saveEmailsToFile(store);
+          (globalThis as any)[GLOBAL_KEY_TS] = 0; // invalidate cache
+        }
+      }
+    } catch (e: any) {
+      console.error('[Auth] Sync failed:', e.message);
+    }
   },
 
   getRole: (email: string): 'admin' | 'user' => {
@@ -654,6 +689,8 @@ function saveTOTPStore(): void {
   }
 }
 
+import { saveTotpStoreToFirestore, getTotpStoreFromFirestore } from '@/lib/firebase';
+
 function totpEmailHash(email: string): string {
   return crypto.createHash('sha256').update(email.trim().toLowerCase() + ':totp-salt').digest('hex');
 }
@@ -695,5 +732,30 @@ export const TOTP_STORE = {
 
   /** Get email hash */
   hash: (email: string): string => totpEmailHash(email),
-};
 
+  getRawData: (): any[] => {
+    return Array.from(getTOTPStore().values());
+  },
+
+  syncWithFirestore: async (): Promise<void> => {
+    try {
+      const data = await getTotpStoreFromFirestore();
+      if (data && Array.isArray(data)) {
+        const store = getTOTPStore();
+        let changed = false;
+        for (const entry of data) {
+          if (!store.has(entry.emailHash)) {
+            store.set(entry.emailHash, entry);
+            changed = true;
+          }
+        }
+        if (changed) {
+          saveTOTPStore();
+          (globalThis as any)[GLOBAL_TOTP_TS] = 0;
+        }
+      }
+    } catch (e: any) {
+      console.error('[TOTP] Sync failed:', e.message);
+    }
+  },
+};

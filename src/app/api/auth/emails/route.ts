@@ -8,6 +8,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
+  await ALLOWED_EMAILS.syncWithFirestore();
+
   return NextResponse.json({
     success: true,
     emails: ALLOWED_EMAILS.list(),
@@ -58,17 +60,18 @@ export async function POST(request: NextRequest) {
 
     const adminEmail = await getSessionEmail(request);
     const validRole = role === 'admin' ? 'admin' : 'user';
+    
+    await ALLOWED_EMAILS.syncWithFirestore(); // Ensure we have latest before adding
+    
     const added = ALLOWED_EMAILS.add(normalized, adminEmail || 'admin', validRole);
 
-    if (!added) {
-      return NextResponse.json({ error: 'Falha ao salvar no banco local' }, { status: 500 });
+    if (added) {
+      import('@/lib/firebase').then(m => m.saveAuthStoreToFirestore(ALLOWED_EMAILS.getRawData()));
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Usuário ${normalized} criado no Firebase com sucesso!`,
-      email: normalized,
-      total: ALLOWED_EMAILS.size(),
+    return NextResponse.json({ 
+      success: added,
+      message: added ? 'Usuário adicionado com sucesso' : 'Email já existe na base local'
     });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Erro interno' }, { status: 500 });
@@ -94,18 +97,15 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Email não está na lista' }, { status: 404 });
     }
 
-    const removed = ALLOWED_EMAILS.remove(normalized);
+    await ALLOWED_EMAILS.syncWithFirestore();
 
+    const removed = ALLOWED_EMAILS.remove(normalized);
     if (!removed) {
-      return NextResponse.json({ 
-        error: 'Não é possível remover o administrador principal ou o último email' 
-      }, { status: 403 });
+      return NextResponse.json({ error: 'Não foi possível remover (usuário não encontrado ou é padrão)' }, { status: 400 });
     }
 
-    // Note: We cannot easily delete a user from Firebase Auth via standard REST without their idToken.
-    // The admin will have to delete them from the Firebase Console to completely remove the auth account,
-    // but removing them from ALLOWED_EMAILS is enough to block them from the dashboard UI visually.
-    
+    import('@/lib/firebase').then(m => m.saveAuthStoreToFirestore(ALLOWED_EMAILS.getRawData()));
+
     return NextResponse.json({
       success: true,
       message: `Email ${normalized} removido da lista local. (Exclua no Firebase Console para remover a conta Auth)`,
@@ -124,6 +124,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const { email, role } = await request.json();
+    const validRole = role === 'admin' ? 'admin' : 'user';
 
     if (!email || !role || typeof email !== 'string' || (role !== 'admin' && role !== 'user')) {
       return NextResponse.json({ error: 'Email e Função (admin/user) são obrigatórios' }, { status: 400 });
@@ -135,18 +136,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Email não está na lista' }, { status: 404 });
     }
 
-    const updated = ALLOWED_EMAILS.updateRole(normalized, role);
-
-    if (!updated) {
-      return NextResponse.json({ 
-        error: 'Não é possível alterar a função do administrador principal' 
-      }, { status: 403 });
-    }
+    await ALLOWED_EMAILS.syncWithFirestore();
     
-    return NextResponse.json({
-      success: true,
-      message: `Função de ${normalized} atualizada para ${role}.`,
-    });
+    const updated = ALLOWED_EMAILS.updateRole(normalized, validRole);
+    if (!updated) {
+      return NextResponse.json({ error: 'Não foi possível atualizar (usuário não encontrado ou é default)' }, { status: 400 });
+    }
+
+    import('@/lib/firebase').then(m => m.saveAuthStoreToFirestore(ALLOWED_EMAILS.getRawData()));
+
+    return NextResponse.json({ success: true, message: 'Função atualizada com sucesso' });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Erro interno' }, { status: 500 });
   }
