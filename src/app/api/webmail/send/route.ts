@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     const password = request.headers.get('x-webmail-pass');
     
     // Fallback constants
-    const host = process.env.WORKMAIL_SMTP_HOST || 'email-smtp.us-east-1.amazonaws.com';
+    const host = process.env.WORKMAIL_SMTP_HOST || 'smtp.mail.us-east-1.awsapps.com';
     const port = parseInt(process.env.WORKMAIL_SMTP_PORT || '465', 10);
 
     if (!user || !password) {

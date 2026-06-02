@@ -297,8 +297,15 @@ export default function WebmailPage() {
                 <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedEmail.subject}</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button onClick={() => {
-                    setComposeTo(selectedEmail.from.match(/<([^>]+)>/)?.[1] || selectedEmail.from);
+                    const to = selectedEmail.from.match(/<([^>]+)>/)?.[1] || selectedEmail.from;
+                    setComposeTo(to);
                     setComposeSubject(`Re: ${selectedEmail.subject}`);
+                    
+                    const originalDate = new Date(selectedEmail.date).toLocaleString('pt-BR');
+                    const quoteHeader = `\n\n\n--- Em ${originalDate}, ${selectedEmail.from} escreveu:\n`;
+                    const quoteBody = selectedEmail.textSnippet.split('\n').map(line => `> ${line}`).join('\n');
+                    
+                    setComposeBody(`${quoteHeader}${quoteBody}`);
                     setComposing(true);
                   }} style={{ padding: '8px 16px', background: 'rgba(99,102,241,0.1)', color: '#818CF8', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', transition: 'all 0.2s' }}>
                     <Reply size={16} /> Responder
