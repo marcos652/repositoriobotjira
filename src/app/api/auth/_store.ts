@@ -382,13 +382,13 @@ export const IP_TRACKER = {
       existing.lastSeen = new Date().toISOString();
       if (!failedAttempt) existing.loginCount++;
     } else {
-      // In strict mode, new IPs are created as BLOCKED by default!
+      // New IPs are allowed by default
       store.set(key, {
         ip: cleanIP,
         email: normalized,
         firstSeen: new Date().toISOString(),
         lastSeen: new Date().toISOString(),
-        blocked: true, // DEFAULT DENY
+        blocked: false, // DEFAULT ALLOW
         loginCount: failedAttempt ? 0 : 1,
       });
     }
@@ -402,8 +402,8 @@ export const IP_TRACKER = {
     if (email) {
       const key = `${email.trim().toLowerCase()}:${cleanIP}`;
       const entry = getIPStore().get(key);
-      // STRICT MODE: If entry doesn't exist, it is considered BLOCKED (true)
-      return entry?.blocked ?? true; 
+      // If entry doesn't exist, it is allowed by default
+      return entry?.blocked ?? false; 
     }
     // If no email, check if ANY entry for this IP is blocked
     let found = false;
@@ -413,7 +413,7 @@ export const IP_TRACKER = {
         if (entry.blocked) return true;
       }
     }
-    return !found ? true : false; // Strict mode
+    return !found ? false : false; // Allow by default if not found
   },
 
   /** Block a specific email:ip combination */
