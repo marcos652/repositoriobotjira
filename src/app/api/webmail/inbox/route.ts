@@ -33,17 +33,18 @@ export async function GET(request: NextRequest) {
     const connection = await imaps.connect(config);
     await connection.openBox('INBOX');
 
-    // Fetch last 50 emails
-    const searchCriteria = ['ALL'];
+    // Fetch recent emails (last 7 days to avoid memory crash)
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    
+    const searchCriteria = [['SINCE', date]];
     const fetchOptions = {
-      bodies: ['HEADER', 'TEXT', ''],
-      struct: true,
+      bodies: [''],
       markSeen: false,
     };
 
-    // Limit to newest 50 to avoid timeout
-    const messages = await connection.search(searchCriteria, fetchOptions);
-    const recentMessages = messages.slice(-50).reverse(); // Get latest 50
+    let messages = await connection.search(searchCriteria, fetchOptions);
+    const recentMessages = messages.slice(-15).reverse(); // Limit to 15 newest
 
     const results = [];
 
