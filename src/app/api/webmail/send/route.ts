@@ -3,20 +3,23 @@ import nodemailer from 'nodemailer';
 
 export async function POST(request: NextRequest) {
   try {
-    const user = process.env.WORKMAIL_EMAIL;
-    const password = process.env.WORKMAIL_PASSWORD;
-    const host = process.env.WORKMAIL_SMTP_HOST || 'smtp.mail.us-east-1.awsapps.com';
+    const { to, subject, text, html } = await request.json();
+
+    // Read credentials from Headers (Multi-user support)
+    const user = request.headers.get('x-webmail-user');
+    const password = request.headers.get('x-webmail-pass');
+    
+    // Fallback constants
+    const host = process.env.WORKMAIL_SMTP_HOST || 'email-smtp.us-east-1.amazonaws.com';
     const port = parseInt(process.env.WORKMAIL_SMTP_PORT || '465', 10);
 
     if (!user || !password) {
       return NextResponse.json(
-        { success: false, error: 'Credenciais de e-mail não configuradas (WORKMAIL_EMAIL e WORKMAIL_PASSWORD)' },
+        { success: false, error: 'Faça login no Webmail para enviar mensagens.' },
         { status: 500 }
       );
     }
 
-    const body = await request.json();
-    const { to, subject, html, text } = body;
 
     if (!to || !subject) {
       return NextResponse.json({ success: false, error: 'Destinatário e Assunto são obrigatórios' }, { status: 400 });

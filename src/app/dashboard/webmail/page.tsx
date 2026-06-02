@@ -26,15 +26,31 @@ export default function WebmailPage() {
   const [composing, setComposing] = useState(false);
   const [loadingBody, setLoadingBody] = useState(false);
 
+  // Auth State
+  const [creds, setCreds] = useState<{user: string, pass: string} | null>(null);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [authChecking, setAuthChecking] = useState(true);
+
+  // Load creds on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('webmail_creds');
+    if (saved) {
+      setCreds(JSON.parse(saved));
+    }
+    setAuthChecking(false);
+  }, []);
+
   // Auto-refresh every 30 seconds
   useEffect(() => {
+    if (!creds) return;
     const interval = setInterval(() => {
       if (activeTab === 'inbox' || activeTab === 'meetings') {
         fetchEmails(true); // silent fetch
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [activeTab]);
+  }, [activeTab, creds]);
 
   // Compose State
   const [composeTo, setComposeTo] = useState('');
@@ -44,15 +60,19 @@ export default function WebmailPage() {
   const [sendResult, setSendResult] = useState<{success: boolean; message: string} | null>(null);
 
   const fetchEmails = async (silent = false) => {
+    if (!creds) return;
     if (!silent) setLoading(true);
     if (!silent) setError(null);
     try {
-      const res = await fetch('/api/webmail/inbox?mode=list');
+      const res = await fetch('/api/webmail/inbox?mode=list', {
+        headers: { 'x-webmail-user': creds.user, 'x-webmail-pass': creds.pass }
+      });
       const data = await res.json();
       if (res.ok && data.success) {
         setEmails(data.emails);
       } else {
         if (!silent) setError(data.error || 'Erro ao carregar e-mails.');
+        if (res.status === 401 || data.error?.includes('Faça login')) handleLogout();
       }
     } catch (err: any) {
       if (!silent) setError('Erro de conexão com o servidor de e-mail.');
@@ -61,11 +81,19 @@ export default function WebmailPage() {
     }
   };
 
+  // Initial fetch when creds are available
+  useEffect(() => {
+    if (creds) fetchEmails();
+  }, [creds]);
+
   const handleSelectEmail = async (email: EmailData) => {
+    if (!creds) return;
     setSelectedEmail(email);
     setLoadingBody(true);
     try {
-      const res = await fetch(`/api/webmail/inbox?mode=body&uid=${email.id}`);
+      const res = await fetch(`/api/webmail/inbox?mode=body&uid=${email.id}`, {
+        headers: { 'x-webmail-user': creds.user, 'x-webmail-pass': creds.pass }
+      });
       const data = await res.json();
       if (res.ok && data.success) {
         setSelectedEmail({ ...email, ...data.email });
@@ -84,13 +112,17 @@ export default function WebmailPage() {
   }, [activeTab]);
 
   const handleSend = async () => {
-    if (!composeTo || !composeSubject) return;
+    if (!creds || !composeTo || !composeSubject) return;
     setSending(true);
     setSendResult(null);
     try {
       const res = await fetch('/api/webmail/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-webmail-user': creds.user,
+          'x-webmail-pass': creds.pass
+        },
         body: JSON.stringify({ to: composeTo, subject: composeSubject, text: composeBody, html: composeBody })
       });
       const data = await res.json();
@@ -107,8 +139,50 @@ export default function WebmailPage() {
     }
   };
 
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginUser || !loginPass) return;
+    const c = { user: loginUser, pass: loginPass };
+    localStorage.setItem('webmail_creds', JSON.stringify(c));
+    setCreds(c);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('webmail_creds');
+    setCreds(null);
+    setEmails([]);
+    setSelectedEmail(null);
+  };
+
   const meetings = emails.filter(e => e.hasMeeting);
   const displayList = activeTab === 'meetings' ? meetings : emails;
+
+  if (authChecking) return null;
+
+  if (!creds) {
+    return (
+      <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ maxWidth: '400px', width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '24px', padding: '40px', textAlign: 'center', boxShadow: '0 24px 48px rgba(0,0,0,0.05)' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+            <Mail size={40} style={{ color: '#818CF8' }} />
+          </div>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Login no Webmail</h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '32px' }}>Conecte sua conta corporativa da Amazon WorkMail para acessar seus e-mails nativamente.</p>
+          
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <input type="email" placeholder="Seu e-mail corporativo" value={loginUser} onChange={e => setLoginUser(e.target.value)} required style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+            <input type="password" placeholder="Sua senha do WorkMail" value={loginPass} onChange={e => setLoginPass(e.target.value)} required style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+            <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer', marginTop: '8px', boxShadow: '0 4px 12px rgba(59,130,246,0.2)' }}>
+              Conectar Conta
+            </button>
+          </form>
+          <div style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+             <AlertTriangle size={12} /> As credenciais ficam salvas localmente no seu navegador.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -124,6 +198,9 @@ export default function WebmailPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <button onClick={handleLogout} style={{ padding: '0 16px', height: '40px', borderRadius: '10px', background: 'transparent', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            Desconectar
+          </button>
           <button onClick={() => fetchEmails()} disabled={loading} style={{ padding: '0 16px', height: '40px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar
           </button>
