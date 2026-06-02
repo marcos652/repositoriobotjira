@@ -25,7 +25,7 @@ const sections = [
 
 // ── Email Management Component ──
 function EmailManagement() {
-  const [emails, setEmails] = useState<Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean }>>([]);
+  const [emails, setEmails] = useState<Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user' }>>([]);
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
