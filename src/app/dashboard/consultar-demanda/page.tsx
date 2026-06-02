@@ -64,6 +64,7 @@ export default function ConsultarDemandaPage() {
   const [editCliente, setEditCliente] = useState('');
   const [updating, setUpdating] = useState(false);
   const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
 
   // New features state
   const [newComment, setNewComment] = useState('');
@@ -93,29 +94,46 @@ export default function ConsultarDemandaPage() {
   const handleSearch = useCallback(async (keyOverride?: string) => {
     let key = (keyOverride || searchKey).trim();
     if (!key) return;
-    if (/^\d+$/.test(key)) key = `DSMM-${key}`;
-    key = key.toUpperCase();
 
-    setLoading(true); setError(null); setDemanda(null); setEditing(false);
+    const isExactKey = /^[a-zA-Z]+-\d+$/.test(key);
+    const isNumber = /^\d+$/.test(key);
+    const isKeySearch = isExactKey || isNumber;
+
+    if (isNumber) key = `DSMM-${key}`;
+    if (isKeySearch) key = key.toUpperCase();
+
+    setLoading(true); setError(null); setDemanda(null); setSearchResults(null); setEditing(false);
     setUpdateResult(null); setActiveTab('details'); setShowHistory(false);
 
     try {
-      const res = await fetch(`/api/demanda/${key}`);
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setDemanda(data);
-        setEditTexto(data.texto || '');
-        setEditSummary(data.summary || '');
-        setEditPriority(data.priority || '');
-        setEditAssignee(data.assignee || '');
-        setEditAssigneeId(data.assigneeId || '');
-        setEditReporter(data.reporter || '');
-        setEditCliente(data.nome_cliente || '');
-        // Save to search history
-        const h = [key, ...loadHistory().filter(k => k !== key)].slice(0, 10);
-        saveHistory(h); setSearchHistory(h);
+      if (isKeySearch) {
+        const res = await fetch(`/api/demanda/${key}`);
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setDemanda(data);
+          setEditTexto(data.texto || '');
+          setEditSummary(data.summary || '');
+          setEditPriority(data.priority || '');
+          setEditAssignee(data.assignee || '');
+          setEditAssigneeId(data.assigneeId || '');
+          setEditReporter(data.reporter || '');
+          setEditCliente(data.nome_cliente || '');
+          const h = [key, ...loadHistory().filter(k => k !== key)].slice(0, 10);
+          saveHistory(h); setSearchHistory(h);
+        } else {
+          setError(data.error || 'Demanda não encontrada');
+        }
       } else {
-        setError(data.error || 'Demanda não encontrada');
+        const res = await fetch(`/api/search-demanda?q=${encodeURIComponent(key)}`);
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setSearchResults(data.results);
+          if (data.results.length === 0) setError('Nenhuma demanda encontrada com esse termo.');
+          const h = [key, ...loadHistory().filter(k => k !== key)].slice(0, 10);
+          saveHistory(h); setSearchHistory(h);
+        } else {
+          setError(data.error || 'Erro na busca textual');
+        }
       }
     } catch { setError('Erro de conexão'); }
     finally { setLoading(false); }
@@ -220,14 +238,13 @@ export default function ConsultarDemandaPage() {
         <div style={{ display: 'flex', gap: '10px' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', padding: '0 16px', borderRadius: '14px', height: '48px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)' }}>
             <Search size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-tertiary)', flexShrink: 0 }}>DSMM-</span>
             <input type="text" value={searchKey}
-              onChange={e => setSearchKey(e.target.value.replace(/[^0-9]/g, ''))}
+              onChange={e => setSearchKey(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               onFocus={() => searchHistory.length > 0 && setShowHistory(true)}
               onBlur={() => setTimeout(() => setShowHistory(false), 200)}
-              placeholder="86" style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }} />
-            {searchKey && <button onClick={() => { setSearchKey(''); setDemanda(null); setError(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: '4px' }}><X size={14} /></button>}
+              placeholder="Ex: DSMM-123 ou Erro de Login..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }} />
+            {searchKey && <button onClick={() => { setSearchKey(''); setDemanda(null); setSearchResults(null); setError(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: '4px' }}><X size={14} /></button>}
           </div>
           <button onClick={() => handleSearch()} disabled={loading || !searchKey.trim()} style={{ padding: '0 24px', borderRadius: '14px', height: '48px', background: loading ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 700, cursor: loading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 16px rgba(59,130,246,0.2)' }}>
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Buscar
@@ -258,6 +275,31 @@ export default function ConsultarDemandaPage() {
         <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 20px', borderRadius: '14px', marginBottom: '20px', background: updateResult.success ? 'rgba(34,197,94,0.06)' : 'rgba(244,63,94,0.06)', border: `1px solid ${updateResult.success ? 'rgba(34,197,94,0.12)' : 'rgba(244,63,94,0.12)'}` }}>
           {updateResult.success ? <CheckCircle2 size={16} style={{ color: '#4ADE80' }} /> : <AlertTriangle size={16} style={{ color: '#FB7185' }} />}
           <span style={{ fontSize: '13px', fontWeight: 600, color: updateResult.success ? '#4ADE80' : '#FB7185' }}>{updateResult.message}</span>
+        </div>
+      )}
+
+      {/* Search Results List */}
+      {!demanda && searchResults && searchResults.length > 0 && (
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px' }}>Resultados da busca ({searchResults.length})</h2>
+          {searchResults.map(res => (
+            <div key={res.key} onClick={() => { setSearchKey(res.key); handleSearch(res.key); }} className="group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-indigo)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-secondary)')}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={S.badge(issueTypeColor('Story').bg, issueTypeColor('Story').color, issueTypeColor('Story').border)}>{res.key}</span>
+                  <span style={S.badge(statusColor(res.statusCategory).bg, statusColor(res.statusCategory).color, statusColor(res.statusCategory).border)}>{res.status}</span>
+                </div>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }} className="group-hover:text-indigo-400 transition-colors">{res.summary}</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><User size={12} /> {res.assignee}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={12} /> {formatDate(res.created)}</span>
+                </div>
+              </div>
+              <div style={{ padding: '8px', background: 'var(--bg-card)', borderRadius: '8px', color: 'var(--text-tertiary)' }} className="group-hover:bg-indigo-500/10 group-hover:text-indigo-400 transition-colors">
+                <ArrowRight size={18} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
