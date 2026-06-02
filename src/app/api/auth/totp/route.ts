@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       // Decrypt the stored secret
       const secretData = decrypt<{ secret: string }>(entry.encryptedSecret);
       if (!secretData) {
-        return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+        return NextResponse.json({ error: 'Erro na descriptografia do TOTP (chave inválida).' }, { status: 500 });
       }
 
       const totp = new OTPAuth.TOTP({
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 });
   } catch (error: any) {
     console.error('TOTP error:', error);
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+    return NextResponse.json({ error: 'Erro interno', details: error?.message || String(error), stack: error?.stack }, { status: 500 });
   }
 }
 

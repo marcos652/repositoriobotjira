@@ -243,7 +243,7 @@ export default function WebmailPage() {
           <div style={{ fontSize: '13px' }}>
             <strong>Erro:</strong> {error}
             <br/>
-            <span style={{ fontSize: '11px', opacity: 0.8 }}>Certifique-se de configurar WORKMAIL_EMAIL e WORKMAIL_PASSWORD nas variáveis de ambiente (.env).</span>
+            <span style={{ fontSize: '11px', opacity: 0.8 }}>Verifique se o seu E-mail e Senha do WorkMail estão corretos no botão de Configurações.</span>
           </div>
         </div>
       )}
