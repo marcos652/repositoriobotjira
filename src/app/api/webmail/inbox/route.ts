@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         const msg = messages[0];
         const all = msg.parts.find((part: any) => part.which === '');
         
-        let parsedBody = { html: '', textSnippet: '', hasMeeting: false, attachments: [], meetings: [] };
+        let parsedBody: any = { html: '', textSnippet: '', hasMeeting: false, attachments: [], meetings: [] };
         if (all && all.body) {
           const parsed = await simpleParser(all.body);
           
@@ -139,14 +139,17 @@ export async function GET(request: NextRequest) {
         try {
           const headerPart = msg.parts.find((part: any) => part.which === 'HEADER.FIELDS (FROM TO SUBJECT DATE)');
           if (headerPart && headerPart.body) {
-            const parsed = await simpleParser(headerPart.body);
+            const headers = headerPart.body;
             
             const id = msg.attributes.uid.toString();
-            const subject = parsed.subject || '(Sem Assunto)';
-            const from = parsed.from?.text || '(Desconhecido)';
+            const subject = (headers.subject && headers.subject.length > 0) ? headers.subject[0] : '(Sem Assunto)';
+            const from = (headers.from && headers.from.length > 0) ? headers.from[0] : '(Desconhecido)';
             
             let date = new Date().toISOString();
-            if (parsed.date) date = parsed.date.toISOString();
+            if (headers.date && headers.date.length > 0) {
+              const d = new Date(headers.date[0]);
+              if (!isNaN(d.getTime())) date = d.toISOString();
+            }
 
             const isRead = msg.attributes.flags.includes('\\Seen');
 
