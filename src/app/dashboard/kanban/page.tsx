@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Kanban, Loader2, WifiOff, RefreshCw, ExternalLink, GripVertical
@@ -164,7 +166,7 @@ export default function KanbanPage() {
               {col.items.map(issue => {
                 const tc = typeColor[issue.fields.issuetype.name] || typeColor['Task'];
                 return (
-                  <a key={issue.key} href={`https://movingpay.atlassian.net/browse/${issue.key}`} target="_blank" rel="noopener noreferrer"
+                  <Link key={issue.key} href={`/dashboard/consultar-demanda?key=${issue.key}`}
                     style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', textDecoration: 'none', transition: 'all 0.15s', cursor: 'pointer', display: 'block' }}
                     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
                     onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
@@ -186,7 +188,7 @@ export default function KanbanPage() {
                       )}
                       <span style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.08)', color: '#FBBF24' }}>{issue.fields.priority.name}</span>
                     </div>
-                  </a>
+                  </Link>
                 );
               })}
               {col.items.length === 0 && (
