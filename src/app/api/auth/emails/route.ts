@@ -17,18 +17,15 @@ export async function GET(request: NextRequest) {
 
 // POST — Add a new email
 export async function POST(request: NextRequest) {
-  console.log('[Emails API] POST received');
   if (!(await isAdmin(request))) {
-    console.log('[Emails API] ❌ Not admin');
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
   try {
-    const { email } = await request.json();
-    console.log(`[Emails API] Adding email: ${email}`);
+    const { email, password } = await request.json();
 
-    if (!email || typeof email !== 'string') {
-      return NextResponse.json({ error: 'Email é obrigatório' }, { status: 400 });
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+      return NextResponse.json({ error: 'Email e Senha são obrigatórios' }, { status: 400 });
     }
 
     const normalized = email.trim().toLowerCase();
@@ -38,20 +35,34 @@ export async function POST(request: NextRequest) {
     }
 
     if (ALLOWED_EMAILS.includes(normalized)) {
-      console.log(`[Emails API] Email already exists: ${normalized}`);
       return NextResponse.json({ error: 'Email já está autorizado' }, { status: 409 });
     }
 
+    // Create user in Firebase Auth via REST API
+    const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${process.env.FIREBASE_API_KEY || 'AIzaSyAGFdbWod_EJgh4OC056IvcqT621L9FWUo'}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: normalized, password, returnSecureToken: false })
+    });
+    const fbData = await fbRes.json();
+
+    if (!fbRes.ok) {
+      const msg = fbData.error?.message || 'Erro no Firebase Auth';
+      if (msg === 'EMAIL_EXISTS') {
+        return NextResponse.json({ error: 'Usuário já existe no Firebase' }, { status: 409 });
+      }
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
+
     const added = ALLOWED_EMAILS.add(normalized);
-    console.log(`[Emails API] add() returned: ${added}`);
 
     if (!added) {
-      return NextResponse.json({ error: 'Falha ao adicionar email' }, { status: 500 });
+      return NextResponse.json({ error: 'Falha ao salvar no banco local' }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
-      message: `Email ${normalized} autorizado com sucesso`,
+      message: `Usuário ${normalized} criado no Firebase com sucesso!`,
       email: normalized,
       total: ALLOWED_EMAILS.size(),
     });
@@ -87,9 +98,13 @@ export async function DELETE(request: NextRequest) {
       }, { status: 403 });
     }
 
+    // Note: We cannot easily delete a user from Firebase Auth via standard REST without their idToken.
+    // The admin will have to delete them from the Firebase Console to completely remove the auth account,
+    // but removing them from ALLOWED_EMAILS is enough to block them from the dashboard UI visually.
+    
     return NextResponse.json({
       success: true,
-      message: `Email ${normalized} removido`,
+      message: `Email ${normalized} removido da lista local. (Exclua no Firebase Console para remover a conta Auth)`,
       total: ALLOWED_EMAILS.size(),
     });
   } catch (error: any) {

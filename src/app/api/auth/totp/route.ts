@@ -6,16 +6,29 @@ import QRCode from 'qrcode';
 // ── POST: Setup / Verify / Confirm TOTP ──
 export async function POST(request: NextRequest) {
   try {
-    const { email, action, code, setupToken } = await request.json();
+    const { email, action, code, setupToken, idToken } = await request.json();
 
-    if (!email) {
-      return NextResponse.json({ error: 'Email obrigatório' }, { status: 400 });
+    if (!email || !idToken) {
+      return NextResponse.json({ error: 'Email e Token obrigatórios' }, { status: 400 });
     }
 
     const normalized = email.trim().toLowerCase();
 
-    if (!ALLOWED_EMAILS.includes(normalized)) {
-      return NextResponse.json({ error: 'Email não autorizado' }, { status: 403 });
+    // Verify Firebase ID Token via REST API
+    const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY || 'AIzaSyAGFdbWod_EJgh4OC056IvcqT621L9FWUo'}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    });
+    const verifyData = await verifyRes.json();
+
+    if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
+      return NextResponse.json({ error: 'Token inválido ou expirado. Faça login novamente.' }, { status: 401 });
+    }
+
+    const authEmail = verifyData.users[0].email?.toLowerCase();
+    if (authEmail !== normalized) {
+      return NextResponse.json({ error: 'Email incompatível com a credencial' }, { status: 403 });
     }
 
     // Check if IP is blocked

@@ -2,7 +2,9 @@
 
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Zap, Mail, ArrowRight, ArrowLeft, Loader2, CheckCircle2, Shield, BarChart3, Users, AlertTriangle, Smartphone, Key } from 'lucide-react';
+import { Zap, Mail, ArrowRight, ArrowLeft, Loader2, CheckCircle2, Shield, BarChart3, Users, AlertTriangle, Smartphone, Key, Lock } from 'lucide-react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 type Step = 'email' | 'code' | 'totp-setup' | 'totp-verify';
 
@@ -11,6 +13,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [authToken, setAuthToken] = useState('');
@@ -49,19 +52,33 @@ function LoginContent() {
     }
   }, [step]);
 
-  // ── Handle email submit: check TOTP first, then fallback to Slack ──
+  // ── Handle login submit: check Firebase Auth first, then TOTP ──
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || isLoading) return;
+    if (!email.trim() || !password || isLoading) return;
     setIsLoading(true);
     setError(null);
 
     try {
-      // First check if user has TOTP configured
+      // 1. Firebase Authentication
+      let idToken = '';
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+        idToken = await userCredential.user.getIdToken();
+      } catch (authError: any) {
+        console.error('Firebase auth error:', authError);
+        setError('Email ou senha inválidos.');
+        setIsLoading(false);
+        return;
+      }
+
+      setAuthToken(idToken); // Temporarily store idToken for verify step
+
+      // 2. Proceed to TOTP check
       const totpRes = await fetch('/api/auth/totp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), action: 'setup' }),
+        body: JSON.stringify({ email: email.trim(), action: 'setup', idToken }),
       });
       const totpData = await totpRes.json();
 
@@ -82,8 +99,9 @@ function LoginContent() {
           return;
         }
       }
-      // If TOTP fails (e.g., 403), show error
-      setError(totpData.error || 'Email não autorizado');
+      
+      // If TOTP API fails for some reason (which shouldn't block an authenticated user but we respect it for now)
+      setError(totpData.error || 'Erro ao processar TOTP');
     } catch {
       setError('Erro de conexão');
     } finally {
@@ -102,7 +120,7 @@ function LoginContent() {
       const res = await fetch('/api/auth/totp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), action: 'verify', code: codeStr }),
+        body: JSON.stringify({ email: email.trim(), action: 'verify', code: codeStr, idToken: authToken }),
       });
       const data = await res.json();
 
@@ -137,6 +155,7 @@ function LoginContent() {
           action: 'confirm-setup',
           code: codeStr,
           setupToken: totpSetupToken,
+          idToken: authToken
         }),
       });
       const data = await res.json();
@@ -396,7 +415,7 @@ function LoginContent() {
               <div className="mb-6">
                 <label className="block text-xs font-bold uppercase tracking-wider mb-2"
                   style={{ color: '#475569' }}>Email corporativo</label>
-                <div className="flex items-center gap-3 px-4 rounded-xl h-13"
+                <div className="flex items-center gap-3 px-4 rounded-xl h-13 mb-4"
                   style={{
                     background: '#0F172A', border: '1px solid #1E293B',
                     transition: 'border-color 0.2s',
@@ -413,17 +432,36 @@ function LoginContent() {
                     style={{ color: '#F8FAFC' }}
                   />
                 </div>
+
+                <label className="block text-xs font-bold uppercase tracking-wider mb-2"
+                  style={{ color: '#475569' }}>Senha</label>
+                <div className="flex items-center gap-3 px-4 rounded-xl h-13"
+                  style={{
+                    background: '#0F172A', border: '1px solid #1E293B',
+                    transition: 'border-color 0.2s',
+                  }}>
+                  <Lock size={16} style={{ color: '#475569', flexShrink: 0 }} />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="flex-1 bg-transparent border-none outline-none text-sm font-medium py-4"
+                    style={{ color: '#F8FAFC' }}
+                  />
+                </div>
               </div>
               <button
                 type="submit"
-                disabled={isLoading || !email.trim()}
+                disabled={isLoading || !email.trim() || !password}
                 className="w-full flex items-center justify-center gap-2 h-12 rounded-xl text-sm font-bold transition-all"
                 style={{
                   background: isLoading ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #3B82F6, #6366F1)',
                   color: '#fff', border: 'none', cursor: isLoading ? 'wait' : 'pointer',
                   boxShadow: '0 4px 24px rgba(59,130,246,0.3)',
                 }}>
-                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Enviar código <ArrowRight size={16} /></>}
+                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Entrar <ArrowRight size={16} /></>}
               </button>
 
               {/* Separator */}

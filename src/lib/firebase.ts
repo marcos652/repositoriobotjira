@@ -108,4 +108,8 @@ export async function getMetricsFromFirestore(type: 'support' | 'dev') {
   return null;
 }
 
+import { getAuth } from "firebase/auth";
+
+export const auth = getAuth(app);
+
 export { app, analytics };

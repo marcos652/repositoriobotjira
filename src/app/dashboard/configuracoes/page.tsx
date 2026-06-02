@@ -28,6 +28,7 @@ function EmailManagement() {
   const [emails, setEmails] = useState<Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean }>>([]);
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -57,19 +58,20 @@ function EmailManagement() {
   }, [message]);
 
   const handleAdd = async () => {
-    if (!newEmail.trim() || !newEmail.includes('@')) return;
+    if (!newEmail.trim() || !newEmail.includes('@') || !newPassword) return;
     setAdding(true);
     setMessage(null);
     try {
       const res = await fetch('/api/auth/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newEmail.trim() }),
+        body: JSON.stringify({ email: newEmail.trim(), password: newPassword }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: 'success', text: `${newEmail} autorizado! O bot enviará o código via Slack DM.` });
+        setMessage({ type: 'success', text: data.message || `${newEmail} autorizado!` });
         setNewEmail('');
+        setNewPassword('');
         loadEmails();
       } else {
         setMessage({ type: 'error', text: data.error || 'Erro ao adicionar' });
@@ -92,7 +94,7 @@ function EmailManagement() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: 'success', text: `${email} removido` });
+        setMessage({ type: 'success', text: data.message || `${email} removido` });
         loadEmails();
       } else {
         setMessage({ type: 'error', text: data.error || 'Erro ao remover' });
@@ -104,49 +106,50 @@ function EmailManagement() {
     }
   };
 
-  const maskEmail = (email: string) => {
-    const [user, domain] = email.split('@');
-    if (user.length <= 3) return `${user[0]}***@${domain}`;
-    return `${user.slice(0, 3)}${'•'.repeat(user.length - 3)}@${domain}`;
-  };
-
   return (
     <div className="em-root">
-      {/* Header */}
-      <div className="em-info">
-        <div className="em-info-icon">
-          <Lock size={14} />
+      <div className="em-info" style={{ background: 'rgba(59, 130, 246, 0.06)', border: '1px solid rgba(59, 130, 246, 0.12)' }}>
+        <div className="em-info-icon" style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#3B82F6' }}>
+          <Shield size={14} />
         </div>
         <p className="em-info-text">
-          Emails são armazenados com <strong>criptografia AES-256-GCM</strong> + hash SHA-256. 
-          Mesmo com acesso ao banco, invasores veem apenas dados criptografados.
+          O gerenciamento de usuários agora sincroniza com o <strong>Firebase Authentication</strong>. 
+          Ao adicionar um usuário aqui, ele será criado no Firebase com a senha inicial que você definir.
         </p>
       </div>
 
-      {/* Add new email */}
-      <div className="em-add-row">
-        <div className="em-input-wrapper">
+      <div className="em-add-row" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div className="em-input-wrapper" style={{ flex: 1, minWidth: '200px' }}>
           <Mail size={14} className="em-input-icon" />
           <input
             type="email"
             value={newEmail}
             onChange={e => setNewEmail(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
             placeholder="novo.usuario@empresa.com"
+            className="em-input"
+          />
+        </div>
+        <div className="em-input-wrapper" style={{ flex: 1, minWidth: '150px' }}>
+          <Lock size={14} className="em-input-icon" />
+          <input
+            type="password"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            placeholder="Senha inicial"
             className="em-input"
           />
         </div>
         <button
           onClick={handleAdd}
-          disabled={adding || !newEmail.includes('@')}
+          disabled={adding || !newEmail.includes('@') || !newPassword}
           className="em-add-btn"
         >
           {adding ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-          Autorizar
+          Adicionar
         </button>
       </div>
 
-      {/* Message */}
       {message && (
         <div className={`em-msg em-msg-${message.type}`}>
           {message.type === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
@@ -159,10 +162,10 @@ function EmailManagement() {
         {loading ? (
           <div className="em-loading">
             <Loader2 size={16} className="animate-spin" />
-            <span>Carregando emails...</span>
+            <span>Carregando usuários...</span>
           </div>
         ) : emails.length === 0 ? (
-          <div className="em-empty">Nenhum email autorizado</div>
+          <div className="em-empty">Nenhum usuário autorizado</div>
         ) : (
           emails.map((entry) => (
             <div key={entry.email} className="em-item">
@@ -198,13 +201,12 @@ function EmailManagement() {
 
       <style jsx>{`
         .em-root { display: flex; flex-direction: column; gap: 14px; }
-        .em-info { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.12); }
-        .em-info-icon { width: 28px; height: 28px; border-radius: 8px; background: rgba(59, 130, 246, 0.12); color: var(--accent-blue); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+        .em-info { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; }
+        .em-info-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
         .em-info-text { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
-        .em-info-text strong { color: var(--accent-blue); }
+        .em-info-text strong { color: var(--text-primary); }
 
-        .em-add-row { display: flex; gap: 8px; }
-        .em-input-wrapper { flex: 1; position: relative; display: flex; align-items: center; }
+        .em-input-wrapper { position: relative; display: flex; align-items: center; }
         .em-input-icon { position: absolute; left: 12px; color: var(--text-tertiary); pointer-events: none; }
         .em-input { width: 100%; padding: 10px 12px 10px 34px; border-radius: 10px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border-primary); color: var(--text-primary); outline: none; font-family: var(--font-sans); transition: border-color 0.2s; }
         .em-input:focus { border-color: var(--accent-blue); }
