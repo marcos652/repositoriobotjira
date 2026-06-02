@@ -386,8 +386,15 @@ export default function WebmailPage() {
               <div style={{ flex: 1, padding: '24px', overflowY: 'auto', color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.6 }}>
                 {selectedEmail.html ? (
                   <iframe 
-                    srcDoc={selectedEmail.html} 
-                    style={{ width: '100%', height: '100%', border: 'none', background: '#fff', borderRadius: '8px' }} 
+                    srcDoc={`
+                      <style>
+                        body { background-color: transparent !important; color: #e2e8f0 !important; font-family: Inter, system-ui, sans-serif !important; margin: 0; padding: 0; }
+                        a { color: #818CF8 !important; }
+                        table, td, div, span, p { background-color: transparent !important; color: inherit !important; }
+                      </style>
+                      ${selectedEmail.html}
+                    `}
+                    style={{ width: '100%', height: '100%', border: 'none', background: 'transparent', borderRadius: '8px' }} 
                     sandbox="allow-popups allow-same-origin"
                   />
                 ) : (
