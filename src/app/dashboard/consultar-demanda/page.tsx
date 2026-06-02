@@ -80,19 +80,6 @@ export default function ConsultarDemandaPage() {
   const [userSearch, setUserSearch] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  useEffect(() => { 
-    setSearchHistory(loadHistory()); 
-    // Check URL for ?key= param
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const keyParam = params.get('key');
-      if (keyParam) {
-        setSearchKey(keyParam);
-        setTimeout(() => handleSearch(keyParam), 50);
-      }
-    }
-  }, [handleSearch]);
-
   // Fetch Jira users when editing starts
   useEffect(() => {
     if (!editing) return;
@@ -149,6 +136,19 @@ export default function ConsultarDemandaPage() {
     } catch { setError('Erro de conexão'); }
     finally { setLoading(false); }
   }, [searchKey]);
+
+  useEffect(() => { 
+    setSearchHistory(loadHistory()); 
+    // Check URL for ?key= param
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const keyParam = params.get('key');
+      if (keyParam) {
+        setSearchKey(keyParam);
+        setTimeout(() => handleSearch(keyParam), 50);
+      }
+    }
+  }, [handleSearch]);
 
   const handleUpdate = async () => {
     if (!demanda) return;
