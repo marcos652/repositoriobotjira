@@ -224,21 +224,18 @@ export default function WebmailPage() {
       {/* Main Container */}
       <div style={{ display: 'flex', flex: 1, gap: '20px', overflow: 'hidden' }}>
         
-        {/* Sidebar Menu */}
-        <div style={{ width: '220px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <button onClick={() => { setActiveTab('inbox'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px', background: activeTab === 'inbox' ? 'rgba(99,102,241,0.1)' : 'transparent', color: activeTab === 'inbox' ? '#818CF8' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, textAlign: 'left', transition: 'all 0.2s' }}>
-            <Inbox size={18} /> Caixa de Entrada
-          </button>
-          <button onClick={() => { setActiveTab('meetings'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px', background: activeTab === 'meetings' ? 'rgba(139,92,246,0.1)' : 'transparent', color: activeTab === 'meetings' ? '#A78BFA' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, textAlign: 'left', transition: 'all 0.2s' }}>
-            <Calendar size={18} /> Reuniões
-          </button>
-        </div>
-
         {/* Email List */}
         <div style={{ flex: 1, maxWidth: selectedEmail ? '380px' : '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '16px', overflow: 'hidden', transition: 'all 0.3s', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)', fontSize: '12px', fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>{activeTab === 'inbox' ? 'Caixa de Entrada' : 'Reuniões e Convites'}</span>
-            <span style={{ padding: '2px 8px', background: 'rgba(99,102,241,0.1)', color: '#818CF8', borderRadius: '12px', fontSize: '11px' }}>{displayList.length} msgs</span>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => { setActiveTab('inbox'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: activeTab === 'inbox' ? 'rgba(99,102,241,0.1)' : 'transparent', color: activeTab === 'inbox' ? '#818CF8' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all 0.2s' }}>
+                <Inbox size={16} /> Caixa de Entrada
+              </button>
+              <button onClick={() => { setActiveTab('meetings'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: activeTab === 'meetings' ? 'rgba(139,92,246,0.1)' : 'transparent', color: activeTab === 'meetings' ? '#A78BFA' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all 0.2s' }}>
+                <Calendar size={16} /> Reuniões
+              </button>
+            </div>
+            <span style={{ padding: '2px 8px', background: 'rgba(99,102,241,0.1)', color: '#818CF8', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>{displayList.length} msgs</span>
           </div>
           
           <div style={{ flex: 1, overflowY: 'auto' }}>
