@@ -49,9 +49,11 @@ export async function POST(request: NextRequest) {
     if (!fbRes.ok) {
       const msg = fbData.error?.message || 'Erro no Firebase Auth';
       if (msg === 'EMAIL_EXISTS') {
-        return NextResponse.json({ error: 'Usuário já existe no Firebase' }, { status: 409 });
+        // Se o usuário já existe no Firebase, nós o ignoramos e apenas autorizamos ele no nosso banco local.
+        console.log(`[Auth] Usuário ${normalized} já existia no Firebase. Autorizando localmente.`);
+      } else {
+        return NextResponse.json({ error: msg }, { status: 500 });
       }
-      return NextResponse.json({ error: msg }, { status: 500 });
     }
 
     const adminEmail = await getSessionEmail(request);
