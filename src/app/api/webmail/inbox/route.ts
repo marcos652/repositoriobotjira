@@ -112,20 +112,29 @@ export async function GET(request: NextRequest) {
 
       if (headerPart && headerPart.body) {
         try {
-          const parsed = await simpleParser(headerPart.body);
+          const headers = headerPart.body;
+          
+          let subject = 'Sem Assunto';
+          if (headers.subject && headers.subject.length > 0) subject = headers.subject[0];
+
+          let from = 'Remetente Desconhecido';
+          if (headers.from && headers.from.length > 0) from = headers.from[0];
+
+          let date = new Date().toISOString();
+          if (headers.date && headers.date.length > 0) date = headers.date[0];
 
           results.push({
             id,
-            subject: parsed.subject || 'Sem Assunto',
-            from: parsed.from?.text || 'Remetente Desconhecido',
-            date: parsed.date || new Date().toISOString(),
+            subject,
+            from,
+            date,
             textSnippet: '...', // Placeholder until clicked
             html: '',
             hasMeeting: false,
             attachments: []
           });
         } catch (e) {
-          console.error('Error parsing email header UID', id, e);
+          console.error('Error extracting email header UID', id, e);
         }
       }
     }
