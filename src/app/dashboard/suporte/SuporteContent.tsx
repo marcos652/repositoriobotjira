@@ -393,22 +393,68 @@ export default function SuporteContent() {
         );
       case 'panel_critical':
         return (
-          <div className="rounded-2xl border overflow-hidden shadow-sm" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+          <div className="rounded-2xl border overflow-hidden transition-all duration-300 hover:shadow-lg" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
             <div className="p-7">
-              <SectionHeader icon={<AlertCircle size={18} style={{ color: 'var(--accent-rose)' }} />} title="Tickets Críticos" badge={<span className="badge badge-rose">{criticalTickets.length}</span>} />
-              <div className="space-y-6">
+              <SectionHeader 
+                icon={<AlertCircle size={18} className="animate-pulse" style={{ color: 'var(--accent-rose)' }} />} 
+                title="Tickets Críticos" 
+                badge={<span className="badge badge-rose shadow-[0_0_10px_rgba(244,63,94,0.3)]">{criticalTickets.length} Ativos</span>} 
+              />
+              <div className="space-y-4">
                 {criticalTickets.length === 0 ? (
-                  <div className="text-center py-8"><CheckCircle2 size={32} className="mx-auto mb-2" style={{ color: 'var(--accent-emerald)' }} /><p className="text-sm font-medium" style={{ color: 'var(--accent-emerald)' }}>Nenhum ticket crítico</p></div>
-                ) : criticalTickets.map(t => (
-                  <div key={t.id} className="p-6 rounded-xl border-l-4" style={{ background: 'var(--accent-rose-light)', borderLeftColor: 'var(--accent-rose)' }}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded" style={{ background: 'var(--accent-rose)', color: '#fff' }}>{t.jiraKey}</span>
-                      {t.isSLAViolated && <span className="badge badge-amber">SLA Violado</span>}
+                  <div className="text-center py-10 rounded-2xl border border-dashed" style={{ borderColor: 'var(--border-secondary)', background: 'var(--bg-secondary)' }}>
+                    <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-3" style={{ background: 'var(--accent-emerald-light)' }}>
+                      <CheckCircle2 size={24} style={{ color: 'var(--accent-emerald)' }} />
                     </div>
-                    <p className="text-sm font-medium mb-2 line-clamp-2" style={{ color: 'var(--text-primary)' }}>{t.summary}</p>
-                    <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      <span>👤 {t.assignee}</span>
-                      {t.timeInStatus && <span className="flex items-center gap-1"><Timer size={12} />{formatMinutes(t.timeInStatus)}</span>}
+                    <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Tudo tranquilo por aqui</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Nenhum ticket crítico aberto no momento.</p>
+                  </div>
+                ) : criticalTickets.map(t => (
+                  <div 
+                    key={t.id} 
+                    className="group relative p-5 rounded-xl border-l-[3px] transition-all duration-200 cursor-pointer overflow-hidden" 
+                    style={{ 
+                      background: 'var(--bg-secondary)', 
+                      borderLeftColor: 'var(--accent-rose)',
+                      borderTop: '1px solid var(--border-secondary)',
+                      borderRight: '1px solid var(--border-secondary)',
+                      borderBottom: '1px solid var(--border-secondary)',
+                    }}
+                  >
+                    {/* Hover Glow Effect */}
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ background: 'linear-gradient(90deg, var(--accent-rose-light) 0%, transparent 100%)' }} />
+                    
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2.5 mb-2">
+                          <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded shadow-sm" style={{ background: 'var(--gradient-danger)', color: '#fff', letterSpacing: '0.05em' }}>
+                            {t.jiraKey}
+                          </span>
+                          {t.isSLAViolated && (
+                            <span className="badge badge-amber flex items-center gap-1 shadow-sm">
+                              <AlertTriangle size={10} /> SLA Estourado
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-bold leading-snug group-hover:text-blue-400 transition-colors line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+                          {t.summary}
+                        </p>
+                      </div>
+                      
+                      <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-3 shrink-0">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--bg-card)' }}>
+                          <Timer size={14} className={t.isSLAViolated ? 'animate-pulse' : ''} style={{ color: t.isSLAViolated ? 'var(--accent-rose)' : 'var(--text-tertiary)' }} />
+                          <span className="text-[11px] font-bold tabular-nums" style={{ color: t.isSLAViolated ? 'var(--accent-rose)' : 'var(--text-primary)' }}>
+                            {t.timeInStatus ? formatMinutes(t.timeInStatus) : '—'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] text-white" style={{ background: 'var(--accent-violet)' }}>
+                            {t.assignee.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="truncate max-w-[100px]">{t.assignee}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}

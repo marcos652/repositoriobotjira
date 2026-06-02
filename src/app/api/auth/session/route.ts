@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ALLOWED_EMAILS } from '../_store';
 
 export async function GET(request: NextRequest) {
   const session = request.cookies.get('session')?.value;
@@ -16,9 +17,11 @@ export async function GET(request: NextRequest) {
       return response;
     }
 
+    const dynamicRole = ALLOWED_EMAILS.getRole(payload.email);
+
     return NextResponse.json({
       authenticated: true,
-      user: { email: payload.email },
+      user: { email: payload.email, role: dynamicRole },
     });
   } catch {
     return NextResponse.json({ authenticated: false }, { status: 401 });

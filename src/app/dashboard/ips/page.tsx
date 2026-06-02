@@ -290,143 +290,112 @@ export default function IPManagementPage() {
             <p>{ips.length === 0 ? 'Nenhum IP registrado ainda' : 'Nenhum resultado encontrado'}</p>
           </div>
         ) : (
-          <div className="ip-table-scroll">
-            <table className="ip-table">
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Endereço IP</th>
-                  <th>Usuário</th>
-                  <th>Primeiro Acesso</th>
-                  <th>Último Acesso</th>
-                  <th>Logins</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((entry) => {
-                  const key = getKey(entry);
-                  const isEditing = editing === key;
+          <div className="ip-list">
+            {filtered.map((entry) => {
+              const key = getKey(entry);
+              const isEditing = editing === key;
 
-                  return (
-                    <tr key={key} className={entry.blocked ? 'ip-row-blocked' : ''}>
-                      {/* Status */}
-                      <td>
-                        <div className={`ip-status-badge ${entry.blocked ? 'ip-status-blocked' : 'ip-status-active'}`}>
-                          <div className="ip-status-dot" />
-                          {entry.blocked ? 'Bloqueado' : 'Ativo'}
-                        </div>
-                      </td>
-
-                      {/* IP */}
-                      <td>
+              return (
+                <div key={key} className={`ip-card ${entry.blocked ? 'ip-card-blocked' : ''}`}>
+                  <div className="ip-card-left">
+                    <div className="ip-card-icon" style={{ background: entry.blocked ? 'linear-gradient(135deg, var(--accent-rose), #be123c)' : 'linear-gradient(135deg, var(--accent-emerald), #047857)' }}>
+                      <Globe size={18} />
+                    </div>
+                    
+                    <div className="ip-card-info">
+                      <div className="ip-card-header">
                         {isEditing ? (
-                          <input
-                            className="ip-edit-input"
-                            value={editIP}
-                            onChange={e => setEditIP(e.target.value)}
-                            placeholder="IP"
-                          />
-                        ) : (
-                          <span className="ip-mono">{entry.ip}</span>
-                        )}
-                      </td>
-
-                      {/* Email */}
-                      <td>
-                        {isEditing ? (
-                          <input
-                            className="ip-edit-input"
-                            value={editEmail}
-                            onChange={e => setEditEmail(e.target.value)}
-                            placeholder="Email"
-                          />
-                        ) : (
-                          <div className="ip-user-cell">
-                            <div className="ip-user-avatar">
-                              {entry.email[0]?.toUpperCase() || '?'}
-                            </div>
-                            <span>{entry.email}</span>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                              className="ip-edit-input"
+                              value={editIP}
+                              onChange={e => setEditIP(e.target.value)}
+                              placeholder="Endereço IP"
+                            />
+                            <input
+                              className="ip-edit-input"
+                              value={editEmail}
+                              onChange={e => setEditEmail(e.target.value)}
+                              placeholder="Email do usuário"
+                            />
                           </div>
+                        ) : (
+                          <>
+                            <span className="ip-card-ip">{entry.ip}</span>
+                            <span className="ip-card-email">— {entry.email}</span>
+                          </>
                         )}
-                      </td>
-
-                      {/* First Seen */}
-                      <td>
-                        <div className="ip-date-cell">
-                          <Clock size={11} />
-                          {new Date(entry.firstSeen).toLocaleDateString('pt-BR')}
-                        </div>
-                      </td>
-
-                      {/* Last Seen */}
-                      <td>
-                        <div className="ip-date-cell">
-                          <Clock size={11} />
-                          {new Date(entry.lastSeen).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </td>
-
-                      {/* Login Count */}
-                      <td>
-                        <span className="ip-login-count">{entry.loginCount}</span>
-                      </td>
-
-                      {/* Actions */}
-                      <td>
-                        <div className="ip-actions">
-                          {isEditing ? (
-                            <>
-                              <button
-                                className="ip-action-btn ip-action-save"
-                                onClick={() => handleSaveEdit(entry)}
-                                disabled={saving}
-                                title="Salvar"
-                              >
-                                {saving ? <Loader2 size={13} className="ip-spin" /> : <Save size={13} />}
-                              </button>
-                              <button
-                                className="ip-action-btn ip-action-cancel"
-                                onClick={() => setEditing(null)}
-                                title="Cancelar"
-                              >
-                                <X size={13} />
-                              </button>
-                            </>
+                      </div>
+                      
+                      {!isEditing && (
+                        <div className="ip-card-meta">
+                          {entry.blocked ? (
+                            <span className="ip-badge ip-badge-blocked">Bloqueado</span>
                           ) : (
-                            <>
-                              <button
-                                className={`ip-action-btn ${entry.blocked ? 'ip-action-unblock' : 'ip-action-block'}`}
-                                onClick={() => handleToggleBlock(entry)}
-                                disabled={toggling === key}
-                                title={entry.blocked ? 'Desbloquear' : 'Bloquear'}
-                              >
-                                {toggling === key ? <Loader2 size={13} className="ip-spin" /> : entry.blocked ? <ShieldCheck size={13} /> : <ShieldOff size={13} />}
-                              </button>
-                              <button
-                                className="ip-action-btn ip-action-edit"
-                                onClick={() => startEdit(entry)}
-                                title="Editar"
-                              >
-                                <Pencil size={13} />
-                              </button>
-                              <button
-                                className="ip-action-btn ip-action-delete"
-                                onClick={() => handleRemove(entry)}
-                                disabled={removing === key}
-                                title="Remover"
-                              >
-                                {removing === key ? <Loader2 size={13} className="ip-spin" /> : <Trash2 size={13} />}
-                              </button>
-                            </>
+                            <span className="ip-badge ip-badge-active">Autorizado</span>
                           )}
+                          <span className="ip-meta-item"><Hash size={12} /> {entry.loginCount} logins</span>
+                          <span className="ip-meta-item"><Clock size={12} /> Último: {new Date(entry.lastSeen).toLocaleString('pt-BR')}</span>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="ip-card-actions">
+                    {isEditing ? (
+                      <>
+                        <button
+                          className="ip-action-btn ip-action-save"
+                          onClick={() => handleSaveEdit(entry)}
+                          disabled={saving}
+                          title="Salvar"
+                        >
+                          {saving ? <Loader2 size={14} className="ip-spin" /> : <Save size={14} />}
+                        </button>
+                        <button
+                          className="ip-action-btn ip-action-cancel"
+                          onClick={() => setEditing(null)}
+                          title="Cancelar"
+                        >
+                          <X size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="ip-btn-toggle"
+                          onClick={() => handleToggleBlock(entry)}
+                          disabled={toggling === key}
+                          style={{
+                            background: entry.blocked ? 'var(--gradient-primary)' : 'rgba(255,255,255,0.05)',
+                            color: entry.blocked ? '#fff' : 'var(--text-secondary)',
+                            boxShadow: entry.blocked ? 'var(--shadow-glow-blue)' : 'none',
+                            border: entry.blocked ? 'none' : '1px solid var(--border-primary)'
+                          }}
+                        >
+                          {toggling === key ? <Loader2 size={14} className="ip-spin" /> : entry.blocked ? 'Liberar IP' : 'Bloquear'}
+                        </button>
+                        <button
+                          className="ip-action-btn ip-action-edit"
+                          onClick={() => startEdit(entry)}
+                          title="Editar"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          className="ip-action-btn ip-action-delete"
+                          onClick={() => handleRemove(entry)}
+                          disabled={removing === key}
+                          title="Remover"
+                        >
+                          {removing === key ? <Loader2 size={14} className="ip-spin" /> : <Trash2 size={14} />}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -492,35 +461,37 @@ export default function IPManagementPage() {
         .ip-filter-btn:hover { background: rgba(255,255,255,0.04); color: var(--text-secondary); }
         .ip-filter-active { background: rgba(99,102,241,0.1) !important; color: #818CF8 !important; border-color: rgba(99,102,241,0.25) !important; }
 
-        /* ── Table ── */
-        .ip-table-container { flex: 1; margin: 16px 24px 24px; border-radius: 14px; background: var(--bg-secondary); border: 1px solid var(--border-secondary); overflow: hidden; display: flex; flex-direction: column; }
-        .ip-loading, .ip-empty { padding: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--text-tertiary); font-size: 13px; }
-        .ip-table-scroll { overflow: auto; flex: 1; }
-        .ip-table { width: 100%; border-collapse: collapse; }
-        .ip-table thead th { position: sticky; top: 0; z-index: 1; padding: 12px 16px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.35); text-align: left; background: var(--bg-secondary); border-bottom: 1px solid var(--border-secondary); white-space: nowrap; }
-        .ip-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.15s; }
-        .ip-table tbody tr:hover { background: rgba(255,255,255,0.02); }
-        .ip-table tbody td { padding: 14px 16px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
-        .ip-row-blocked { opacity: 0.7; }
-
-        /* Status badge */
-        .ip-status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-        .ip-status-active { background: rgba(34,197,94,0.1); color: #22C55E; }
-        .ip-status-blocked { background: rgba(239,68,68,0.1); color: #EF4444; }
-        .ip-status-dot { width: 6px; height: 6px; border-radius: 50%; }
-        .ip-status-active .ip-status-dot { background: #22C55E; box-shadow: 0 0 6px rgba(34,197,94,0.5); animation: ipPulse 2s infinite; }
-        .ip-status-blocked .ip-status-dot { background: #EF4444; }
-        @keyframes ipPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        /* Cells */
-        .ip-mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-weight: 600; color: #F8FAFC; font-size: 12px; letter-spacing: 0.02em; }
-        .ip-user-cell { display: flex; align-items: center; gap: 10px; }
-        .ip-user-avatar { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #fff; flex-shrink: 0; }
-        .ip-date-cell { display: flex; align-items: center; gap: 6px; color: var(--text-tertiary); font-size: 11px; }
-        .ip-login-count { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 24px; padding: 0 8px; border-radius: 6px; background: rgba(99,102,241,0.08); color: #818CF8; font-size: 11px; font-weight: 700; }
-
+        /* ── Cards List ── */
+        .ip-table-container { flex: 1; margin: 16px 24px 24px; overflow: hidden; display: flex; flex-direction: column; border-radius: 14px; }
+        .ip-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px; }
+        .ip-loading, .ip-empty { padding: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--text-tertiary); font-size: 13px; background: var(--bg-secondary); border-radius: 14px; border: 1px solid var(--border-secondary); }
+        
+        .ip-card { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-radius: 14px; background: var(--bg-secondary); border: 1px solid var(--border-secondary); transition: all 0.2s; }
+        .ip-card:hover { border-color: rgba(255,255,255,0.08); background: var(--bg-card-hover); }
+        .ip-card-blocked { opacity: 0.8; }
+        
+        .ip-card-left { display: flex; align-items: center; gap: 16px; flex: 1; }
+        .ip-card-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        
+        .ip-card-info { display: flex; flex-direction: column; gap: 6px; }
+        .ip-card-header { display: flex; align-items: baseline; gap: 8px; }
+        .ip-card-ip { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-weight: 700; color: #F8FAFC; font-size: 14px; letter-spacing: 0.02em; }
+        
+        .ip-card-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .ip-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+        .ip-badge-active { background: rgba(34,197,94,0.12); color: #22C55E; border: 1px solid rgba(34,197,94,0.2); }
+        .ip-badge-blocked { background: rgba(244,63,94,0.12); color: #F43F5E; border: 1px solid rgba(244,63,94,0.2); }
+        
+        .ip-meta-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
+        
         /* Edit input */
-        .ip-edit-input { padding: 6px 10px; border-radius: 8px; font-size: 12px; background: var(--bg-card); border: 1px solid #6366F1; color: var(--text-primary); outline: none; font-family: var(--font-sans); width: 100%; min-width: 120px; }
+        .ip-edit-input { padding: 6px 10px; border-radius: 8px; font-size: 12px; background: var(--bg-card); border: 1px solid #6366F1; color: var(--text-primary); outline: none; font-family: var(--font-sans); min-width: 160px; }
+
+        /* Actions */
+        .ip-card-actions { display: flex; align-items: center; gap: 8px; }
+        .ip-btn-toggle { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 11px; font-weight: 700; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s; min-width: 100px; justify-content: center; }
+        .ip-btn-toggle:hover:not(:disabled) { transform: translateY(-1px); }
+        .ip-btn-toggle:disabled { opacity: 0.6; cursor: not-allowed; }
 
         /* Actions */
         .ip-actions { display: flex; gap: 4px; }

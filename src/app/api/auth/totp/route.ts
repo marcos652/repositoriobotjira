@@ -37,7 +37,9 @@ export async function POST(request: NextRequest) {
       || '127.0.0.1';
 
     if (IP_TRACKER.isBlocked(clientIP, normalized)) {
-      return NextResponse.json({ error: 'Acesso bloqueado. Contate o administrador.' }, { status: 403 });
+      // Record the failed attempt so the admin can see it and unblock it
+      IP_TRACKER.record(normalized, clientIP, true);
+      return NextResponse.json({ error: 'Acesso por IP não autorizado. Contate o administrador para liberação.' }, { status: 403 });
     }
 
     // ── ACTION: setup — Generate new TOTP secret ──
@@ -116,8 +118,10 @@ export async function POST(request: NextRequest) {
       IP_TRACKER.record(normalized, clientIP);
 
       // Create session
+      const role = ALLOWED_EMAILS.getRole(normalized);
       const sessionPayload = {
         email: normalized,
+        role,
         iat: Date.now(),
         exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
       };
@@ -175,8 +179,10 @@ export async function POST(request: NextRequest) {
       IP_TRACKER.record(normalized, clientIP);
 
       // Create session
+      const role = ALLOWED_EMAILS.getRole(normalized);
       const sessionPayload = {
         email: normalized,
+        role,
         iat: Date.now(),
         exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
       };

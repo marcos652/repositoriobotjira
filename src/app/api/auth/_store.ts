@@ -73,6 +73,7 @@ interface SecureEmail {
   encrypted: string;
   addedAt: string;
   addedBy?: string;
+  role?: 'admin' | 'user';
 }
 
 const DEFAULT_EMAILS = [
@@ -194,6 +195,7 @@ function getStore(): Map<string, SecureEmail> {
         encrypted: encryptEmail(email),
         addedAt: new Date().toISOString(),
         addedBy: 'system',
+        role: 'admin',
       });
       changed = true;
     }
@@ -213,6 +215,7 @@ function getStore(): Map<string, SecureEmail> {
         encrypted: encryptEmail(email),
         addedAt: new Date().toISOString(),
         addedBy: 'env',
+        role: 'admin',
       });
       changed = true;
     }
@@ -230,8 +233,8 @@ export const ALLOWED_EMAILS = {
     return getStore().has(hash);
   },
 
-  list: (): Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean }> => {
-    const result: Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean }> = [];
+  list: (): Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user' }> => {
+    const result: Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user' }> = [];
     for (const entry of getStore().values()) {
       const email = decryptEmail(entry.encrypted);
       if (email) {
@@ -240,13 +243,22 @@ export const ALLOWED_EMAILS = {
           addedAt: entry.addedAt,
           addedBy: entry.addedBy,
           isDefault: DEFAULT_EMAILS.includes(email),
+          role: entry.role || 'user', // Default existing users to 'user' if not set
         });
       }
     }
     return result;
   },
 
-  add: (email: string, addedBy?: string): boolean => {
+  getRole: (email: string): 'admin' | 'user' => {
+    const hash = hashEmail(email);
+    const entry = getStore().get(hash);
+    if (!entry) return 'user';
+    if (DEFAULT_EMAILS.includes(email.trim().toLowerCase())) return 'admin'; // Hardcoded defaults are always admin
+    return entry.role || 'user';
+  },
+
+  add: (email: string, addedBy?: string, role: 'admin' | 'user' = 'user'): boolean => {
     const normalized = email.trim().toLowerCase();
     if (!normalized.includes('@')) return false;
     const hash = hashEmail(normalized);
@@ -257,10 +269,26 @@ export const ALLOWED_EMAILS = {
       encrypted: encryptEmail(normalized),
       addedAt: new Date().toISOString(),
       addedBy: addedBy || 'admin',
+      role,
     });
     saveEmailsToFile(store); // Persist!
     (globalThis as any)[GLOBAL_KEY_TS] = 0; // Invalidate cache
     console.log(`[Auth] Added email: ${normalized.slice(0, 3)}***`);
+    return true;
+  },
+
+  updateRole: (email: string, role: 'admin' | 'user'): boolean => {
+    const normalized = email.trim().toLowerCase();
+    if (DEFAULT_EMAILS.includes(normalized)) return false; // Cannot change hardcoded admins
+    const hash = hashEmail(normalized);
+    const store = getStore();
+    const entry = store.get(hash);
+    if (!entry) return false;
+    
+    entry.role = role;
+    saveEmailsToFile(store);
+    (globalThis as any)[GLOBAL_KEY_TS] = 0;
+    console.log(`[Auth] Updated role for ${normalized.slice(0, 3)}*** to ${role}`);
     return true;
   },
 
@@ -343,27 +371,29 @@ function saveIPStore(): void {
 
 export const IP_TRACKER = {
   /** Record a login from an IP */
-  record: (email: string, ip: string): void => {
+  record: (email: string, ip: string, failedAttempt: boolean = false): void => {
     const normalized = email.trim().toLowerCase();
     const cleanIP = ip.replace('::ffff:', ''); // Normalize IPv4-mapped IPv6
     const key = `${normalized}:${cleanIP}`;
     const store = getIPStore();
     const existing = store.get(key);
+    
     if (existing) {
       existing.lastSeen = new Date().toISOString();
-      existing.loginCount++;
+      if (!failedAttempt) existing.loginCount++;
     } else {
+      // In strict mode, new IPs are created as BLOCKED by default!
       store.set(key, {
         ip: cleanIP,
         email: normalized,
         firstSeen: new Date().toISOString(),
         lastSeen: new Date().toISOString(),
-        blocked: false,
-        loginCount: 1,
+        blocked: true, // DEFAULT DENY
+        loginCount: failedAttempt ? 0 : 1,
       });
     }
     saveIPStore();
-    console.log(`[IP] Recorded login: ${normalized.slice(0, 3)}*** from ${cleanIP}`);
+    console.log(`[IP] Recorded login attempt: ${normalized.slice(0, 3)}*** from ${cleanIP}`);
   },
 
   /** Check if an IP is blocked for a specific email (or globally if no email given) */
@@ -372,13 +402,18 @@ export const IP_TRACKER = {
     if (email) {
       const key = `${email.trim().toLowerCase()}:${cleanIP}`;
       const entry = getIPStore().get(key);
-      return entry?.blocked ?? false;
+      // STRICT MODE: If entry doesn't exist, it is considered BLOCKED (true)
+      return entry?.blocked ?? true; 
     }
     // If no email, check if ANY entry for this IP is blocked
+    let found = false;
     for (const entry of getIPStore().values()) {
-      if (entry.ip === cleanIP && entry.blocked) return true;
+      if (entry.ip === cleanIP) {
+        found = true;
+        if (entry.blocked) return true;
+      }
     }
-    return false;
+    return !found ? true : false; // Strict mode
   },
 
   /** Block a specific email:ip combination */
@@ -393,9 +428,19 @@ export const IP_TRACKER = {
       if (entry) {
         entry.blocked = true;
         found = true;
+      } else {
+        // Create it blocked if it doesn't exist
+        store.set(key, {
+          ip: cleanIP,
+          email: email.trim().toLowerCase(),
+          firstSeen: new Date().toISOString(),
+          lastSeen: new Date().toISOString(),
+          blocked: true,
+          loginCount: 0,
+        });
+        found = true;
       }
     } else {
-      // Legacy: block all entries with this IP
       for (const [key, entry] of store) {
         if (entry.ip === cleanIP) {
           entry.blocked = true;
@@ -417,6 +462,17 @@ export const IP_TRACKER = {
       const entry = store.get(key);
       if (entry) {
         entry.blocked = false;
+        found = true;
+      } else {
+        // Create it unblocked if it doesn't exist (Manual Allow)
+        store.set(key, {
+          ip: cleanIP,
+          email: email.trim().toLowerCase(),
+          firstSeen: new Date().toISOString(),
+          lastSeen: new Date().toISOString(),
+          blocked: false,
+          loginCount: 0,
+        });
         found = true;
       }
     } else {

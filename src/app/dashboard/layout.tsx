@@ -5,7 +5,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { FilterProvider } from '@/contexts/FilterContext';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import ToastProvider from '@/components/ui/ToastProvider';
 import CommandPalette from '@/components/ui/CommandPalette';
 import OnboardingTour from '@/components/ui/OnboardingTour';
@@ -44,14 +44,32 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/dashboard/logs': { title: 'Logs / Auditoria', subtitle: 'Histórico de ações e eventos do sistema' },
   '/dashboard/notificacoes': { title: 'Notificações', subtitle: 'Alertas e histórico de avisos' },
   '/dashboard/configuracoes': { title: 'Configurações', subtitle: 'Preferências gerais do sistema' },
+  '/dashboard/implantacao': { title: 'Implantação', subtitle: 'Acompanhamento de novos clientes e integrações' },
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const pageInfo = pageTitles[pathname] || { title: 'JiraOps', subtitle: '' };
   useKeyboardShortcuts();
   useSessionAutoRefresh();
+
+  useEffect(() => {
+    // RBAC: Client-side route protection
+    const adminOnlyRoutes = ['/dashboard/configuracoes', '/dashboard/ips', '/dashboard/equipe', '/dashboard/logs'];
+    if (adminOnlyRoutes.some(route => pathname.startsWith(route))) {
+      fetch('/api/auth/session')
+        .then(r => r.json())
+        .then(data => {
+          const role = data.user?.role || 'user';
+          if (role !== 'admin') {
+            router.push('/dashboard');
+          }
+        })
+        .catch(() => {});
+    }
+  }, [pathname, router]);
 
   return (
     <ThemeProvider>
@@ -66,7 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Header title={pageInfo.title} subtitle={pageInfo.subtitle} />
               <main
                 className={`flex-1 overflow-y-auto ${
-                  ['/dashboard/nova-demanda','/dashboard/metricas','/dashboard/calendario','/dashboard/equipe','/dashboard/relatorios','/dashboard/sla','/dashboard/releases','/dashboard/clientes','/dashboard/knowledge','/dashboard/automacoes','/dashboard/integracoes','/dashboard/logs','/dashboard/notificacoes','/dashboard/configuracoes'].includes(pathname)
+                  ['/dashboard/nova-demanda','/dashboard/metricas','/dashboard/calendario','/dashboard/equipe','/dashboard/relatorios','/dashboard/sla','/dashboard/releases','/dashboard/clientes','/dashboard/knowledge','/dashboard/automacoes','/dashboard/integracoes','/dashboard/logs','/dashboard/notificacoes','/dashboard/configuracoes','/dashboard/implantacao'].includes(pathname)
                     ? 'pl-8 pr-4 py-4'
                     : 'pl-14 pr-10 py-10'
                 }`}

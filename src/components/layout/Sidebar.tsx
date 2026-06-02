@@ -8,7 +8,7 @@ import {
   Users, GitBranch, Zap, ChevronLeft, ChevronRight, HelpCircle,
   Kanban, CalendarDays, ClipboardList, Bell, Shield,
   Bot, BookOpen, ScrollText, Building2, FileBarChart, Sparkles,
-  LogOut, Search, MessageSquare, Globe
+  LogOut, Search, MessageSquare, Globe, Rocket
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -30,9 +30,8 @@ function getDisplayName(email: string): string {
   return name.split(/[._-]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
 }
 
-function getRole(email: string): string {
-  // Primary admin
-  if (email === 'marcos.vinicius@movingpay.com.br') return 'Administrador';
+function getRoleLabel(role: string): string {
+  if (role === 'admin') return 'Administrador';
   return 'Usuário';
 }
 
@@ -70,6 +69,7 @@ const navItems = [
     section: 'GESTÃO',
     items: [
       { label: 'Clientes', href: '/dashboard/clientes', icon: Building2 },
+      { label: 'Implantação', href: '/dashboard/implantacao', icon: Rocket },
       { label: 'Base de Conhecimento', href: '/dashboard/knowledge', icon: BookOpen },
       { label: 'Automações', href: '/dashboard/automacoes', icon: Bot },
     ],
@@ -93,6 +93,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [userImage, setUserImage] = useState<string>('');
   const [authMethod, setAuthMethod] = useState<'google' | 'slack' | ''>('');
 
+  const [userRole, setUserRole] = useState<'admin' | 'user'>('user');
+
   useEffect(() => {
     // Try Auth.js session first (Google SSO)
     fetch('/api/auth/session')
@@ -100,11 +102,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       .then(data => {
         if (data.user?.email) {
           setUserEmail(data.user.email);
+          setUserRole(data.user.role || 'user');
           if (data.user.image) setUserImage(data.user.image);
           setAuthMethod(data.user.image ? 'google' : 'slack');
         } else if (data.authenticated && data.user?.email) {
           // Manual session fallback
           setUserEmail(data.user.email);
+          setUserRole(data.user.role || 'user');
           setAuthMethod('slack');
         }
       })
@@ -113,7 +117,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const initials = userEmail ? getInitials(userEmail) : '??';
   const displayName = userEmail ? getDisplayName(userEmail) : 'Carregando...';
-  const role = userEmail ? getRole(userEmail) : '';
+  const roleLabel = userEmail ? getRoleLabel(userRole) : '';
 
   const handleLogout = async () => {
     if (authMethod === 'google') {
@@ -212,7 +216,14 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {navItems.flatMap(s => s.items).map((item) => {
+          {navItems.flatMap(s => {
+            // Hide specific sections for non-admins
+            if (userRole !== 'admin' && s.section === 'SISTEMA') return [];
+            return s.items;
+          }).map((item) => {
+            // Further hide specific items just in case
+            if (userRole !== 'admin' && ['Equipe', 'Configurações', 'Gerenciar IPs', 'Logs / Auditoria'].includes(item.label)) return null;
+
             const active = isActive(item.href);
             const Icon = item.icon;
 
@@ -229,41 +240,41 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   borderRadius: '12px',
                   transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
                   background: active
-                    ? 'rgba(255,255,255,0.22)'
-                    : 'rgba(255,255,255,0.06)',
+                    ? 'rgba(124, 58, 237, 0.15)'
+                    : 'rgba(255,255,255,0.02)',
                   color: active ? '#fff' : 'rgba(255,255,255,0.65)',
                   backdropFilter: 'blur(8px)',
                   WebkitBackdropFilter: 'blur(8px)',
                   border: active
-                    ? '1px solid rgba(255,255,255,0.2)'
-                    : '1px solid rgba(255,255,255,0.06)',
+                    ? '1px solid rgba(124, 58, 237, 0.4)'
+                    : '1px solid rgba(255,255,255,0.04)',
                   boxShadow: active
-                    ? '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 15px rgba(255,255,255,0.05)'
+                    ? '0 4px 20px rgba(124, 58, 237, 0.25), inset 0 1px 0 rgba(124, 58, 237, 0.3)'
                     : '0 1px 3px rgba(0,0,0,0.08)',
                   transform: 'translateY(0) scale(1)',
                 }}
                 onMouseEnter={(e) => {
                   const el = e.currentTarget as HTMLAnchorElement;
                   if (!active) {
-                    el.style.background = 'rgba(255,255,255,0.14)';
+                    el.style.background = 'rgba(124, 58, 237, 0.08)';
                     el.style.color = '#fff';
-                    el.style.borderColor = 'rgba(255,255,255,0.14)';
-                    el.style.boxShadow = '0 6px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1), 0 0 12px rgba(255,255,255,0.04)';
+                    el.style.borderColor = 'rgba(124, 58, 237, 0.2)';
+                    el.style.boxShadow = '0 6px 24px rgba(124, 58, 237, 0.15), inset 0 1px 0 rgba(255,255,255,0.05)';
                     el.style.transform = 'translateY(-1px) scale(1.01)';
                   } else {
-                    el.style.boxShadow = '0 6px 28px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 20px rgba(255,255,255,0.08)';
+                    el.style.boxShadow = '0 6px 28px rgba(124, 58, 237, 0.3), inset 0 1px 0 rgba(124, 58, 237, 0.4)';
                     el.style.transform = 'translateY(-1px) scale(1.01)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   const el = e.currentTarget as HTMLAnchorElement;
                   if (!active) {
-                    el.style.background = 'rgba(255,255,255,0.06)';
+                    el.style.background = 'rgba(255,255,255,0.02)';
                     el.style.color = 'rgba(255,255,255,0.65)';
-                    el.style.borderColor = 'rgba(255,255,255,0.06)';
+                    el.style.borderColor = 'rgba(255,255,255,0.04)';
                     el.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
                   } else {
-                    el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15), 0 0 15px rgba(255,255,255,0.05)';
+                    el.style.boxShadow = '0 4px 20px rgba(124, 58, 237, 0.25), inset 0 1px 0 rgba(124, 58, 237, 0.3)';
                   }
                   el.style.transform = 'translateY(0) scale(1)';
                 }}
@@ -402,7 +413,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-bold truncate text-white">{displayName}</p>
                 <p className="text-[10px] truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                  {role}
+                  {roleLabel}
                 </p>
               </div>
               <button

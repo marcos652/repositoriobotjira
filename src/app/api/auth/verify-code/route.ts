@@ -63,7 +63,14 @@ export async function POST(request: NextRequest) {
       || '127.0.0.1';
     IP_TRACKER.record(normalizedEmail, clientIP);
 
-    const sessionValue = generateSessionToken(normalizedEmail);
+    const role = ALLOWED_EMAILS.getRole(normalizedEmail);
+    const sessionPayload = {
+      email: normalizedEmail,
+      role,
+      iat: Date.now(),
+      exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    };
+    const sessionValue = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
 
     const response = NextResponse.json({
       success: true,

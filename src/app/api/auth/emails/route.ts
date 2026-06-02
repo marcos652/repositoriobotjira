@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ALLOWED_EMAILS } from '../_store';
-import { isAdmin } from '../_admin';
+import { isAdmin, getSessionEmail } from '../_admin';
 
 // GET — List all allowed emails
 export async function GET(request: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { email, password } = await request.json();
+    const { email, password, role } = await request.json();
 
     if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return NextResponse.json({ error: 'Email e Senha são obrigatórios' }, { status: 400 });
@@ -54,7 +54,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 500 });
     }
 
-    const added = ALLOWED_EMAILS.add(normalized);
+    const adminEmail = await getSessionEmail(request);
+    const validRole = role === 'admin' ? 'admin' : 'user';
+    const added = ALLOWED_EMAILS.add(normalized, adminEmail || 'admin', validRole);
 
     if (!added) {
       return NextResponse.json({ error: 'Falha ao salvar no banco local' }, { status: 500 });
@@ -106,6 +108,42 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: `Email ${normalized} removido da lista local. (Exclua no Firebase Console para remover a conta Auth)`,
       total: ALLOWED_EMAILS.size(),
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Erro interno' }, { status: 500 });
+  }
+}
+
+// PUT — Update an email's role
+export async function PUT(request: NextRequest) {
+  if (!(await isAdmin(request))) {
+    return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
+  }
+
+  try {
+    const { email, role } = await request.json();
+
+    if (!email || !role || typeof email !== 'string' || (role !== 'admin' && role !== 'user')) {
+      return NextResponse.json({ error: 'Email e Função (admin/user) são obrigatórios' }, { status: 400 });
+    }
+
+    const normalized = email.trim().toLowerCase();
+
+    if (!ALLOWED_EMAILS.includes(normalized)) {
+      return NextResponse.json({ error: 'Email não está na lista' }, { status: 404 });
+    }
+
+    const updated = ALLOWED_EMAILS.updateRole(normalized, role);
+
+    if (!updated) {
+      return NextResponse.json({ 
+        error: 'Não é possível alterar a função do administrador principal' 
+      }, { status: 403 });
+    }
+    
+    return NextResponse.json({
+      success: true,
+      message: `Função de ${normalized} atualizada para ${role}.`,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Erro interno' }, { status: 500 });

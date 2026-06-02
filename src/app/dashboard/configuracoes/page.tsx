@@ -29,6 +29,7 @@ function EmailManagement() {
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<'admin' | 'user'>('user');
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -65,13 +66,14 @@ function EmailManagement() {
       const res = await fetch('/api/auth/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newEmail.trim(), password: newPassword }),
+        body: JSON.stringify({ email: newEmail.trim(), password: newPassword, role: newRole }),
       });
       const data = await res.json();
       if (res.ok) {
         setMessage({ type: 'success', text: data.message || `${newEmail} autorizado!` });
         setNewEmail('');
         setNewPassword('');
+        setNewRole('user');
         loadEmails();
       } else {
         setMessage({ type: 'error', text: data.error || 'Erro ao adicionar' });
@@ -103,6 +105,27 @@ function EmailManagement() {
       setMessage({ type: 'error', text: 'Erro de conexão' });
     } finally {
       setRemoving(null);
+    }
+  };
+
+  const handleRoleChange = async (email: string, newRole: string) => {
+    try {
+      const res = await fetch('/api/auth/emails', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role: newRole }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: 'success', text: data.message || `Função atualizada` });
+        loadEmails();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Erro ao alterar função' });
+        // Refresh to revert the select visually if it failed
+        loadEmails();
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Erro de conexão' });
     }
   };
 
@@ -140,6 +163,18 @@ function EmailManagement() {
             className="em-input"
           />
         </div>
+        <div className="em-input-wrapper" style={{ flex: 0.5, minWidth: '110px' }}>
+          <Shield size={14} className="em-input-icon" />
+          <select 
+            value={newRole} 
+            onChange={e => setNewRole(e.target.value as 'admin' | 'user')}
+            className="em-input"
+            style={{ appearance: 'none', paddingRight: '24px' }}
+          >
+            <option value="user">Usuário</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
         <button
           onClick={handleAdd}
           disabled={adding || !newEmail.includes('@') || !newPassword}
@@ -175,7 +210,19 @@ function EmailManagement() {
               <div className="em-item-info">
                 <p className="em-item-email">{entry.email}</p>
                 <p className="em-item-meta">
-                  {entry.isDefault && <span className="em-badge">Admin</span>}
+                  {entry.isDefault ? (
+                    <span className="em-badge">Admin</span>
+                  ) : (
+                    <select
+                      value={entry.role}
+                      onChange={(e) => handleRoleChange(entry.email, e.target.value)}
+                      className={`em-role-select ${entry.role === 'admin' ? 'admin' : 'user'}`}
+                      disabled={removing === entry.email}
+                    >
+                      <option value="admin">ADMIN</option>
+                      <option value="user">USUÁRIO</option>
+                    </select>
+                  )}
                   <span>Adicionado {entry.addedBy === 'system' ? 'automaticamente' : `por ${entry.addedBy || 'admin'}`}</span>
                   <span>•</span>
                   <span>{new Date(entry.addedAt).toLocaleDateString('pt-BR')}</span>
@@ -233,6 +280,10 @@ function EmailManagement() {
         .em-item-meta { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-tertiary); margin-top: 2px; flex-wrap: wrap; }
 
         .em-badge { display: inline-flex; padding: 1px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.12); color: var(--accent-emerald); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+        .em-role-select { appearance: none; border: none; padding: 1px 18px 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; outline: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%228%22%20height%3D%225%22%20viewBox%3D%220%200%208%205%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M4%205L8%200H0L4%205Z%22%20fill%3D%22currentColor%22%2F%3E%3C%2Fsvg%3E'); background-repeat: no-repeat; background-position: right 4px center; background-size: 6px; transition: opacity 0.2s; }
+        .em-role-select:hover { opacity: 0.8; }
+        .em-role-select.admin { background-color: rgba(16, 185, 129, 0.12); color: var(--accent-emerald); }
+        .em-role-select.user { background-color: rgba(59, 130, 246, 0.12); color: var(--accent-blue); }
 
         .em-remove-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-primary); background: transparent; color: var(--text-tertiary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
         .em-remove-btn:hover:not(:disabled) { background: rgba(244, 63, 94, 0.1); color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.3); }
@@ -244,88 +295,7 @@ function EmailManagement() {
   );
 }
 
-// ── IP Management Component ──
-function IPManagement() {
-  const [ips, setIps] = useState<Array<{ ip: string; email: string; firstSeen: string; lastSeen: string; blocked: boolean; loginCount: number }>>([]);
-  const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState<string | null>(null);
 
-  const loadIPs = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/auth/ips');
-      if (res.ok) {
-        const data = await res.json();
-        setIps(data.ips || []);
-      }
-    } catch {} finally { setLoading(false); }
-  };
-
-  useEffect(() => { loadIPs(); }, []);
-
-  const handleToggleBlock = async (ip: string, email: string, currentlyBlocked: boolean) => {
-    setToggling(`${email}:${ip}`);
-    try {
-      await fetch('/api/auth/ips', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip, email, action: currentlyBlocked ? 'unblock' : 'block' }),
-      });
-      await loadIPs();
-    } catch {} finally { setToggling(null); }
-  };
-
-  return (
-    <div className="em-root">
-      {loading ? (
-        <div className="em-loading"><Loader2 size={16} className="animate-spin" /><span>Carregando IPs...</span></div>
-      ) : ips.length === 0 ? (
-        <div className="em-empty">Nenhum login registrado ainda</div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>IP</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Usuário</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Primeiro Acesso</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Último Acesso</th>
-                <th style={{ textAlign: 'center', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Logins</th>
-                <th style={{ textAlign: 'center', padding: '8px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ips.map((entry) => (
-                <tr key={`${entry.email}:${entry.ip}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <td style={{ padding: '10px 12px', color: '#F8FAFC', fontFamily: 'monospace', fontWeight: 600 }}>{entry.ip}</td>
-                  <td style={{ padding: '10px 12px', color: '#94A3B8' }}>{entry.email}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748B', fontSize: '11px' }}>{new Date(entry.firstSeen).toLocaleString('pt-BR')}</td>
-                  <td style={{ padding: '10px 12px', color: '#64748B', fontSize: '11px' }}>{new Date(entry.lastSeen).toLocaleString('pt-BR')}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', color: '#94A3B8', fontWeight: 700 }}>{entry.loginCount}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => handleToggleBlock(entry.ip, entry.email, entry.blocked)}
-                      disabled={toggling === `${entry.email}:${entry.ip}`}
-                      style={{
-                        padding: '4px 12px', borderRadius: '6px', border: 'none', fontSize: '10px', fontWeight: 700,
-                        cursor: toggling === `${entry.email}:${entry.ip}` ? 'wait' : 'pointer',
-                        background: entry.blocked ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
-                        color: entry.blocked ? '#EF4444' : '#22C55E',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      {toggling === `${entry.email}:${entry.ip}` ? '...' : entry.blocked ? '🚫 Bloqueado' : '✅ Ativo'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function ConfiguracoesPage() {
   return (
@@ -345,16 +315,7 @@ export default function ConfiguracoesPage() {
           </div>
         </div>
 
-        {/* ── IP Management Section ── */}
-        <div className="cf-section">
-          <div className="cf-section-header">
-            <div className="cf-section-icon" style={{background:'rgba(239,68,68,0.12)',color:'#EF4444'}}><Globe size={18}/></div>
-            <div><p className="cf-section-title">IPs de Acesso</p><p className="cf-section-desc">Monitore e bloqueie IPs que acessam o dashboard.</p></div>
-          </div>
-          <div className="cf-section-body">
-            <IPManagement />
-          </div>
-        </div>
+
         {sections.map(s=>{const Icon=s.icon;return(
           <div key={s.id} className="cf-section">
             <div className="cf-section-header">

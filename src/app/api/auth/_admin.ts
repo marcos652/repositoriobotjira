@@ -32,10 +32,19 @@ export async function getSessionEmail(request: NextRequest): Promise<string | nu
   return null;
 }
 
+import { ALLOWED_EMAILS } from './_store';
+
 export async function isAdmin(request: NextRequest): Promise<boolean> {
   const email = await getSessionEmail(request);
-  const result = email === ADMIN_EMAIL;
-  console.log(`[Admin] isAdmin: email=${email}, admin=${result}`);
+  if (!email) return false;
+  
+  // Super admin fallback
+  if (email === ADMIN_EMAIL) return true;
+  
+  // Check role in database
+  const role = ALLOWED_EMAILS.getRole(email);
+  const result = role === 'admin';
+  console.log(`[Admin] isAdmin: email=${email}, role=${role}, admin=${result}`);
   return result;
 }
 
