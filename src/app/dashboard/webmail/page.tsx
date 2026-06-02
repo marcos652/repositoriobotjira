@@ -15,6 +15,7 @@ interface EmailData {
   html: string;
   hasMeeting: boolean;
   attachments: { filename: string; size: number }[];
+  isRead?: boolean;
 }
 
 export default function WebmailPage() {
@@ -88,6 +89,12 @@ export default function WebmailPage() {
 
   const handleSelectEmail = async (email: EmailData) => {
     if (!creds) return;
+    
+    // Optimistically mark as read in the UI
+    if (!email.isRead) {
+      setEmails(emails.map(e => e.id === email.id ? { ...e, isRead: true } : e));
+    }
+
     setSelectedEmail(email);
     setLoadingBody(true);
     try {
@@ -96,12 +103,32 @@ export default function WebmailPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setSelectedEmail({ ...email, ...data.email });
+        setSelectedEmail({ ...email, ...data.email, isRead: true });
       }
     } catch (e) {
       console.error('Failed to fetch body', e);
     } finally {
       setLoadingBody(false);
+    }
+  };
+
+  const toggleReadStatus = async (e: React.MouseEvent, email: EmailData) => {
+    e.stopPropagation(); // prevent opening the email
+    if (!creds) return;
+    const newStatus = !email.isRead;
+    
+    // Optimistic UI update
+    setEmails(emails.map(em => em.id === email.id ? { ...em, isRead: newStatus } : em));
+    if (selectedEmail?.id === email.id) {
+      setSelectedEmail({ ...selectedEmail, isRead: newStatus });
+    }
+
+    try {
+      await fetch(`/api/webmail/inbox?mode=${newStatus ? 'markRead' : 'markUnread'}&uid=${email.id}`, {
+        headers: { 'x-webmail-user': creds.user, 'x-webmail-pass': creds.pass }
+      });
+    } catch (err) {
+      console.error('Failed to toggle read status', err);
     }
   };
 
@@ -230,6 +257,11 @@ export default function WebmailPage() {
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => { setActiveTab('inbox'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: activeTab === 'inbox' ? 'rgba(99,102,241,0.1)' : 'transparent', color: activeTab === 'inbox' ? '#818CF8' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all 0.2s' }}>
                 <Inbox size={16} /> Caixa de Entrada
+                {emails.filter(e => !e.isRead).length > 0 && (
+                  <span style={{ background: '#EF4444', color: '#fff', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', marginLeft: '4px' }}>
+                    {emails.filter(e => !e.isRead).length}
+                  </span>
+                )}
               </button>
               <button onClick={() => { setActiveTab('meetings'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: activeTab === 'meetings' ? 'rgba(139,92,246,0.1)' : 'transparent', color: activeTab === 'meetings' ? '#A78BFA' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all 0.2s' }}>
                 <Calendar size={16} /> Reuniões
@@ -260,21 +292,36 @@ export default function WebmailPage() {
               const isSelected = selectedEmail?.id === email.id;
               
               return (
-                <div key={email.id} onClick={() => handleSelectEmail(email)} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: isSelected ? 'var(--bg-secondary)' : 'transparent', cursor: 'pointer', transition: 'background 0.2s', borderLeft: isSelected ? '3px solid #6366F1' : '3px solid transparent' }}>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #A78BFA)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, flexShrink: 0, boxShadow: '0 2px 8px rgba(99,102,241,0.3)' }}>
+                <div key={email.id} onClick={() => handleSelectEmail(email)} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: isSelected ? 'var(--bg-secondary)' : 'transparent', cursor: 'pointer', transition: 'background 0.2s', borderLeft: isSelected ? '3px solid #6366F1' : (!email.isRead ? '3px solid #3B82F6' : '3px solid transparent'), position: 'relative' }}>
+                  
+                  {/* Unread Indicator Dot */}
+                  {!email.isRead && (
+                    <div style={{ position: 'absolute', top: '24px', left: '10px', width: '8px', height: '8px', borderRadius: '50%', background: '#3B82F6', boxShadow: '0 0 8px rgba(59,130,246,0.6)' }} />
+                  )}
+
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', paddingLeft: !email.isRead ? '8px' : '0' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #A78BFA)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, flexShrink: 0, boxShadow: '0 2px 8px rgba(99,102,241,0.3)', opacity: !email.isRead ? 1 : 0.7 }}>
                       {initial}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: isSelected ? 800 : 700, color: isSelected ? '#818CF8' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '75%' }}>
+                        <span style={{ fontSize: '14px', fontWeight: isSelected || !email.isRead ? 800 : 600, color: isSelected || !email.isRead ? 'var(--text-primary)' : 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '75%' }}>
                           {senderName}
                         </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 600 }}>
-                          {new Date(email.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button 
+                            onClick={(e) => toggleReadStatus(e, email)}
+                            title={email.isRead ? "Marcar como Não Lido" : "Marcar como Lido"}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: email.isRead ? 'var(--text-tertiary)' : '#3B82F6', padding: '0', display: 'flex' }}
+                          >
+                            <Mail size={14} />
+                          </button>
+                          <span style={{ fontSize: '11px', color: !email.isRead ? '#3B82F6' : 'var(--text-tertiary)', fontWeight: !email.isRead ? 700 : 500 }}>
+                            {new Date(email.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                          </span>
+                        </div>
                       </div>
-                      <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <h4 style={{ fontSize: '13px', fontWeight: !email.isRead ? 700 : 500, color: !email.isRead ? 'var(--text-primary)' : 'var(--text-secondary)', margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {email.hasMeeting && <Calendar size={12} style={{ display: 'inline', marginRight: '4px', color: '#A78BFA' }} />}
                         {email.subject}
                       </h4>

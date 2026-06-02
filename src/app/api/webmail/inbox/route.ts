@@ -89,6 +89,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, email: parsedBody });
     }
 
+    if (mode === 'markRead' && uid) {
+      await connection.addFlags(uid, '\\Seen');
+      connection.end();
+      return NextResponse.json({ success: true });
+    }
+
+    if (mode === 'markUnread' && uid) {
+      await connection.delFlags(uid, '\\Seen');
+      connection.end();
+      return NextResponse.json({ success: true });
+    }
+
     // LIST MODE (HEADERS ONLY)
     // Fetch recent emails (last 5 days) HEADERS ONLY to avoid AWS timeout
     const date = new Date();
@@ -126,6 +138,8 @@ export async function GET(request: NextRequest) {
           let date = new Date().toISOString();
           if (headers.date && headers.date.length > 0) date = headers.date[0];
 
+          const isRead = msg.attributes.flags.includes('\\Seen');
+
           results.push({
             id,
             subject,
@@ -134,7 +148,8 @@ export async function GET(request: NextRequest) {
             textSnippet: '...', // Placeholder until clicked
             html: '',
             hasMeeting: false,
-            attachments: []
+            attachments: [],
+            isRead
           });
         } catch (e) {
           console.error('Error extracting email header UID', id, e);
