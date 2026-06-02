@@ -24,6 +24,17 @@ export default function WebmailPage() {
   const [selectedEmail, setSelectedEmail] = useState<EmailData | null>(null);
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent' | 'meetings'>('inbox');
   const [composing, setComposing] = useState(false);
+  const [loadingBody, setLoadingBody] = useState(false);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (activeTab === 'inbox' || activeTab === 'meetings') {
+        fetchEmails(true); // silent fetch
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   // Compose State
   const [composeTo, setComposeTo] = useState('');
@@ -32,21 +43,37 @@ export default function WebmailPage() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{success: boolean; message: string} | null>(null);
 
-  const fetchEmails = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchEmails = async (silent = false) => {
+    if (!silent) setLoading(true);
+    if (!silent) setError(null);
     try {
-      const res = await fetch('/api/webmail/inbox');
+      const res = await fetch('/api/webmail/inbox?mode=list');
       const data = await res.json();
       if (res.ok && data.success) {
         setEmails(data.emails);
       } else {
-        setError(data.error || 'Erro ao carregar e-mails.');
+        if (!silent) setError(data.error || 'Erro ao carregar e-mails.');
       }
     } catch (err: any) {
-      setError('Erro de conexão com o servidor de e-mail.');
+      if (!silent) setError('Erro de conexão com o servidor de e-mail.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const handleSelectEmail = async (email: EmailData) => {
+    setSelectedEmail(email);
+    setLoadingBody(true);
+    try {
+      const res = await fetch(`/api/webmail/inbox?mode=body&uid=${email.id}`);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSelectedEmail({ ...email, ...data.email });
+      }
+    } catch (e) {
+      console.error('Failed to fetch body', e);
+    } finally {
+      setLoadingBody(false);
     }
   };
 
@@ -150,7 +177,7 @@ export default function WebmailPage() {
               </div>
             )}
             {!loading && displayList.map(email => (
-              <div key={email.id} onClick={() => setSelectedEmail(email)} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: selectedEmail?.id === email.id ? 'var(--bg-secondary)' : 'transparent', cursor: 'pointer', transition: 'background 0.2s' }}>
+              <div key={email.id} onClick={() => handleSelectEmail(email)} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: selectedEmail?.id === email.id ? 'var(--bg-secondary)' : 'transparent', cursor: 'pointer', transition: 'background 0.2s' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                   <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70%' }}>
                     {email.from.replace(/<.*>/, '')}
@@ -190,26 +217,37 @@ export default function WebmailPage() {
               </div>
             </div>
 
-            <div style={{ flex: 1, padding: '24px', overflowY: 'auto', color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6 }}>
-              <div dangerouslySetInnerHTML={{ __html: selectedEmail.html || selectedEmail.textSnippet.replace(/\n/g, '<br/>') }} />
-              
-              <div style={{ marginTop: '32px', padding: '24px', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border-secondary)', textAlign: 'center' }}>
-                <Lock size={24} style={{ color: '#FBBF24', margin: '0 auto 12px' }} />
-                <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 8px' }}>E-mail Protegido por SSO</h4>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 20px', lineHeight: 1.5 }}>O conteúdo completo e os anexos deste e-mail estão protegidos pelas políticas de segurança da Amazon WorkMail.</p>
-                
-                <a 
-                  href="https://mvpay.awsapps.com/auth/?client_id=6b9615ec01be1c8d&redirect_uri=https%3A%2F%2Fwebmail.mail.us-east-1.awsapps.com%2Fworkmail%2F"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px', borderRadius: '10px', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', fontSize: '13px', fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 12px rgba(59,130,246,0.2)' }}
-                >
-                  <ExternalLink size={16} /> Ler E-mail Completo na Amazon
-                </a>
+            {loadingBody ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)' }}>
+                <Loader2 size={32} className="animate-spin mb-4" style={{ color: '#818CF8' }} />
+                <p style={{ fontSize: '14px', fontWeight: 600 }}>Baixando conteúdo seguro da Amazon...</p>
               </div>
-            </div>
+            ) : (
+              <div style={{ flex: 1, padding: '24px', overflowY: 'auto', color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.6 }}>
+                {selectedEmail.html ? (
+                  <iframe 
+                    srcDoc={selectedEmail.html} 
+                    style={{ width: '100%', height: '100%', border: 'none', background: '#fff', borderRadius: '8px' }} 
+                    sandbox="allow-popups allow-same-origin"
+                  />
+                ) : (
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{selectedEmail.textSnippet}</div>
+                )}
+                
+                {selectedEmail.hasMeeting && (
+                  <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#A78BFA', fontWeight: 700, marginBottom: '8px' }}>
+                      <Calendar size={18} /> Convite de Reunião Encontrado
+                    </div>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                      Este e-mail contém um arquivo de calendário (.ics). Verifique a aba Reuniões para mais detalhes.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             
-            {selectedEmail.attachments.length > 0 && (
+            {selectedEmail.attachments && selectedEmail.attachments.length > 0 && !loadingBody && (
               <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)' }}>
                 <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: '8px' }}>ANEXOS</div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
