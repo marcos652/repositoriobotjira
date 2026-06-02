@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Mail, Send, Calendar, RefreshCw, AlertTriangle, Inbox, 
-  Clock, Paperclip, ChevronRight, CheckCircle2, User, Reply, X
+  Clock, Paperclip, ChevronRight, CheckCircle2, User, Reply, X, Loader2
 } from 'lucide-react';
 
 interface EmailData {
