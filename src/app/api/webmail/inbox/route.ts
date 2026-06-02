@@ -33,44 +33,45 @@ export async function GET(request: NextRequest) {
     const connection = await imaps.connect(config);
     await connection.openBox('INBOX');
 
-    // Fetch recent emails (last 7 days to avoid memory crash)
+    // Fetch recent emails (last 5 days) HEADERS ONLY to avoid AWS timeout
     const date = new Date();
-    date.setDate(date.getDate() - 7);
+    date.setDate(date.getDate() - 5);
     
     const searchCriteria = [['SINCE', date]];
     const fetchOptions = {
-      bodies: [''],
+      bodies: ['HEADER.FIELDS (FROM TO SUBJECT DATE)'],
+      struct: false,
       markSeen: false,
     };
 
     let messages = await connection.search(searchCriteria, fetchOptions);
-    const recentMessages = messages.slice(-15).reverse(); // Limit to 15 newest
+    
+    // Sort by UID descending (newest first)
+    messages.sort((a: any, b: any) => b.attributes.uid - a.attributes.uid);
+    const recentMessages = messages.slice(0, 20); // Show max 20
 
     const results = [];
 
     for (const msg of recentMessages) {
-      const all = msg.parts.find((part: any) => part.which === '');
+      const headerPart = msg.parts.find((part: any) => part.which.includes('HEADER'));
       const id = msg.attributes.uid;
 
-      if (all && all.body) {
+      if (headerPart && headerPart.body) {
         try {
-          const parsed = await simpleParser(all.body);
-          
-          // Check for calendar invites (.ics)
-          const hasMeeting = parsed.attachments.some(a => a.contentType.includes('text/calendar') || a.filename?.endsWith('.ics'));
+          const parsed = await simpleParser(headerPart.body);
 
           results.push({
             id,
             subject: parsed.subject || 'Sem Assunto',
-            from: parsed.from?.text || '',
-            date: parsed.date,
-            textSnippet: parsed.text ? parsed.text.substring(0, 150) + '...' : '',
-            html: parsed.html || '',
-            hasMeeting,
-            attachments: parsed.attachments.map(a => ({ filename: a.filename, size: a.size }))
+            from: parsed.from?.text || 'Remetente Desconhecido',
+            date: parsed.date || new Date().toISOString(),
+            textSnippet: 'Clique para abrir o e-mail no painel da Amazon (conteúdo protegido).',
+            html: '',
+            hasMeeting: false,
+            attachments: []
           });
         } catch (e) {
-          console.error('Error parsing email UID', id, e);
+          console.error('Error parsing email header UID', id, e);
         }
       }
     }

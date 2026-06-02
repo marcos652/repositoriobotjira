@@ -190,7 +190,24 @@ export default function WebmailPage() {
               </div>
             </div>
 
-            <div style={{ flex: 1, padding: '24px', overflowY: 'auto', color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6 }} dangerouslySetInnerHTML={{ __html: selectedEmail.html || selectedEmail.textSnippet.replace(/\n/g, '<br/>') }} />
+            <div style={{ flex: 1, padding: '24px', overflowY: 'auto', color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.6 }}>
+              <div dangerouslySetInnerHTML={{ __html: selectedEmail.html || selectedEmail.textSnippet.replace(/\n/g, '<br/>') }} />
+              
+              <div style={{ marginTop: '32px', padding: '24px', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border-secondary)', textAlign: 'center' }}>
+                <Lock size={24} style={{ color: '#FBBF24', margin: '0 auto 12px' }} />
+                <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 8px' }}>E-mail Protegido por SSO</h4>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 20px', lineHeight: 1.5 }}>O conteúdo completo e os anexos deste e-mail estão protegidos pelas políticas de segurança da Amazon WorkMail.</p>
+                
+                <a 
+                  href="https://mvpay.awsapps.com/auth/?client_id=6b9615ec01be1c8d&redirect_uri=https%3A%2F%2Fwebmail.mail.us-east-1.awsapps.com%2Fworkmail%2F"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px', borderRadius: '10px', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', fontSize: '13px', fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 12px rgba(59,130,246,0.2)' }}
+                >
+                  <ExternalLink size={16} /> Ler E-mail Completo na Amazon
+                </a>
+              </div>
+            </div>
             
             {selectedEmail.attachments.length > 0 && (
               <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)' }}>
