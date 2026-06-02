@@ -45,6 +45,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/dashboard/notificacoes': { title: 'Notificações', subtitle: 'Alertas e histórico de avisos' },
   '/dashboard/configuracoes': { title: 'Configurações', subtitle: 'Preferências gerais do sistema' },
   '/dashboard/implantacao': { title: 'Implantação', subtitle: 'Acompanhamento de novos clientes e integrações' },
+  '/dashboard/webmail': { title: 'Webmail', subtitle: 'Amazon WorkMail / E-mail Corporativo' },
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -84,7 +85,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Header title={pageInfo.title} subtitle={pageInfo.subtitle} />
               <main
                 className={`flex-1 overflow-y-auto ${
-                  ['/dashboard/nova-demanda','/dashboard/metricas','/dashboard/calendario','/dashboard/equipe','/dashboard/relatorios','/dashboard/sla','/dashboard/releases','/dashboard/clientes','/dashboard/knowledge','/dashboard/automacoes','/dashboard/integracoes','/dashboard/logs','/dashboard/notificacoes','/dashboard/configuracoes','/dashboard/implantacao'].includes(pathname)
+                  ['/dashboard/nova-demanda','/dashboard/metricas','/dashboard/calendario','/dashboard/equipe','/dashboard/relatorios','/dashboard/sla','/dashboard/releases','/dashboard/clientes','/dashboard/knowledge','/dashboard/automacoes','/dashboard/integracoes','/dashboard/logs','/dashboard/notificacoes','/dashboard/configuracoes','/dashboard/implantacao','/dashboard/webmail'].includes(pathname)
                     ? 'pl-8 pr-4 py-4'
                     : 'pl-14 pr-10 py-10'
                 }`}
