@@ -45,7 +45,6 @@ const navItems = [
       { label: 'Suporte', href: '/dashboard/suporte', icon: Headphones },
       { label: 'Desenvolvimento', href: '/dashboard/dev', icon: Code2 },
       { label: 'Slack', href: '/dashboard/slack', icon: MessageSquare },
-      { label: 'Webmail', href: '/dashboard/webmail', icon: Mail },
     ],
   },
   {
