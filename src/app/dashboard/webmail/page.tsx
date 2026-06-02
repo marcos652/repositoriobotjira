@@ -235,61 +235,93 @@ export default function WebmailPage() {
         </div>
 
         {/* Email List */}
-        <div style={{ flex: 1, maxWidth: selectedEmail ? '350px' : '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '16px', overflow: 'hidden', transition: 'all 0.3s' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)', fontSize: '12px', fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {activeTab === 'inbox' ? 'Caixa de Entrada' : 'Reuniões e Convites'}
+        <div style={{ flex: 1, maxWidth: selectedEmail ? '380px' : '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '16px', overflow: 'hidden', transition: 'all 0.3s', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)', fontSize: '12px', fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{activeTab === 'inbox' ? 'Caixa de Entrada' : 'Reuniões e Convites'}</span>
+            <span style={{ padding: '2px 8px', background: 'rgba(99,102,241,0.1)', color: '#818CF8', borderRadius: '12px', fontSize: '11px' }}>{displayList.length} msgs</span>
           </div>
           
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {loading && !error && (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                <Loader2 size={24} className="animate-spin mx-auto mb-3" style={{ color: '#818CF8' }} />
-                <p style={{ fontSize: '13px', fontWeight: 600 }}>Sincronizando Amazon WorkMail...</p>
+              <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                <Loader2 size={32} className="animate-spin mx-auto mb-4" style={{ color: '#818CF8' }} />
+                <p style={{ fontSize: '14px', fontWeight: 600 }}>Sincronizando sua caixa...</p>
               </div>
             )}
             {!loading && displayList.length === 0 && !error && (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                <CheckCircle2 size={32} className="mx-auto mb-3" style={{ color: '#4ADE80' }} />
-                <p style={{ fontSize: '13px', fontWeight: 600 }}>Nenhum e-mail por aqui.</p>
+              <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(74,222,128,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <CheckCircle2 size={32} style={{ color: '#4ADE80' }} />
+                </div>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Tudo Limpo!</h3>
+                <p style={{ fontSize: '13px' }}>Nenhum e-mail novo por aqui.</p>
               </div>
             )}
-            {!loading && displayList.map(email => (
-              <div key={email.id} onClick={() => handleSelectEmail(email)} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: selectedEmail?.id === email.id ? 'var(--bg-secondary)' : 'transparent', cursor: 'pointer', transition: 'background 0.2s' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '70%' }}>
-                    {email.from.replace(/<.*>/, '')}
-                  </span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                    {new Date(email.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-                  </span>
+            {!loading && displayList.map(email => {
+              const senderName = email.from.replace(/<.*>/, '').trim() || 'Desconhecido';
+              const initial = senderName.charAt(0).toUpperCase();
+              const isSelected = selectedEmail?.id === email.id;
+              
+              return (
+                <div key={email.id} onClick={() => handleSelectEmail(email)} style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: isSelected ? 'var(--bg-secondary)' : 'transparent', cursor: 'pointer', transition: 'background 0.2s', borderLeft: isSelected ? '3px solid #6366F1' : '3px solid transparent' }}>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #A78BFA)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, flexShrink: 0, boxShadow: '0 2px 8px rgba(99,102,241,0.3)' }}>
+                      {initial}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: isSelected ? 800 : 700, color: isSelected ? '#818CF8' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '75%' }}>
+                          {senderName}
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 600 }}>
+                          {new Date(email.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                        </span>
+                      </div>
+                      <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {email.hasMeeting && <Calendar size={12} style={{ display: 'inline', marginRight: '4px', color: '#A78BFA' }} />}
+                        {email.subject}
+                      </h4>
+                      <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.4 }}>
+                        {email.textSnippet}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {email.hasMeeting && <Calendar size={12} style={{ display: 'inline', marginRight: '4px', color: '#A78BFA' }} />}
-                  {email.subject}
-                </h4>
-                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {email.textSnippet}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Email Reader */}
         {selectedEmail && (
-          <div className="animate-fade-in" style={{ flex: 2, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '24px', borderBottom: '1px solid var(--border-secondary)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{selectedEmail.subject}</h2>
-                <button onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={20}/></button>
+          <div className="animate-fade-in" style={{ flex: 2, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.04)' }}>
+            <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedEmail.subject}</h2>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => {
+                    setComposeTo(selectedEmail.from.match(/<([^>]+)>/)?.[1] || selectedEmail.from);
+                    setComposeSubject(`Re: ${selectedEmail.subject}`);
+                    setComposing(true);
+                  }} style={{ padding: '8px 16px', background: 'rgba(99,102,241,0.1)', color: '#818CF8', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', transition: 'all 0.2s' }}>
+                    <Reply size={16} /> Responder
+                  </button>
+                  <button onClick={() => setSelectedEmail(null)} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '8px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 0.2s' }}>
+                    <X size={18}/>
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-                  <User size={20} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '18px', fontWeight: 800, boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}>
+                  {selectedEmail.from.replace(/<.*>/, '').trim().charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{selectedEmail.from}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{new Date(selectedEmail.date).toLocaleString('pt-BR')}</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>{selectedEmail.from.replace(/<.*>/, '').trim() || 'Desconhecido'}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{selectedEmail.from.match(/<([^>]+)>/)?.[1] || ''}</span>
+                    <span>•</span>
+                    <span>{new Date(selectedEmail.date).toLocaleString('pt-BR', { dateStyle: 'long', timeStyle: 'short' })}</span>
+                  </div>
                 </div>
               </div>
             </div>
