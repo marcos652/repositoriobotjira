@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
         host,
         port,
         tls: true,
-        authTimeout: 10000,
+        authTimeout: 5000,
+        connTimeout: 5000,
         tlsOptions: { rejectUnauthorized: false }
       }
     };
