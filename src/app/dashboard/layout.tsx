@@ -57,19 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useSessionAutoRefresh();
 
   useEffect(() => {
-    // RBAC: Client-side route protection
-    const adminOnlyRoutes = ['/dashboard/configuracoes', '/dashboard/ips', '/dashboard/equipe', '/dashboard/logs'];
-    if (adminOnlyRoutes.some(route => pathname.startsWith(route))) {
-      fetch('/api/auth/session')
-        .then(r => r.json())
-        .then(data => {
-          const role = data.user?.role || 'user';
-          if (role !== 'admin') {
-            router.push('/dashboard');
-          }
-        })
-        .catch(() => {});
-    }
+    // RBAC: Proteção removida a pedido do usuário (liberado para todos)
   }, [pathname, router]);
 
   return (
