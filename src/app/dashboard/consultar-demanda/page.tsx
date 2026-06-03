@@ -31,6 +31,10 @@ interface DemandaData {
   transitions: TransitionData[]; sprint: SprintData | null;
   pullRequests: PullRequestData[]; changelog: ChangelogEntry[];
   timeTracking: TimeTrackingData | null; url: string;
+  produto: { id: string; value: string }[];
+  saude: { id: string; value: string } | null;
+  impacto: { id: string; value: string } | null;
+  dataInicio: string | null;
 }
 
 // ─── Helpers ───
@@ -62,6 +66,11 @@ export default function ConsultarDemandaPage() {
   const [editAssigneeId, setEditAssigneeId] = useState('');
   const [editReporter, setEditReporter] = useState('');
   const [editCliente, setEditCliente] = useState('');
+  const [editProduto, setEditProduto] = useState<string[]>([]);
+  const [editSaude, setEditSaude] = useState('');
+  const [editImpacto, setEditImpacto] = useState('');
+  const [editDataInicio, setEditDataInicio] = useState('');
+  const [editLabels, setEditLabels] = useState('');
   const [updating, setUpdating] = useState(false);
   const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string } | null>(null);
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
@@ -116,6 +125,11 @@ export default function ConsultarDemandaPage() {
           setEditAssigneeId(data.assigneeId || '');
           setEditReporter(data.reporter || '');
           setEditCliente(data.nome_cliente || '');
+          setEditProduto(data.produto?.map((p: any) => p.id) || []);
+          setEditSaude(data.saude?.id || '');
+          setEditImpacto(data.impacto?.id || '');
+          setEditDataInicio(data.dataInicio || '');
+          setEditLabels(data.labels?.join(', ') || '');
           const h = [key, ...loadHistory().filter(k => k !== key)].slice(0, 10);
           saveHistory(h); setSearchHistory(h);
         } else {
@@ -159,6 +173,12 @@ export default function ConsultarDemandaPage() {
     if (editPriority !== (demanda.priority || '')) body.priority = editPriority;
     if (editAssigneeId !== (demanda.assigneeId || '')) body.assignee = editAssigneeId;
     if (editCliente !== (demanda.nome_cliente || '')) body.cliente = editCliente;
+    if (editLabels !== (demanda.labels?.join(', ') || '')) body.labels = editLabels.split(',').map(s=>s.trim()).filter(Boolean);
+    if (JSON.stringify(editProduto) !== JSON.stringify(demanda.produto?.map(p=>p.id)||[])) body.produto = editProduto;
+    if (editSaude !== (demanda.saude?.id || '')) body.saude = editSaude;
+    if (editImpacto !== (demanda.impacto?.id || '')) body.impacto = editImpacto;
+    if (editDataInicio !== (demanda.dataInicio || '')) body.dataInicio = editDataInicio;
+
     if (Object.keys(body).length === 0) { setUpdateResult({ success: false, message: 'Nenhuma alteração' }); setUpdating(false); return; }
     try {
       const res = await fetch(`/api/atualizar-demanda/${demanda.issue_key}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -332,11 +352,29 @@ export default function ConsultarDemandaPage() {
               {/* Status transition dropdown */}
               {demanda.transitions.length > 0 && (
                 <div style={{ position: 'relative' }}>
-                  <select disabled={transitioning} onChange={e => { if (e.target.value) handleTransition(e.target.value); e.target.value = ''; }}
-                    style={{ padding: '8px 28px 8px 12px', borderRadius: '10px', fontSize: '11px', fontWeight: 700, background: 'rgba(34,197,94,0.06)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.1)', cursor: 'pointer', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'10\' height=\'6\' viewBox=\'0 0 10 6\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M1 1L5 5L9 1\' stroke=\'%234ADE80\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
-                    <option value="">Mover para...</option>
-                    {demanda.transitions.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
+                  <button onClick={() => {
+                    const el = document.getElementById('transition-dropdown');
+                    if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
+                  }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'rgba(34,197,94,0.08)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.15)', cursor: 'pointer' }}>
+                    {transitioning ? <Loader2 size={14} className="animate-spin" /> : 'Mover para...'} <ChevronDown size={14} />
+                  </button>
+                  <div id="transition-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', width: '280px', zIndex: 100, overflow: 'hidden' }}>
+                    <div style={{ padding: '8px 12px', fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-secondary)' }}>
+                      Fluxo de Trabalho
+                    </div>
+                    {demanda.transitions.map(t => (
+                      <button key={t.id} onClick={() => {
+                        document.getElementById('transition-dropdown')!.style.display = 'none';
+                        handleTransition(t.id);
+                      }} disabled={transitioning} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '12px 16px', background: 'none', border: 'none', borderBottom: '1px solid var(--border-secondary)', cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s' }} onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')} onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{t.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <ArrowRight size={14} style={{ color: 'var(--text-tertiary)' }} />
+                          <span style={S.badge('rgba(255,255,255,0.05)', 'var(--text-secondary)', 'var(--border-secondary)')}>{t.to}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
               <button onClick={copyLink} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'rgba(99,102,241,0.08)', color: '#818CF8', border: 'none', cursor: 'pointer' }}>
@@ -405,6 +443,74 @@ export default function ConsultarDemandaPage() {
                       <input value={editCliente} onChange={e => setEditCliente(e.target.value)} placeholder="Nome do cliente" style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
                     ) : (
                       <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.nome_cliente || '—'}</p>
+                    )}
+                  </div>
+
+                  {/* Categorias (Labels) */}
+                  <div style={S.card}>
+                    <label style={S.label}><Tag size={11} /> Categorias</label>
+                    {editing ? (
+                      <input value={editLabels} onChange={e => setEditLabels(e.target.value)} placeholder="backend, bug..." style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+                    ) : (
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.labels.length > 0 ? demanda.labels.join(', ') : '—'}</p>
+                    )}
+                  </div>
+
+                  {/* Produto */}
+                  <div style={S.card}>
+                    <label style={S.label}><Building2 size={11} /> Produto</label>
+                    {editing ? (
+                      <select multiple value={editProduto} onChange={e => setEditProduto(Array.from(e.target.selectedOptions, option => option.value))} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', height: '80px' }}>
+                        <option value="10225">Gateway</option>
+                        <option value="10226">Console</option>
+                        <option value="10227">Vendedor</option>
+                        <option value="10228">Estabelecimento</option>
+                        <option value="10229">Regulatório</option>
+                        <option value="10230">Registradora</option>
+                      </select>
+                    ) : (
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.produto?.map(p => p.value).join(', ') || '—'}</p>
+                    )}
+                  </div>
+
+                  {/* Saúde do Cliente */}
+                  <div style={S.card}>
+                    <label style={S.label}><Shield size={11} /> Saúde do Cliente</label>
+                    {editing ? (
+                      <select value={editSaude} onChange={e => setEditSaude(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }}>
+                        <option value="">Selecione...</option>
+                        <option value="10119">🟢</option>
+                        <option value="10120">🟡</option>
+                        <option value="10121">🔴</option>
+                      </select>
+                    ) : (
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.saude?.value || '—'}</p>
+                    )}
+                  </div>
+
+                  {/* Impacto */}
+                  <div style={S.card}>
+                    <label style={S.label}><AlertTriangle size={11} /> Impacto</label>
+                    {editing ? (
+                      <select value={editImpacto} onChange={e => setEditImpacto(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }}>
+                        <option value="">Selecione...</option>
+                        <option value="10000">Extensive / Widespread</option>
+                        <option value="10001">Significant / Large</option>
+                        <option value="10002">Moderate / Limited</option>
+                        <option value="10003">Minor / Localized</option>
+                      </select>
+                    ) : (
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.impacto?.value || '—'}</p>
+                    )}
+                  </div>
+
+                  {/* Data de Início */}
+                  <div style={S.card}>
+                    <label style={S.label}><Calendar size={11} /> Data de Início</label>
+                    {editing ? (
+                      <input type="date" value={editDataInicio} onChange={e => setEditDataInicio(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark' }} />
+                    ) : (
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.dataInicio ? formatDate(demanda.dataInicio) : '—'}</p>
                     )}
                   </div>
 

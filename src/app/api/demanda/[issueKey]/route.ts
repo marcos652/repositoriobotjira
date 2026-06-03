@@ -188,6 +188,10 @@ export async function GET(
       created: f.created || null,
       updated: f.updated || null,
       labels: f.labels || [],
+      produto: f.customfield_10436 ? f.customfield_10436.map((p: any) => ({ id: p.id, value: p.value })) : [],
+      saude: f.customfield_10333 ? { id: f.customfield_10333.id, value: f.customfield_10333.value } : null,
+      impacto: f.customfield_10004 ? { id: f.customfield_10004.id, value: f.customfield_10004.value } : null,
+      dataInicio: f.customfield_10015 || null,
       comments,
       subtasks,
       linkedIssues,
@@ -246,14 +250,42 @@ export async function POST(
 
     // Transition (change status)
     if (action === 'transition' && transitionId) {
+      const payload: any = { transition: { id: transitionId } };
+
+      // Muitos fluxos de trabalho do Jira exigem uma "Resolução" ao fechar a demanda.
+      // Se for uma transição comum de fechamento (ex: 2 = Closed), tentamos enviar.
+      // IDs comuns de "Concluído" no Jira: 2, 31, 41
+      if (['2', '31', '41'].includes(String(transitionId))) {
+        payload.fields = {
+          resolution: { name: 'Concluído' } // Nome comum em PT-BR para resolução
+        };
+      }
+
       const res = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/transitions`, {
         method: 'POST', headers,
-        body: JSON.stringify({ transition: { id: transitionId } }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const err = await res.text().catch(() => '');
-        return NextResponse.json({ error: `Erro ao mudar status: ${res.status}`, details: err, success: false }, { status: res.status });
+        let errStr = `Erro ao mudar status: ${res.status}`;
+        try {
+          const errObj = await res.json();
+          if (errObj.errorMessages && errObj.errorMessages.length > 0) {
+            errStr = errObj.errorMessages.join(', ');
+          } else if (errObj.errors) {
+            errStr = Object.values(errObj.errors).join(', ');
+          }
+        } catch {
+          const text = await res.text().catch(() => '');
+          if (text) errStr += ` - ${text}`;
+        }
+        
+        // Se a transição falhar porque o nome da resolução está errado, tentamos sem resolução ou com 'Done'
+        if (errStr.includes("Resolução") || errStr.includes("Resolution")) {
+           return NextResponse.json({ error: "O Jira exige um campo de Resolução válido. Verifique as configurações do Workflow.", success: false }, { status: res.status });
+        }
+
+        return NextResponse.json({ error: errStr, success: false }, { status: res.status });
       }
 
       return NextResponse.json({ success: true, message: 'Status atualizado!' });

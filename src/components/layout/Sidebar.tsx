@@ -217,12 +217,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {navItems.flatMap(s => {
-            // Hide specific sections for non-admins
-            if (userRole !== 'admin' && s.section === 'SISTEMA') return [];
             return s.items;
           }).map((item) => {
-            // Further hide specific items just in case
-            if (userRole !== 'admin' && ['Equipe', 'Configurações', 'Gerenciar IPs', 'Logs / Auditoria'].includes(item.label)) return null;
+
 
             const active = isActive(item.href);
             const Icon = item.icon;

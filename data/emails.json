@@ -1,0 +1,23 @@
+[
+  {
+    "hash": "2ad8622fe24277b4e546d0f8d54fa6e3ccbff50765c9d8204a409d83f10c44be",
+    "encrypted": "NDql6oXemSClIZ4CyVSufbj9fXaXQ1atp48l2l4OC43y/3ImQKapjTKpSKdwPmL1Bfro8NT5VJmwceUukP8CcTtG1+Qnh6vfSh/p1ESqYE7PSpKvV1FF00sYv3c3p4E=",
+    "addedAt": "2026-06-02T20:34:11.724Z",
+    "addedBy": "system",
+    "role": "admin"
+  },
+  {
+    "hash": "6a23fd8198af42be759081d810115814cf2b008f2255b1ca1164d7002b494a06",
+    "encrypted": "JSwycANIkt4mJ27N94elsBcmDmy6cV6IY09FH6aXKGP++dT6sEsL4WravIW7pwQr43jt/Dx3IIZ+TjmGSSHN1hks9M/iSKR5HOlGdFdCc9dSMgEz86sTTiNUSdOV",
+    "addedAt": "2026-06-02T20:34:11.725Z",
+    "addedBy": "system",
+    "role": "admin"
+  },
+  {
+    "hash": "368ec1dfc0bc4504aa10f9ab5ac91d217abb671e0fd580227cbe792b4349a25e",
+    "encrypted": "pk/6sbUJle948AliBztSrZRaAZPnyNTRxaRoy1FJKAi5LDmpitPsYsTrcgVwNay6ZgAgfLTqFZQVFw/wlyYKEGEq/HIXh7pkt8v0GQjV3lGUM2jCGbIBSWVHyANF3DE=",
+    "addedAt": "2026-06-02T20:34:11.725Z",
+    "addedBy": "system",
+    "role": "admin"
+  }
+]

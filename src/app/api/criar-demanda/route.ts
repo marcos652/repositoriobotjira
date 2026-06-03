@@ -112,11 +112,28 @@ async function createJiraIssue(issueData: any) {
   // 2. Wait 4s then PUT description (same pattern as API Bot)
   await new Promise(r => setTimeout(r, 4000));
 
-  await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`, {
+  let adfDescription = issueData.description;
+  if (Array.isArray(adfDescription)) {
+    adfDescription = { version: 1, type: 'doc', content: adfDescription };
+  } else if (adfDescription && typeof adfDescription === 'object' && adfDescription.type !== 'doc') {
+    adfDescription = { version: 1, type: 'doc', content: [adfDescription] };
+  } else if (typeof adfDescription === 'string') {
+    adfDescription = {
+      version: 1,
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: adfDescription }] }]
+    };
+  }
+
+  const descRes = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`, {
     method: 'PUT',
     headers: jiraHeaders,
-    body: JSON.stringify({ fields: { description: issueData.description } }),
+    body: JSON.stringify({ fields: { description: adfDescription } }),
   });
+
+  if (!descRes.ok) {
+    console.error('Falha ao atualizar descrição no Jira:', await descRes.text().catch(() => 'Erro desconhecido'));
+  }
 
   // 3. Transition to Refinamento
   await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/transitions`, {
@@ -145,6 +162,66 @@ async function notifySlack(issueKey: string, issueUrl: string, clientName: strin
   }).catch(() => {}); // non-critical
 }
 
+// ─── Attachments ───
+async function uploadAttachments(issueKey: string, urls: string[]) {
+  if (!urls || urls.length === 0) return;
+  const jiraAuth = getJiraAuth();
+
+  for (const [index, dataUrl] of urls.entries()) {
+    try {
+      if (dataUrl.startsWith('data:')) {
+        // Trata data URL (base64) gerado pelo /api/upload-image
+        const matches = dataUrl.match(/^data:([a-zA-Z0-9/+-.]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const mimeType = matches[1];
+          const base64Data = matches[2];
+          const buffer = Buffer.from(base64Data, 'base64');
+          
+          let ext = mimeType.split('/')[1] || 'bin';
+          if (ext.includes('document')) ext = 'docx';
+          if (ext.includes('sheet')) ext = 'xlsx';
+          
+          const filename = `anexo_${index + 1}.${ext.replace('+', '').replace('-', '')}`;
+          const blob = new Blob([buffer], { type: mimeType });
+          
+          const formData = new FormData();
+          formData.append('file', blob, filename);
+
+          await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${jiraAuth}`,
+              'X-Atlassian-Token': 'no-check'
+            },
+            body: formData as any
+          });
+        }
+      } else if (dataUrl.startsWith('http')) {
+        // Trata URL normal de imagem (digitada manualmente)
+        const res = await fetch(dataUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          const filename = new URL(dataUrl).pathname.split('/').pop() || `anexo_${index + 1}`;
+          
+          const formData = new FormData();
+          formData.append('file', blob, filename);
+
+          await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${jiraAuth}`,
+              'X-Atlassian-Token': 'no-check'
+            },
+            body: formData as any
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Falha ao enviar anexo para o Jira:', err);
+    }
+  }
+}
+
 // ─── Route ───
 export async function POST(request: NextRequest) {
   try {
@@ -168,7 +245,12 @@ export async function POST(request: NextRequest) {
     // Step 2: Create Jira issue
     const { issueKey, issueUrl } = await createJiraIssue(issueData);
 
-    // Step 3: Notify Slack (fire and forget)
+    // Step 3: Upload Attachments (se houver)
+    if (urls_imagens && urls_imagens.length > 0) {
+      await uploadAttachments(issueKey, urls_imagens);
+    }
+
+    // Step 4: Notify Slack (fire and forget)
     const clientFinal = nome_cliente || issueData.client_name || 'NÃO IDENTIFICADO';
     notifySlack(issueKey, issueUrl, clientFinal, issueData.resumo_slack || '');
 

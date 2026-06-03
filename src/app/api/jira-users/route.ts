@@ -13,7 +13,7 @@ export async function GET() {
     const jiraAuth = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
 
     const res = await fetch(
-      `${JIRA_BASE_URL}/rest/api/3/users/search?maxResults=100`,
+      `${JIRA_BASE_URL}/rest/api/3/user/assignable/search?project=DSMM&maxResults=150`,
       {
         headers: {
           'Accept': 'application/json',

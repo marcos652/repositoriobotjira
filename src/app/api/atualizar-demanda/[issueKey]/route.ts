@@ -54,6 +54,18 @@ export async function PUT(
         ? { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: body.cliente }] }] }
         : null;
     }
+    if (body.produto !== undefined) {
+      jiraPayload.fields.customfield_10436 = body.produto.length > 0 ? body.produto.map((id: string) => ({ id })) : null;
+    }
+    if (body.saude !== undefined) {
+      jiraPayload.fields.customfield_10333 = body.saude ? { id: body.saude } : null;
+    }
+    if (body.impacto !== undefined) {
+      jiraPayload.fields.customfield_10004 = body.impacto ? { id: body.impacto } : null;
+    }
+    if (body.dataInicio !== undefined) {
+      jiraPayload.fields.customfield_10015 = body.dataInicio || null;
+    }
 
     // Fetch directly from Jira REST API
     const jiraAuth = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
