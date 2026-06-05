@@ -135,12 +135,10 @@ async function createJiraIssue(issueData: any) {
     console.error('Falha ao atualizar descrição no Jira:', await descRes.text().catch(() => 'Erro desconhecido'));
   }
 
-  // 3. Transition to Refinamento
-  await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/transitions`, {
-    method: 'POST',
-    headers: jiraHeaders,
-    body: JSON.stringify({ transition: { id: REFINAMENTO_TRANSITION_ID } }),
-  }).catch(() => {}); // non-critical
+  // 3. (Removido) Transição automática para Refinamento
+  // O usuário solicitou que as novas demandas fiquem em Backlog.
+  // Se for necessário mover para Backlog explicitamente, o ID da transição seria usado aqui.
+  // Por padrão, o Jira já cria as demandas no status inicial do workflow (geralmente Backlog ou To Do).
 
   return { issueKey, issueUrl };
 }
