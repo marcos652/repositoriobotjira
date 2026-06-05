@@ -2,12 +2,22 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-// Encryption key (32 bytes for AES-256)
+// Encryption key (32 bytes for AES-256-GCM)
 const ENCRYPTION_KEY = (() => {
   const envKey = process.env.AUTH_ENCRYPTION_KEY;
-  if (envKey && envKey.length >= 32) return envKey.slice(0, 32);
+  // If a raw 32‑byte (256‑bit) key is provided via env (base64 or hex), use it directly
+  if (envKey) {
+    try {
+      const buf = Buffer.from(envKey, 'base64');
+      if (buf.length === 32) return buf;
+      // fallback: treat as hex string
+      const hexBuf = Buffer.from(envKey.replace(/[^a-fA-F0-9]/g, ''), 'hex');
+      if (hexBuf.length === 32) return hexBuf;
+    } catch {}
+  }
+  // Derive a deterministic 32‑byte key from available tokens
   const seed = `${process.env.JIRA_TOKEN || ''}${process.env.SLACK_TOKEN || ''}jiraops-secret-2024`;
-  return crypto.createHash('sha256').update(seed).digest('hex').slice(0, 32);
+  return crypto.createHash('sha256').update(seed).digest();
 })();
 
 const ALGORITHM = 'aes-256-gcm';
@@ -32,6 +42,7 @@ export function encrypt(data: object): string {
  * Decrypt data encrypted with AES-256-GCM
  */
 export function decrypt<T = any>(encryptedBase64: string): T | null {
+  // Primary decryption using current ENCRYPTION_KEY (Buffer of 32 bytes)
   try {
     const combined = Buffer.from(encryptedBase64, 'base64');
     const iv = combined.subarray(0, IV_LENGTH);
@@ -43,9 +54,27 @@ export function decrypt<T = any>(encryptedBase64: string): T | null {
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return JSON.parse(decrypted.toString('utf8'));
   } catch {
-    return null;
+    // Fallback: legacy key derived as hex string (first 32 chars of SHA‑256)
+    try {
+      const seed = `${process.env.JIRA_TOKEN || ''}${process.env.SLACK_TOKEN || ''}jiraops-secret-2024`;
+      const legacyKeyHex = crypto.createHash('sha256').update(seed).digest('hex').slice(0, 32);
+      const legacyKey = Buffer.from(legacyKeyHex, 'utf8');
+      const combined = Buffer.from(encryptedBase64, 'base64');
+      const iv = combined.subarray(0, IV_LENGTH);
+      const authTag = combined.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
+      const cipherText = combined.subarray(IV_LENGTH + TAG_LENGTH);
+      const decipher = crypto.createDecipheriv(ALGORITHM, legacyKey, iv);
+      decipher.setAuthTag(authTag);
+      let decrypted = decipher.update(cipherText);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+      return JSON.parse(decrypted.toString('utf8'));
+    } catch {
+      return null;
+    }
   }
 }
+
+
 
 // ═══════════════════════════════════════════
 //  SECURE EMAIL STORAGE — File-Persisted

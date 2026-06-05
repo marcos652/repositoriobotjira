@@ -191,9 +191,9 @@ let clientInstance: JiraClient | null = null;
 
 export function getJiraClient(): JiraClient {
   if (!clientInstance) {
-    const domain = process.env.JIRA_DOMAIN;
+    const domain = process.env.JIRA_DOMAIN || 'movingpay.atlassian.net';
     const email = process.env.JIRA_EMAIL;
-    const apiToken = process.env.JIRA_API_TOKEN;
+    const apiToken = process.env.JIRA_API_TOKEN || process.env.JIRA_TOKEN;
 
     if (!domain || !email || !apiToken) {
       throw new Error('Missing Jira configuration. Set JIRA_DOMAIN, JIRA_EMAIL, and JIRA_API_TOKEN environment variables.');
@@ -206,5 +206,5 @@ export function getJiraClient(): JiraClient {
 }
 
 export function isJiraConfigured(): boolean {
-  return !!(process.env.JIRA_DOMAIN && process.env.JIRA_EMAIL && process.env.JIRA_API_TOKEN);
+  return !!(process.env.JIRA_EMAIL && (process.env.JIRA_API_TOKEN || process.env.JIRA_TOKEN));
 }

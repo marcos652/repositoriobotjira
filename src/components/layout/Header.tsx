@@ -58,25 +58,45 @@ export default function Header({ title, subtitle }: HeaderProps) {
 
         {/* Center: Date Range Pills */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 p-1 rounded-xl"
+          <div className="flex items-center gap-1.5 p-1.5 rounded-[16px] relative"
             style={{
-              background: 'rgba(15, 23, 42, 0.5)',
-              border: '1px solid var(--border-primary)',
+              background: 'rgba(5, 8, 15, 0.6)',
+              border: '1px solid rgba(255,255,255,0.03)',
+              boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.6), inset 0 1px 2px rgba(0,0,0,0.4)',
             }}>
-            {dateRanges.map(({ label, value }) => (
-              <button
-                key={value}
-                onClick={() => setDateRange(value)}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 active:scale-95 cursor-pointer"
-                style={{
-                  background: filters.dateRange === value ? 'var(--gradient-primary)' : 'transparent',
-                  color: filters.dateRange === value ? '#fff' : 'var(--text-tertiary)',
-                  boxShadow: filters.dateRange === value ? '0 2px 8px rgba(59,130,246,0.3)' : 'none',
-                }}
-              >
-                {label}
-              </button>
-            ))}
+            {dateRanges.map(({ label, value }) => {
+              const isActive = filters.dateRange === value;
+              return (
+                <button
+                  key={value}
+                  onClick={() => setDateRange(value)}
+                  className="relative z-10 px-5 py-1.5 rounded-[12px] text-[13px] font-extrabold transition-all duration-300 cursor-pointer overflow-hidden group flex items-center justify-center"
+                  style={{
+                    minWidth: '85px',
+                    color: isActive ? '#fff' : 'rgba(255,255,255,0.4)',
+                    background: isActive ? 'linear-gradient(180deg, rgba(99,102,241,0.15) 0%, rgba(79,70,229,0.4) 100%)' : 'transparent',
+                    border: isActive ? '1px solid rgba(129,140,248,0.4)' : '1px solid transparent',
+                    boxShadow: isActive ? '0 4px 12px rgba(79,70,229,0.3), inset 0 1px 0 rgba(255,255,255,0.2)' : 'none',
+                  }}
+                >
+                  {/* Subtle active glow bar at the top */}
+                  {isActive && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[30px] h-[2px] rounded-b-full transition-all duration-500"
+                      style={{ background: '#A5B4FC', boxShadow: '0 0 10px 2px rgba(165,180,252,0.6)' }} />
+                  )}
+                  
+                  <span className="relative z-10 transition-colors duration-300 group-hover:text-white"
+                    style={{ textShadow: isActive ? '0 1px 4px rgba(0,0,0,0.6)' : 'none' }}>
+                    {label}
+                  </span>
+
+                  {/* Hover subtle glow for inactive items */}
+                  {!isActive && (
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-[10px]" />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {hasActiveFilters && (
