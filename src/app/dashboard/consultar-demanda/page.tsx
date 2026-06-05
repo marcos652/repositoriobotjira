@@ -7,7 +7,7 @@ import {
   Sparkles, Building2, MessageCircle, GitBranch,
   GitPullRequest, GitMerge, Send, Copy, Link2,
   Paperclip, ListTree, ArrowRight, Timer, ChevronDown,
-  Activity, Shield, Calendar
+  Activity, Shield, Calendar, Trash2
 } from 'lucide-react';
 
 // ─── Types ───
@@ -72,6 +72,7 @@ export default function ConsultarDemandaPage() {
   const [editDataInicio, setEditDataInicio] = useState('');
   const [editLabels, setEditLabels] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string } | null>(null);
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
 
@@ -187,6 +188,27 @@ export default function ConsultarDemandaPage() {
       else setUpdateResult({ success: false, message: data.error || 'Erro' });
     } catch { setUpdateResult({ success: false, message: 'Erro de conexão' }); }
     finally { setUpdating(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!demanda) return;
+    if (!confirm(`Tem certeza que deseja excluir a demanda ${demanda.issue_key}? Esta ação não pode ser desfeita.`)) return;
+    setDeleting(true); setUpdateResult(null);
+    try {
+      const res = await fetch(`/api/demanda/${demanda.issue_key}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUpdateResult({ success: true, message: 'Demanda excluída!' });
+        setDemanda(null);
+        if (searchHistory.includes(demanda.issue_key)) {
+          const h = searchHistory.filter(k => k !== demanda.issue_key);
+          saveHistory(h); setSearchHistory(h);
+        }
+      } else {
+        setUpdateResult({ success: false, message: data.error || 'Erro ao excluir' });
+      }
+    } catch { setUpdateResult({ success: false, message: 'Erro de conexão' }); }
+    finally { setDeleting(false); }
   };
 
   const handleAddComment = async () => {
@@ -382,6 +404,9 @@ export default function ConsultarDemandaPage() {
               </button>
               <button onClick={() => { setEditing(!editing); setUpdateResult(null); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: editing ? 'rgba(244,63,94,0.08)' : 'rgba(99,102,241,0.08)', color: editing ? '#FB7185' : '#818CF8', border: 'none', cursor: 'pointer' }}>
                 {editing ? <><X size={14} /> Cancelar</> : <><Edit3 size={14} /> Editar</>}
+              </button>
+              <button onClick={handleDelete} disabled={deleting} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'rgba(244,63,94,0.08)', color: '#FB7185', border: 'none', cursor: deleting ? 'wait' : 'pointer' }}>
+                {deleting ? <Loader2 size={14} className="animate-spin" /> : <><Trash2 size={14} /> Excluir</>}
               </button>
               <a href={demanda.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', textDecoration: 'none', boxShadow: '0 2px 8px rgba(59,130,246,0.2)' }}>
                 Jira <ArrowUpRight size={13} />

@@ -296,3 +296,42 @@ export async function POST(
     return NextResponse.json({ error: 'Falha na operação', message: error?.message, success: false }, { status: 500 });
   }
 }
+
+// ─── DELETE: Excluir demanda ───
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ issueKey: string }> }
+) {
+  try {
+    const { issueKey } = await params;
+    if (!JIRA_EMAIL || !JIRA_TOKEN) {
+      return NextResponse.json({ error: 'Credenciais não configuradas' }, { status: 500 });
+    }
+
+    const jiraAuth = getJiraAuth();
+    const headers = { 'Authorization': `Basic ${jiraAuth}` };
+
+    const res = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`, {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (!res.ok) {
+      let errStr = `Erro ao excluir: ${res.status}`;
+      try {
+        const errObj = await res.json();
+        if (errObj.errorMessages && errObj.errorMessages.length > 0) {
+          errStr = errObj.errorMessages.join(', ');
+        }
+      } catch {
+        const text = await res.text().catch(() => '');
+        if (text) errStr += ` - ${text}`;
+      }
+      return NextResponse.json({ error: errStr, success: false }, { status: res.status });
+    }
+
+    return NextResponse.json({ success: true, message: 'Demanda excluída com sucesso!' });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Falha na exclusão', message: error?.message, success: false }, { status: 500 });
+  }
+}
