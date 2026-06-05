@@ -82,9 +82,8 @@ export default function KanbanPage() {
             used.add(match);
           }
         }
-        if (items.length > 0) {
-          result.push({ ...config, id: config.title, statusCategory: config.title, items });
-        }
+        // Remove items.length > 0 check to always show configured columns
+        result.push({ ...config, id: config.title, statusCategory: config.title, items });
       }
 
       for (const [status, items] of statusGroups) {
