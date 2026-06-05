@@ -83,7 +83,7 @@ export class JiraClient {
       startAt,
     };
 
-    const res = await fetch(`${this.baseUrl}/rest/api/3/search/jql`, {
+    const res = await fetch(`${this.baseUrl}/rest/api/3/search`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(body),
