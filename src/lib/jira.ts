@@ -74,16 +74,14 @@ export class JiraClient {
     jql: string,
     fields: string[] = DEFAULT_FIELDS,
     maxResults = 50,
-    nextPageToken?: string
-  ): Promise<JiraSearchResult> {
+    startAt = 0
+  ): Promise<{ issues: JiraIssue[]; total: number; startAt: number; maxResults: number }> {
     const body: Record<string, unknown> = {
       jql,
       fields,
       maxResults,
+      startAt,
     };
-    if (nextPageToken) {
-      body.nextPageToken = nextPageToken;
-    }
 
     const res = await fetch(`${this.baseUrl}/rest/api/3/search/jql`, {
       method: 'POST',
@@ -101,15 +99,19 @@ export class JiraClient {
 
   async searchAllIssues(jql: string, fields: string[] = DEFAULT_FIELDS): Promise<JiraIssue[]> {
     const allIssues: JiraIssue[] = [];
-    let nextPageToken: string | undefined;
+    let startAt = 0;
+    const maxResults = 100;
 
-    // Safety limit: max 10 pages (up to 1000 issues)
-    for (let page = 0; page < 10; page++) {
-      const result = await this.searchIssues(jql, fields, 100, nextPageToken);
+    // Safety limit: max 20 pages (up to 2000 issues)
+    for (let page = 0; page < 20; page++) {
+      const result = await this.searchIssues(jql, fields, maxResults, startAt);
       allIssues.push(...result.issues);
 
-      if (result.isLast || !result.nextPageToken) break;
-      nextPageToken = result.nextPageToken;
+      if (allIssues.length >= result.total || result.issues.length === 0) {
+        break;
+      }
+      
+      startAt += result.issues.length;
     }
 
     return allIssues;
