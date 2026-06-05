@@ -76,10 +76,11 @@ export default function KanbanPage() {
       for (const config of columnConfig) {
         const items: JiraIssue[] = [];
         for (const match of config.match) {
-          const group = statusGroups.get(match);
-          if (group) {
-            items.push(...group);
-            used.add(match);
+          for (const [statusKey, group] of statusGroups.entries()) {
+            if (statusKey.toLowerCase() === match.toLowerCase() && !used.has(statusKey)) {
+              items.push(...group);
+              used.add(statusKey);
+            }
           }
         }
         // Remove items.length > 0 check to always show configured columns
