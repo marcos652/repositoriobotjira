@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     const { getJiraClient } = await import('@/lib/jira');
     const client = getJiraClient();
 
-    const result = await client.searchIssues(jql, undefined, 50);
+    const result = await client.searchIssues(jql, undefined, 1000);
 
     return NextResponse.json({
       mode: 'live',
