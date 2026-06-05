@@ -6,7 +6,7 @@ import { Zap, Mail, ArrowRight, ArrowLeft, Loader2, CheckCircle2, Shield, BarCha
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-type Step = 'email' | 'code' | 'totp-setup' | 'totp-verify';
+type Step = 'email';
 
 function LoginContent() {
   const router = useRouter();
@@ -14,19 +14,10 @@ function LoginContent() {
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
-  const [authToken, setAuthToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [totpQR, setTotpQR] = useState('');
-  const [totpSecret, setTotpSecret] = useState('');
-  const [totpSetupToken, setTotpSetupToken] = useState('');
-  const [totpCode, setTotpCode] = useState(['', '', '', '', '', '']);
-  const totpRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Check for OAuth errors from callback
   useEffect(() => {
@@ -38,21 +29,7 @@ function LoginContent() {
     }
   }, [searchParams]);
 
-  // Countdown timer for resend
-  useEffect(() => {
-    if (countdown <= 0) return;
-    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [countdown]);
-
-  // Auto-focus first code input when step changes to 'code'
-  useEffect(() => {
-    if (step === 'code') {
-      setTimeout(() => codeRefs.current[0]?.focus(), 100);
-    }
-  }, [step]);
-
-  // ── Handle login submit: check Firebase Auth first, then TOTP ──
+  // ── Handle login submit: check Firebase Auth first, then set session ──
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password || isLoading) return;
@@ -72,65 +49,19 @@ function LoginContent() {
         return;
       }
 
-      setAuthToken(idToken); // Temporarily store idToken for verify step
-
-      // 2. Proceed to TOTP check
-      const totpRes = await fetch('/api/auth/totp', {
+      // 2. Set Session Cookie
+      const sessionRes = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), action: 'setup', idToken }),
+        body: JSON.stringify({ idToken }),
       });
-      const totpData = await totpRes.json();
+      const sessionData = await sessionRes.json();
 
-      if (totpRes.ok) {
-        if (totpData.configured) {
-          // User has TOTP — go to verify step
-          setStep('totp-verify');
-          setIsLoading(false);
-          setTimeout(() => totpRefs.current[0]?.focus(), 100);
-          return;
-        } else {
-          // New user — show QR code to setup
-          setTotpQR(totpData.qrCode);
-          setTotpSecret(totpData.secret);
-          setTotpSetupToken(totpData.setupToken);
-          setStep('totp-setup');
-          setIsLoading(false);
-          return;
-        }
-      }
-      
-      // If TOTP API fails for some reason (which shouldn't block an authenticated user but we respect it for now)
-      setError(totpData.error || 'Erro ao processar TOTP');
-    } catch {
-      setError('Erro de conexão');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ── Verify TOTP code (existing users) ──
-  const handleVerifyTOTP = async () => {
-    const codeStr = totpCode.join('');
-    if (codeStr.length !== 6 || isLoading) return;
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/auth/totp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), action: 'verify', code: codeStr, idToken: authToken }),
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      if (sessionRes.ok) {
         setSuccess('Login realizado!');
         setTimeout(() => router.push('/dashboard'), 500);
       } else {
-        setError(data.error || 'Código incorreto');
-        setTotpCode(['', '', '', '', '', '']);
-        totpRefs.current[0]?.focus();
+        setError(sessionData.error || 'Erro ao criar sessão');
       }
     } catch {
       setError('Erro de conexão');
@@ -139,155 +70,7 @@ function LoginContent() {
     }
   };
 
-  // ── Confirm TOTP setup (new users) ──
-  const handleConfirmSetup = async () => {
-    const codeStr = totpCode.join('');
-    if (codeStr.length !== 6 || isLoading) return;
-    setIsLoading(true);
-    setError(null);
 
-    try {
-      const res = await fetch('/api/auth/totp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim(),
-          action: 'confirm-setup',
-          code: codeStr,
-          setupToken: totpSetupToken,
-          idToken: authToken
-        }),
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setSuccess('Authenticator configurado! Entrando...');
-        setTimeout(() => router.push('/dashboard'), 500);
-      } else {
-        setError(data.error || 'Código incorreto');
-        setTotpCode(['', '', '', '', '', '']);
-        totpRefs.current[0]?.focus();
-      }
-    } catch {
-      setError('Erro de conexão');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ── TOTP code input handlers ──
-  const handleTotpInput = (index: number, value: string) => {
-    if (!/^\d?$/.test(value)) return;
-    const newCode = [...totpCode];
-    newCode[index] = value;
-    setTotpCode(newCode);
-    if (value && index < 5) totpRefs.current[index + 1]?.focus();
-    if (value && index === 5 && newCode.join('').length === 6) {
-      if (step === 'totp-verify') setTimeout(() => handleVerifyTOTP(), 200);
-      else if (step === 'totp-setup') setTimeout(() => handleConfirmSetup(), 200);
-    }
-  };
-
-  const handleTotpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !totpCode[index] && index > 0) {
-      totpRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerifyCode = async () => {
-    const fullCode = code.join('');
-    if (fullCode.length !== 6 || isLoading) return;
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/auth/verify-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), code: fullCode, token: authToken }),
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setAuthToken(''); // Invalida o token imediatamente
-        setCode(['', '', '', '', '', '']);
-        setSuccess('Login realizado! Redirecionando...');
-        setTimeout(() => router.push('/dashboard'), 1000);
-      } else {
-        setAuthToken(''); // Token usado = expirado
-        setError(data.error || 'Código inválido. Solicite um novo.');
-        setCode(['', '', '', '', '', '']);
-        codeRefs.current[0]?.focus();
-      }
-    } catch {
-      setError('Erro de conexão');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCodeInput = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newCode = [...code];
-    newCode[index] = value.slice(-1);
-    setCode(newCode);
-
-    // Auto-advance to next input
-    if (value && index < 5) {
-      codeRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-submit when all 6 digits filled
-    if (value && index === 5) {
-      const fullCode = newCode.join('');
-      if (fullCode.length === 6) {
-        setTimeout(() => handleVerifyCode(), 200);
-      }
-    }
-  };
-
-  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !code[index] && index > 0) {
-      codeRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleCodePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
-      setCode(pasted.split(''));
-      codeRefs.current[5]?.focus();
-      setTimeout(() => handleVerifyCode(), 300);
-    }
-  };
-
-  const handleResend = async () => {
-    if (countdown > 0) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/auth/send-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setAuthToken(data.token);
-        setSuccess('Novo código enviado!');
-        setCountdown(60);
-        setCode(['', '', '', '', '', '']);
-        codeRefs.current[0]?.focus();
-      } else {
-        setError(data.error || 'Erro ao reenviar');
-      }
-    } catch {
-      setError('Erro de conexão');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen flex" style={{ background: '#050810' }}>
@@ -371,25 +154,11 @@ function LoginContent() {
 
           {/* Header */}
           <div className="mb-8">
-            {step !== 'email' && (
-              <button onClick={() => { setStep('email'); setError(null); setSuccess(null); setTotpCode(['','','','','','']); }}
-                className="flex items-center gap-2 mb-6 text-sm font-medium transition-colors"
-                style={{ color: '#64748B', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                <ArrowLeft size={14} /> Voltar
-              </button>
-            )}
             <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8FAFC' }}>
-              {step === 'email' ? 'Entrar no Dashboard' : step === 'totp-setup' ? 'Configurar Authenticator' : step === 'totp-verify' ? 'Verificação 2FA' : 'Verificação'}
+              Entrar no Dashboard
             </h2>
             <p className="text-sm" style={{ color: '#64748B' }}>
-              {step === 'email'
-                ? 'Digite seu email corporativo.'
-                : step === 'totp-setup'
-                ? 'Escaneie o QR code com o Google Authenticator.'
-                : step === 'totp-verify'
-                ? <>Abra o <strong style={{ color: '#94A3B8' }}>Google Authenticator</strong> e digite o código.</>
-                : <>Código enviado no Slack para <strong style={{ color: '#94A3B8' }}>{email}</strong></>
-              }
+              Digite seu email corporativo.
             </p>
           </div>
 
@@ -529,102 +298,7 @@ function LoginContent() {
             </form>
           )}
 
-          {/* Step: TOTP Setup (QR Code) */}
-          {step === 'totp-setup' && (
-            <div className="animate-fade-in">
-              <div className="flex flex-col items-center mb-6">
-                <div className="p-3 rounded-2xl mb-4" style={{ background: '#0F172A', border: '1px solid #1E293B' }}>
-                  {totpQR && <img src={totpQR} alt="QR Code" width={240} height={240} style={{ borderRadius: '12px' }} />}
-                </div>
-                <p className="text-[10px] text-center" style={{ color: '#475569' }}>
-                  Ou insira manualmente: <code className="px-2 py-1 rounded text-[10px] font-mono" style={{ background: '#1E293B', color: '#94A3B8' }}>{totpSecret}</code>
-                </p>
-              </div>
 
-              <label className="block text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#475569' }}>
-                <Smartphone size={12} style={{ display: 'inline', marginRight: '6px' }} />
-                Digite o código do Authenticator
-              </label>
-              <div className="flex gap-3 justify-between mb-6">
-                {totpCode.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={el => { totpRefs.current[i] = el; }}
-                    type="text" inputMode="numeric" maxLength={1}
-                    value={digit}
-                    onChange={e => handleTotpInput(i, e.target.value)}
-                    onKeyDown={e => handleTotpKeyDown(i, e)}
-                    className="w-12 h-14 text-center text-xl font-bold rounded-xl outline-none transition-all"
-                    style={{
-                      background: '#0F172A',
-                      border: digit ? '2px solid #22C55E' : '1px solid #1E293B',
-                      color: '#F8FAFC',
-                      boxShadow: digit ? '0 0 12px rgba(34,197,94,0.15)' : 'none',
-                    }}
-                  />
-                ))}
-              </div>
-
-              <button
-                onClick={handleConfirmSetup}
-                disabled={isLoading || totpCode.join('').length !== 6}
-                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl text-sm font-bold transition-all"
-                style={{
-                  background: totpCode.join('').length === 6 ? 'linear-gradient(135deg, #22C55E, #16A34A)' : 'rgba(99,102,241,0.15)',
-                  color: '#fff', border: 'none',
-                  cursor: totpCode.join('').length !== 6 ? 'default' : 'pointer',
-                  boxShadow: totpCode.join('').length === 6 ? '0 4px 24px rgba(34,197,94,0.3)' : 'none',
-                }}>
-                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Confirmar e Entrar <CheckCircle2 size={16} /></>}
-              </button>
-            </div>
-          )}
-
-          {/* Step: TOTP Verify (returning users) */}
-          {step === 'totp-verify' && (
-            <div className="animate-fade-in">
-              <div className="flex items-center gap-3 mb-6 px-4 py-3 rounded-xl" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)' }}>
-                <Key size={16} style={{ color: '#818CF8', flexShrink: 0 }} />
-                <span className="text-xs font-medium" style={{ color: '#94A3B8' }}>
-                  Abra o Google Authenticator no celular
-                </span>
-              </div>
-
-              <label className="block text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#475569' }}>Código de 6 dígitos</label>
-              <div className="flex gap-3 justify-between mb-6">
-                {totpCode.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={el => { totpRefs.current[i] = el; }}
-                    type="text" inputMode="numeric" maxLength={1}
-                    value={digit}
-                    onChange={e => handleTotpInput(i, e.target.value)}
-                    onKeyDown={e => handleTotpKeyDown(i, e)}
-                    className="w-12 h-14 text-center text-xl font-bold rounded-xl outline-none transition-all"
-                    style={{
-                      background: '#0F172A',
-                      border: digit ? '2px solid #6366F1' : '1px solid #1E293B',
-                      color: '#F8FAFC',
-                      boxShadow: digit ? '0 0 12px rgba(99,102,241,0.15)' : 'none',
-                    }}
-                  />
-                ))}
-              </div>
-
-              <button
-                onClick={handleVerifyTOTP}
-                disabled={isLoading || totpCode.join('').length !== 6}
-                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl text-sm font-bold transition-all"
-                style={{
-                  background: totpCode.join('').length === 6 ? 'linear-gradient(135deg, #22C55E, #16A34A)' : 'rgba(99,102,241,0.15)',
-                  color: '#fff', border: 'none',
-                  cursor: totpCode.join('').length !== 6 ? 'default' : 'pointer',
-                  boxShadow: totpCode.join('').length === 6 ? '0 4px 24px rgba(34,197,94,0.3)' : 'none',
-                }}>
-                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Verificar <CheckCircle2 size={16} /></>}
-              </button>
-            </div>
-          )}
 
           {/* Footer */}
           <p className="mt-10 text-center text-[10px]" style={{ color: '#334155' }}>
