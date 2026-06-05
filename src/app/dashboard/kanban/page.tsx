@@ -95,6 +95,21 @@ export default function KanbanPage() {
         }
       }
 
+      // Reorder based on localStorage
+      const savedOrderStr = localStorage.getItem('jiraops_kanban_col_order');
+      if (savedOrderStr) {
+        try {
+          const savedOrder: string[] = JSON.parse(savedOrderStr);
+          result.sort((a, b) => {
+            let idxA = savedOrder.indexOf(a.title);
+            let idxB = savedOrder.indexOf(b.title);
+            if (idxA === -1) idxA = 999;
+            if (idxB === -1) idxB = 999;
+            return idxA - idxB;
+          });
+        } catch {}
+      }
+
       setColumns(result);
     } catch (err) {
       setError(String(err));
@@ -124,6 +139,35 @@ export default function KanbanPage() {
     } finally {
       setDeletingKey(null);
     }
+  };
+
+  const [draggedColIndex, setDraggedColIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedColIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedColIndex === null || draggedColIndex === dropIndex) return;
+
+    const newCols = [...columns];
+    const [draggedCol] = newCols.splice(draggedColIndex, 1);
+    newCols.splice(dropIndex, 0, draggedCol);
+
+    setColumns(newCols);
+    localStorage.setItem('jiraops_kanban_col_order', JSON.stringify(newCols.map(c => c.title)));
+    setDraggedColIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedColIndex(null);
   };
 
   useEffect(() => { fetchKanban(); }, [fetchKanban]);
@@ -172,8 +216,14 @@ export default function KanbanPage() {
 
       {/* Board */}
       <div style={{ display: 'flex', gap: '14px', overflowX: 'auto', flex: 1, paddingBottom: '12px' }}>
-        {columns.map((col) => (
-          <div key={col.title} style={{ minWidth: '280px', maxWidth: '320px', flex: '1 0 280px', display: 'flex', flexDirection: 'column', borderRadius: '16px', background: col.bgColor, border: '1px solid var(--border-secondary)', overflow: 'hidden' }}>
+        {columns.map((col, index) => (
+          <div key={col.title}
+            draggable
+            onDragStart={(e) => handleDragStart(e, index)}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, index)}
+            onDragEnd={handleDragEnd}
+            style={{ minWidth: '280px', maxWidth: '320px', flex: '1 0 280px', display: 'flex', flexDirection: 'column', borderRadius: '16px', background: col.bgColor, border: '1px solid var(--border-secondary)', overflow: 'hidden', cursor: 'grab', opacity: draggedColIndex === index ? 0.5 : 1 }}>
             {/* Column header */}
             <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `2px solid ${col.color}20` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
