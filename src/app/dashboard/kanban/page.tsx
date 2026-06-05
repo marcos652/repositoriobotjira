@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Kanban, Loader2, WifiOff, RefreshCw, ExternalLink, GripVertical
+  Kanban, Loader2, WifiOff, RefreshCw, ExternalLink, GripVertical, Trash2
 } from 'lucide-react';
 
 interface JiraIssue {
@@ -104,6 +104,28 @@ export default function KanbanPage() {
     }
   }, []);
 
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+
+  const handleDelete = async (e: React.MouseEvent, key: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Tem certeza que deseja excluir a demanda ${key}? Esta ação não pode ser desfeita.`)) return;
+    setDeletingKey(key);
+    try {
+      const res = await fetch(`/api/demanda/${key}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchKanban();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Erro ao excluir');
+      }
+    } catch {
+      alert('Erro de conexão');
+    } finally {
+      setDeletingKey(null);
+    }
+  };
+
   useEffect(() => { fetchKanban(); }, [fetchKanban]);
 
   if (loading) {
@@ -171,7 +193,12 @@ export default function KanbanPage() {
                     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
                     onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, color: '#818CF8' }}>{issue.key}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, color: '#818CF8' }}>{issue.key}</span>
+                        <button onClick={(e) => handleDelete(e, issue.key)} disabled={deletingKey === issue.key} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FB7185', padding: 0, display: 'flex', opacity: deletingKey === issue.key ? 0.5 : 1 }}>
+                          {deletingKey === issue.key ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                        </button>
+                      </div>
                       <span style={{ padding: '2px 8px', borderRadius: '5px', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', ...tc }}>{issue.fields.issuetype.name}</span>
                     </div>
                     <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 10px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{issue.fields.summary}</p>
