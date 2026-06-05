@@ -40,13 +40,13 @@ export async function GET(request: NextRequest) {
     const { getJiraClient } = await import('@/lib/jira');
     const client = getJiraClient();
 
-    const result = await client.searchIssues(jql, undefined, 1000);
+    const allIssues = await client.searchAllIssues(jql);
 
     return NextResponse.json({
       mode: 'live',
       jql,
-      issues: result.issues,
-      total: result.issues.length,
+      issues: allIssues,
+      total: allIssues.length,
     });
   } catch (error) {
     console.error('Jira API error:', error);
