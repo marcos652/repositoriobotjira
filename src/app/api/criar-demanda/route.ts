@@ -113,8 +113,7 @@ async function createJiraIssue(issueData: any) {
   const issueKey = createData.key;
   const issueUrl = `${JIRA_BASE_URL}/browse/${issueKey}`;
 
-  // 2. Wait 2s to ensure issue is fully created before attachments
-  await new Promise(r => setTimeout(r, 2000));
+  // O Jira cria a demanda de forma síncrona, não precisamos esperar.
 
   return { issueKey, issueUrl };
 }
@@ -159,10 +158,10 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
           if (ext.includes('sheet')) ext = 'xlsx';
           
           const filename = originalFilename || `anexo_${index + 1}.${ext.replace('+', '').replace('-', '')}`;
-          const blob = new Blob([buffer], { type: mimeType });
+          const fileObj = new File([buffer], filename, { type: mimeType });
           
           const formData = new FormData();
-          formData.append('file', blob, filename);
+          formData.append('file', fileObj);
 
           await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
             method: 'POST',
@@ -179,9 +178,10 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
         if (res.ok) {
           const blob = await res.blob();
           const filename = originalFilename || new URL(dataUrl).pathname.split('/').pop() || `anexo_${index + 1}`;
+          const fileObj = new File([blob], filename, { type: blob.type });
           
           const formData = new FormData();
-          formData.append('file', blob, filename);
+          formData.append('file', fileObj);
 
           await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
             method: 'POST',
