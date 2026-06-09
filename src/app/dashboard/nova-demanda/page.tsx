@@ -8,6 +8,9 @@ import {
   Layers, Target, PenTool, Upload, Image, Trash2,
   Mic, MicOff, Eye, EyeOff, Copy, Shield, RotateCcw, AlertCircle
 } from 'lucide-react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import ImageExtension from '@tiptap/extension-image';
 
 interface DemandaResult {
   success: boolean;
@@ -104,6 +107,25 @@ export default function NovaDemandaPage() {
   const recognitionRef = useRef<any>(null);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const editor = useEditor({
+    extensions: [StarterKit, ImageExtension.configure({ inline: true })],
+    content: texto,
+    immediatelyRender: false,
+    onUpdate: ({ editor }) => {
+      setTexto(editor.getHTML());
+      setValidationWarn('');
+    },
+    onFocus: () => setFocusEditor(true),
+    onBlur: () => setFocusEditor(false),
+  });
+
+  // Sync editor content when duplicating from history
+  useEffect(() => {
+    if (editor && editor.getHTML() !== texto && !editor.isFocused) {
+      editor.commands.setContent(texto);
+    }
+  }, [texto, editor]);
+
   // Auto-dismiss toast after 5s
   useEffect(() => {
     if (!result) return;
@@ -134,12 +156,7 @@ export default function NovaDemandaPage() {
 
   const clearDraft = () => { try { localStorage.removeItem('jiraops-demanda-draft'); } catch {} };
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.max(220, Math.min(textareaRef.current.scrollHeight, 500)) + 'px';
-    }
-  }, [texto]);
+  // Editor Height Adjustment removed as ReactQuill handles its own sizing.
 
   const addImageUrl = () => {
     if (novaUrl.trim()) { setUrlsImagens([...urlsImagens, novaUrl.trim()]); setNovaUrl(''); }
@@ -147,7 +164,8 @@ export default function NovaDemandaPage() {
 
   const applyTemplate = (prompt: string) => {
     setTexto(prompt);
-    textareaRef.current?.focus();
+    editor?.commands.setContent(prompt);
+    editor?.commands.focus();
   };
 
   // Upload file helper
@@ -171,9 +189,18 @@ export default function NovaDemandaPage() {
       if (res.ok) {
         const isImage = file.type.startsWith('image/');
         const preview = isImage ? URL.createObjectURL(file) : undefined;
-        const img: UploadedImage = { url: data.url, filename: data.filename || file.name, preview, isImage, type: file.type };
+        // Use displayName if available, fallback to filename or original name
+        const finalFilename = data.displayName || data.filename || file.name;
+        const img: UploadedImage = { url: data.url, filename: finalFilename, preview, isImage, type: file.type };
         setUploadedImages(prev => [...prev, img]);
         setUrlsImagens(prev => [...prev, data.url]);
+        
+        // Insert visual image into the editor
+        if (editor) {
+          editor.commands.insertContent(`<br/><img src="${data.url}" alt="${finalFilename}" style="max-width: 100%; max-height: 300px; border-radius: 8px;" /><br/>`);
+        } else {
+          setTexto(prev => prev + `<br/><img src="${data.url}" alt="${finalFilename}" style="max-width: 100%; max-height: 300px; border-radius: 8px;" /><br/>`);
+        }
       } else {
         alert(data.error || 'Erro no upload');
       }
@@ -233,10 +260,39 @@ export default function NovaDemandaPage() {
     setResult(null);
     setProgressStep(0);
 
-    const body: any = { texto: texto.trim() };
+    // ─── PARSE HTML TO EXTRACT BASE64 IMAGES ───
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(texto, 'text/html');
+    const imgs = doc.querySelectorAll('img');
+    const extractedArquivos: {url: string, filename: string}[] = [];
+    
+    imgs.forEach((img, index) => {
+      const src = img.src;
+      if (src.startsWith('data:')) {
+        const ext = src.split(';')[0].split('/')[1] || 'png';
+        const filename = img.getAttribute('alt') || `imagem_colada_${Date.now()}_${index}.${ext}`;
+        extractedArquivos.push({ url: src, filename });
+        // Substituir a imagem pelo marcador de texto
+        const textNode = doc.createTextNode(`\n[Anexo: ${filename}]\n`);
+        img.parentNode?.replaceChild(textNode, img);
+      }
+    });
+
+    const textoLimpo = doc.body.innerHTML;
+
+    const body: any = { texto: textoLimpo };
     if (nomeCliente.trim()) body.nome_cliente = nomeCliente.trim();
     if (referencia.trim()) body.referencia = referencia.trim();
-    if (urlsImagens.length > 0) body.urls_imagens = urlsImagens;
+    if (urlsImagens.length > 0) body.urls_imagens = urlsImagens; // legacy fallback
+    
+    // Unir os arquivos das imagens embutidas (do quill) com os uploads da dropzone
+    const todosArquivos = [...uploadedImages.map(img => ({ url: img.url, filename: img.filename })), ...extractedArquivos];
+    // Evitar duplicatas baseadas na URL
+    const map = new Map(todosArquivos.map(i => [i.url, i]));
+    
+    if (map.size > 0) {
+      body.arquivos = Array.from(map.values());
+    }
     if (prioridade) body.prioridade = prioridade;
     if (urgencia) body.texto = `[${urgencia.toUpperCase()}] ${body.texto}`;
 
@@ -315,7 +371,8 @@ export default function NovaDemandaPage() {
     if (item.urgencia) setUrgencia(item.urgencia);
     setActiveView('editor');
     setShowMeta(!!(item.nomeCliente || item.prioridade || item.urgencia));
-    textareaRef.current?.focus();
+    editor?.commands.setContent(item.texto);
+    editor?.commands.focus();
   };
 
   // Keyboard shortcuts
@@ -449,23 +506,11 @@ export default function NovaDemandaPage() {
                 </div>
 
                 {showPreview && texto ? (
-                  <div className="nd-preview" dangerouslySetInnerHTML={{ __html: renderMarkdown(texto) }} />
+                  <div className="nd-preview" dangerouslySetInnerHTML={{ __html: texto }} />
                 ) : (
-                  <textarea
-                    ref={textareaRef}
-                    value={texto}
-                    onChange={(e) => { setTexto(e.target.value); setValidationWarn(''); }}
-                    onFocus={() => setFocusEditor(true)}
-                    onBlur={() => setFocusEditor(false)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleSubmit(e as any); } }}
-                    placeholder="Descreva sua demanda com o máximo de detalhes...
-
-O bot Gemini irá analisar o texto e criar a issue no Jira com o tipo, prioridade, descrição e componentes adequados.
-
-💡 Use **negrito**, *itálico* e `código` — suporta Markdown!"
-                    className="nd-editor-textarea"
-                    required
-                  />
+                  <div className="nd-editor-textarea" style={{ padding: '16px' }} onClick={() => editor?.commands.focus()}>
+                    <EditorContent editor={editor} />
+                  </div>
                 )}
               </div>
 

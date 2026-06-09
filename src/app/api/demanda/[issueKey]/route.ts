@@ -42,7 +42,7 @@ export async function GET(
 
     // 1) Fetch issue (all useful fields)
     const issueRes = await fetch(
-      `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}?fields=summary,description,status,issuetype,priority,assignee,reporter,created,updated,labels,comment,subtasks,issuelinks,attachment,customfield_10062,customfield_10015,customfield_10016,customfield_10020,timetracking&expand=renderedFields,changelog`,
+      `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}?fields=summary,description,status,issuetype,priority,assignee,reporter,created,updated,labels,comment,subtasks,issuelinks,attachment,customfield_10062,customfield_10015,customfield_10016,customfield_10020,customfield_10436,customfield_10333,customfield_10004,timetracking&expand=renderedFields,changelog`,
       { headers, signal: AbortSignal.timeout(15000) }
     );
 

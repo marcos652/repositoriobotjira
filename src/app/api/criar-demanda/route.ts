@@ -32,12 +32,15 @@ Regras:
 - NÃO INVENTE INFORMAÇÕES. Seja DIRETO e OBJETIVO.
 - Classifique: "Bug", "Story" ou "Task".
 
-ESTRUTURA JSON EXIGIDA PARA CADA SEÇÃO DO ADF v1 (USE PAINÉIS):
-{ "type": "panel", "attrs": { "panelType": "info" }, "content": [ { "type": "heading", "attrs": { "level": 3 }, "content": [ { "type": "text", "text": "Título da Seção" } ] }, { "type": "paragraph", "content": [ { "type": "text", "text": "Conteúdo..." } ] } ] }
-
-Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "description" (ADF), "client_name", "client_id", "issuetype", "story_type" e "resumo_slack".
+ESTRUTURA JSON EXIGIDA:
+Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "description", "client_name", "client_id", "issuetype", "story_type" e "resumo_slack".
 O campo "summary" DEVE começar com o nome do cliente entre colchetes (ex: [Nome do Cliente] Título).
-O campo "resumo_slack" deve conter de 1 a 2 linhas explicando de forma muito resumida sobre o que se trata a demanda.`;
+O campo "resumo_slack" deve conter de 1 a 2 linhas explicando de forma muito resumida sobre o que se trata a demanda.
+
+IMPORTANTE SOBRE A DESCRIÇÃO:
+- O campo "description" deve ser em Jira Wiki Markup (sintaxe do Jira: h3., *negrito*, {panel:title=...}, !nome_da_imagem.png!).
+- NÃO USE Markdown padrão nem ADF.
+- SE houver marcações de anexos no texto original (ex: [Anexo: imagem.png]), insira EXATAMENTE a sintaxe !imagem.png! (ou !nome_do_arquivo!) no local correspondente dentro do texto da descrição para que a imagem/anexo apareça inline (embutido) no Jira naquele exato local.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
@@ -79,6 +82,7 @@ async function createJiraIssue(issueData: any) {
   const fields: any = {
     project: { key: 'DSMM' },
     summary: issueData.summary,
+    description: issueData.description,
     issuetype: { name: issueData.issuetype || 'Task' },
     assignee: { id: JIRA_ASSIGNEE_ID },
     customfield_10015: now.toISOString().split('T')[0], // Start Date
@@ -93,8 +97,8 @@ async function createJiraIssue(issueData: any) {
     fields.customfield_10402 = { id: issueData.story_type?.toUpperCase() === 'FEATURE' ? '10189' : '10190' };
   }
 
-  // 1. Create issue
-  const createRes = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue`, {
+  // 1. Create issue using v2 API to support Wiki Markup directly
+  const createRes = await fetch(`${JIRA_BASE_URL}/rest/api/2/issue`, {
     method: 'POST',
     headers: jiraHeaders,
     body: JSON.stringify({ fields }),
@@ -109,36 +113,8 @@ async function createJiraIssue(issueData: any) {
   const issueKey = createData.key;
   const issueUrl = `${JIRA_BASE_URL}/browse/${issueKey}`;
 
-  // 2. Wait 4s then PUT description (same pattern as API Bot)
-  await new Promise(r => setTimeout(r, 4000));
-
-  let adfDescription = issueData.description;
-  if (Array.isArray(adfDescription)) {
-    adfDescription = { version: 1, type: 'doc', content: adfDescription };
-  } else if (adfDescription && typeof adfDescription === 'object' && adfDescription.type !== 'doc') {
-    adfDescription = { version: 1, type: 'doc', content: [adfDescription] };
-  } else if (typeof adfDescription === 'string') {
-    adfDescription = {
-      version: 1,
-      type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: adfDescription }] }]
-    };
-  }
-
-  const descRes = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`, {
-    method: 'PUT',
-    headers: jiraHeaders,
-    body: JSON.stringify({ fields: { description: adfDescription } }),
-  });
-
-  if (!descRes.ok) {
-    console.error('Falha ao atualizar descrição no Jira:', await descRes.text().catch(() => 'Erro desconhecido'));
-  }
-
-  // 3. (Removido) Transição automática para Refinamento
-  // O usuário solicitou que as novas demandas fiquem em Backlog.
-  // Se for necessário mover para Backlog explicitamente, o ID da transição seria usado aqui.
-  // Por padrão, o Jira já cria as demandas no status inicial do workflow (geralmente Backlog ou To Do).
+  // 2. Wait 2s to ensure issue is fully created before attachments
+  await new Promise(r => setTimeout(r, 2000));
 
   return { issueKey, issueUrl };
 }
@@ -161,12 +137,15 @@ async function notifySlack(issueKey: string, issueUrl: string, clientName: strin
 }
 
 // ─── Attachments ───
-async function uploadAttachments(issueKey: string, urls: string[]) {
-  if (!urls || urls.length === 0) return;
+async function uploadAttachments(issueKey: string, arquivos: {url: string, filename?: string}[]) {
+  if (!arquivos || arquivos.length === 0) return;
   const jiraAuth = getJiraAuth();
 
-  for (const [index, dataUrl] of urls.entries()) {
+  for (const [index, arq] of arquivos.entries()) {
     try {
+      const dataUrl = arq.url;
+      const originalFilename = arq.filename;
+      
       if (dataUrl.startsWith('data:')) {
         // Trata data URL (base64) gerado pelo /api/upload-image
         const matches = dataUrl.match(/^data:([a-zA-Z0-9/+-.]+);base64,(.+)$/);
@@ -179,7 +158,7 @@ async function uploadAttachments(issueKey: string, urls: string[]) {
           if (ext.includes('document')) ext = 'docx';
           if (ext.includes('sheet')) ext = 'xlsx';
           
-          const filename = `anexo_${index + 1}.${ext.replace('+', '').replace('-', '')}`;
+          const filename = originalFilename || `anexo_${index + 1}.${ext.replace('+', '').replace('-', '')}`;
           const blob = new Blob([buffer], { type: mimeType });
           
           const formData = new FormData();
@@ -199,7 +178,7 @@ async function uploadAttachments(issueKey: string, urls: string[]) {
         const res = await fetch(dataUrl);
         if (res.ok) {
           const blob = await res.blob();
-          const filename = new URL(dataUrl).pathname.split('/').pop() || `anexo_${index + 1}`;
+          const filename = originalFilename || new URL(dataUrl).pathname.split('/').pop() || `anexo_${index + 1}`;
           
           const formData = new FormData();
           formData.append('file', blob, filename);
@@ -224,7 +203,7 @@ async function uploadAttachments(issueKey: string, urls: string[]) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { texto, nome_cliente, referencia = 'Painel Externo', urls_imagens = [] } = body;
+    const { texto, nome_cliente, referencia = 'Painel Externo', urls_imagens = [], arquivos = [] } = body;
 
     if (!texto || typeof texto !== 'string' || texto.trim().length < 5) {
       return NextResponse.json({ error: 'Texto da demanda é obrigatório', success: false }, { status: 400 });
@@ -244,8 +223,13 @@ export async function POST(request: NextRequest) {
     const { issueKey, issueUrl } = await createJiraIssue(issueData);
 
     // Step 3: Upload Attachments (se houver)
-    if (urls_imagens && urls_imagens.length > 0) {
-      await uploadAttachments(issueKey, urls_imagens);
+    // Se "arquivos" estiver presente (novo formato), use-os. Senão, mapeie as urls_imagens (legacy)
+    const arquivosParaEnviar = arquivos.length > 0 
+      ? arquivos 
+      : (urls_imagens && urls_imagens.length > 0 ? urls_imagens.map((u: string) => ({ url: u })) : []);
+
+    if (arquivosParaEnviar.length > 0) {
+      await uploadAttachments(issueKey, arquivosParaEnviar);
     }
 
     // Step 4: Notify Slack (fire and forget)
