@@ -90,7 +90,7 @@ async function createJiraIssue(issueData: any) {
     customfield_10333: { id: '10119' }, // Saude
   };
 
-  if (issueData.client_id) {
+  if (issueData.client_id && issueData.client_id !== 'N/A' && !isNaN(Number(issueData.client_id))) {
     fields.customfield_10469 = [{ id: String(issueData.client_id) }];
   }
   if (issueData.issuetype === 'Story' && issueData.story_type) {
