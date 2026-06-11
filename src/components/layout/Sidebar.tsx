@@ -97,7 +97,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   useEffect(() => {
     // Try Auth.js session first (Google SSO)
-    fetch('/api/auth/session')
+    fetch('/api/auth/custom-session')
       .then(r => r.json())
       .then(data => {
         if (data.user?.email) {
@@ -131,7 +131,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       });
     }
     // Also clear manual session
-    await fetch('/api/auth/session', { method: 'DELETE' });
+    await fetch('/api/auth/custom-session', { method: 'DELETE' });
     router.push('/login');
   };
 

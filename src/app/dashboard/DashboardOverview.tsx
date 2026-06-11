@@ -37,7 +37,7 @@ function useUserName(): string {
     } catch {}
 
     // Try Auth.js session API
-    fetch('/api/auth/session')
+    fetch('/api/auth/custom-session')
       .then(r => r.json())
       .then(data => {
         if (data?.user?.name) {

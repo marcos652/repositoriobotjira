@@ -50,7 +50,7 @@ function LoginContent() {
       }
 
       // 2. Set Session Cookie
-      const sessionRes = await fetch('/api/auth/session', {
+      const sessionRes = await fetch('/api/auth/custom-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
