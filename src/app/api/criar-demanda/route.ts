@@ -17,7 +17,7 @@ function getJiraAuth() {
   return Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
 }
 
-const CLIENTS_MAPPING = `[001] EUROPAG: 10231, [006] CLOUDWALK: 10232, [007] PAYGO: 10233, [008] HYPERLOCAL: 10234, [011] YUPI: 10235, [013] PAGOLIVRE: 10236, [022] CDX: 10237, [027] AKIREDE: 10238, [030] TRADEUP: 10239, [031] FACILPAY: 10240, [040] IFOOD: 10241, [044] VILEVEPAY: 10242, [056] PLUS DELIVERY: 10243, [063] KEYPAY: 10244, [066] ORUSPAY: 10245, [067] PARCELECART: 10246, [076] CODEPAY: 10247, [077] EAGLE: 10248, [082] VALOREM: 10249, [086] PERFECTPAY: 10250, [101] PRONTOPAGUEI: 10251, [103] ALLBANKINVEST: 10252, [108] SIMPAY: 10253, [113] MP: 10254, [127] MUITOBANK: 10255, [128] MAISTODOS: 10256, [135] CEOPAG: 10257, [136] PAYPRIME: 10258, [138] PARCELENAHORA: 10259, [143] KIRVANO: 10260, [147] GREGPAY: 10261, [149] DELTAPAG: 10262, [152] PARCELAMOS: 10263, [154] SKYBANK: 10264, [156] COMPROPAY: 10265, [158] OCTUSPAY: 10266, [160] NEXTIONPAY: 10267, [162] ARKAMAY: 10268, [165] DOK: 10269, [168] ATLANTICPAY: 10270, [170] 2M: 10271, [172] INGRESSE: 10272, [174] TICKETANDGO: 10273, [176] ASSINY: 10274, [178] PAYUP: 10275, [180] RP3BANK: 10276, [182] MACREBANK: 10277, [184] TICTO: 10278, [186] BLOKKO: 10279, [187] CAKTOPAY: 10280, [189] AMERICAPAY: 10281, [191] FUNDOPAY: 10282, [193] ABEXPAY: 10283, [195] CARTOS: 10284, [196] HOLYCASH: 10285, [200] AMI: 10286, [203] CASADOCREDITO: 10287, [205] CREDITT: 10288, [207] TBKBANKS: 10289, [209] FASTPAY: 10290, [211] MUTUALBANK: 10291, [213] 4ONBRASIL: 10292, [217] AQUISIPAY: 10293, [221] CRONOS: 10294, [223] PIXPAY: 10295, [225] MAUPI: 10296, [227] HYPERCASHPAY: 10297, [229] SOLPAG: 10298, [231] LASTLINK: 10299, [233] BARATAO: 10300, [235] LERA: 10301, [237] EQUIS: 10302, [239] 8B: 10303, [241] MUSE: 10304, [243] MAGAZORD: 10305, GERAL MOVINGPAY: N/A, HOLDING: N/A`;
+const CLIENTS_MAPPING = CLIENTS.map(c => `${c.name}: ${c.id}`).join(', ') + ', GERAL MOVINGPAY: N/A, HOLDING: N/A';
 
 const REFINAMENTO_TRANSITION_ID = '13';
 
@@ -250,20 +250,28 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { texto, nome_cliente, referencia = 'Painel Externo', urls_imagens = [], arquivos = [] } = body;
-
-    if (!texto || typeof texto !== 'string' || texto.trim().length < 5) {
-      return NextResponse.json({ error: 'Texto da demanda é obrigatório', success: false }, { status: 400 });
-    }
+    const { texto, nome_cliente, referencia = 'Painel Externo', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado } = body;
 
     if (!GEMINI_API_KEY || !JIRA_EMAIL || !JIRA_TOKEN) {
       return NextResponse.json({ error: 'Servidor mal configurado — variáveis de ambiente faltando', success: false }, { status: 500 });
     }
 
-    // Step 1: Gemini generates issue data
-    const issueData = await generateIssueData(texto.trim(), referencia, nome_cliente);
-    if (!issueData || !issueData.summary) {
-      return NextResponse.json({ error: 'Falha na geração dos dados via Gemini', success: false }, { status: 500 });
+    let issueData = issueDataPreGerado;
+
+    // Step 1: Gemini generates issue data if not provided
+    if (!issueData) {
+      if (!texto || typeof texto !== 'string' || texto.trim().length < 5) {
+        return NextResponse.json({ error: 'Texto da demanda é obrigatório', success: false }, { status: 400 });
+      }
+      issueData = await generateIssueData(texto.trim(), referencia, nome_cliente);
+      if (!issueData || !issueData.summary) {
+        return NextResponse.json({ error: 'Falha na geração dos dados via Gemini', success: false }, { status: 500 });
+      }
+    }
+
+    // Se for apenas preview, retorna os dados gerados pela IA sem criar no Jira
+    if (previewOnly) {
+      return NextResponse.json({ success: true, issueData });
     }
 
     // Step 2: Create Jira issue

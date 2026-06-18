@@ -11,6 +11,7 @@ import {
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import ImageExtension from '@tiptap/extension-image';
+import { CLIENTS } from '@/lib/clients';
 
 interface DemandaResult {
   success: boolean;
@@ -101,6 +102,9 @@ export default function NovaDemandaPage() {
   const [dragOver, setDragOver] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [currentBodyParams, setCurrentBodyParams] = useState<any>(null);
   const [validationWarn, setValidationWarn] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +170,31 @@ export default function NovaDemandaPage() {
     setTexto(prompt);
     editor?.commands.setContent(prompt);
     editor?.commands.focus();
+  };
+
+  const enhanceText = async () => {
+    const htmlContent = editor?.getHTML() || texto;
+    if (!htmlContent.trim() || htmlContent === '<p></p>') return;
+    
+    setEnhancing(true);
+    try {
+      const res = await fetch('/api/aprimorar-texto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: htmlContent })
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.text) {
+        editor?.commands.setContent(data.text);
+        setTexto(data.text);
+      } else {
+        alert(data.error || 'Erro ao aprimorar texto');
+      }
+    } catch (err) {
+      alert('Falha na conexão com a API de aprimoramento');
+    } finally {
+      setEnhancing(false);
+    }
   };
 
   // Upload file helper
@@ -305,7 +334,43 @@ export default function NovaDemandaPage() {
       const res = await fetch('/api/criar-demanda', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, previewOnly: true }),
+      });
+      const data = await res.json();
+      clearInterval(stepInterval);
+
+      if (res.ok && data.success && data.issueData) {
+        setPreviewData(data.issueData);
+        setCurrentBodyParams(body);
+      } else {
+        setResult({ success: false, error: data.error || 'Erro ao gerar o preview com IA' });
+      }
+    } catch {
+      clearInterval(stepInterval);
+      setResult({ success: false, error: 'Não foi possível conectar ao servidor' });
+    } finally {
+      setLoading(false);
+      setProgressStep(0);
+    }
+  };
+
+  const confirmCreate = async () => {
+    if (!previewData || !currentBodyParams) return;
+    setLoading(true);
+    setProgressStep(0);
+    setPreviewData(null); // Fecha o modal de preview
+
+    // Simulate progress steps for actual creation
+    const stepInterval = setInterval(() => {
+      setProgressStep(prev => (prev < PROGRESS_STEPS.length - 1 ? prev + 1 : prev));
+    }, 2000);
+
+    try {
+      const bodyFinal = { ...currentBodyParams, issueDataPreGerado: previewData };
+      const res = await fetch('/api/criar-demanda', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyFinal),
       });
       const data = await res.json();
       clearInterval(stepInterval);
@@ -318,15 +383,16 @@ export default function NovaDemandaPage() {
         saveHistory(newHistory);
         setTexto(''); setNomeCliente(''); setUrlsImagens([]); setReferencia('Painel Externo'); setPrioridade(''); setUrgencia(''); setShowMeta(false);
         clearDraft();
+        setCurrentBodyParams(null);
       } else {
-        setResult({ success: false, error: data.error || data.detail || data.details?.detail?.[0]?.msg || 'Erro desconhecido' });
+        setResult({ success: false, error: data.error || data.detail || 'Erro desconhecido' });
         const newHistory = [{ texto: texto.trim().slice(0, 120), time: now, status: 'error' as const }, ...history];
         setHistory(newHistory);
         saveHistory(newHistory);
       }
     } catch {
       clearInterval(stepInterval);
-      setResult({ success: false, error: 'Não foi possível conectar ao bot de criar demanda' });
+      setResult({ success: false, error: 'Falha na comunicação com o Jira' });
     } finally {
       setLoading(false);
       setProgressStep(0);
@@ -464,7 +530,35 @@ export default function NovaDemandaPage() {
           </div>
 
           {activeView === 'editor' ? (
-            <form onSubmit={handleSubmit} className="nd-form">
+            previewData ? (
+              <div className="nd-preview-modal animate-fade-in" style={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '12px', padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <Sparkles size={18} color="#8B5CF6" />
+                  <h2 style={{ fontSize: '18px', fontWeight: 500, margin: 0 }}>Revisão da IA ({previewData.issuetype || 'Task'})</h2>
+                </div>
+                
+                <div style={{ background: '#1E293B', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #334155' }}>
+                  <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Título gerado:</div>
+                  <strong style={{ fontSize: '15px' }}>{previewData.summary}</strong>
+                </div>
+
+                <div style={{ background: '#1E293B', padding: '16px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #334155', maxHeight: '400px', overflowY: 'auto' }}>
+                   <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '8px' }}>Descrição estruturada:</div>
+                   <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px', color: '#CBD5E1', fontFamily: 'monospace' }}>{previewData.description}</pre>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                  {loading && <Loader2 size={16} className="animate-spin" color="#8B5CF6" />}
+                  <button type="button" onClick={() => setPreviewData(null)} disabled={loading} style={{ background: 'transparent', border: '1px solid #334155', color: '#CBD5E1', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                    Voltar e Editar
+                  </button>
+                  <button type="button" onClick={confirmCreate} disabled={loading} className="nd-submit-btn" style={{ width: 'auto' }}>
+                    <Send size={15} /> {loading ? 'Criando no Jira...' : 'Confirmar e Criar Demanda'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="nd-form">
               {/* Templates */}
               {!texto && (
                 <div className="nd-templates">
@@ -496,6 +590,9 @@ export default function NovaDemandaPage() {
                         <CheckCircle2 size={9} /> rascunho salvo
                       </span>
                     )}
+                    <button type="button" onClick={enhanceText} disabled={enhancing || !texto.trim() || texto === '<p></p>'} className="nd-editor-btn" title="Aprimorar texto com IA" style={{ color: '#8B5CF6' }}>
+                      {enhancing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    </button>
                     <button type="button" onClick={() => setShowPreview(!showPreview)} className="nd-editor-btn" title="Preview Markdown">
                       {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
@@ -611,7 +708,15 @@ export default function NovaDemandaPage() {
                   <div className="nd-meta-row">
                     <div className="nd-input-group">
                       <label><User size={11} /> Cliente</label>
-                      <input value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} placeholder="Nome do cliente" />
+                      <input 
+                        value={nomeCliente} 
+                        onChange={(e) => setNomeCliente(e.target.value)} 
+                        placeholder="Pesquisar cliente..." 
+                        list="clientes-list" 
+                      />
+                      <datalist id="clientes-list">
+                        {CLIENTS.map(c => <option key={c.id} value={c.name} />)}
+                      </datalist>
                     </div>
                     <div className="nd-input-group">
                       <label><Hash size={11} /> Referência</label>
@@ -688,6 +793,7 @@ export default function NovaDemandaPage() {
                 </button>
               </div>
             </form>
+            )
           ) : (
             /* ── HISTORY VIEW ── */
             <div className="nd-history">
