@@ -25,33 +25,55 @@ const REFINAMENTO_TRANSITION_ID = '13';
 async function generateIssueData(texto: string, referencia: string, nomeCliente?: string) {
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-  const prompt = `Você é um Analista de Qualidade e Produto (QA/PM) especialista em Jira. Seu objetivo é RECEBER um relato muitas vezes informal ou mal estruturado e REESTRUTURÁ-LO completamente em uma demanda técnica profissional.
+  const prompt = `Você é um Analista de Qualidade e Produto (QA/PM) especialista em Jira. Seu objetivo é RECEBER um relato muitas vezes informal ou mal estruturado e REESTRUTURÁ-LO completamente em uma demanda técnica profissional, SEGUINDO RIGOROSAMENTE as regras da empresa.
 
 Texto Original do Solicitante: "${texto}"
 Referência da Origem: ${referencia}
 Cliente Fornecido: ${nomeCliente || 'Extrair do texto'}
 Lista de clientes disponíveis: ${CLIENTS_MAPPING}
 
-REGRAS DE REESTRUTURAÇÃO DA DESCRIÇÃO (OBRIGATÓRIO):
-1. NÃO COPIE E COLE o texto original. Você DEVE analisar a dor relatada e reescrever o texto de forma profissional, técnica e organizada.
-2. O campo "description" DEVE obrigatoriamente ser estruturado com os seguintes tópicos (usando formatação Jira Wiki Markup):
-   h3. Contexto / Cenário
-   h3. Problema Relatado (ou Objetivo se for Story/Task)
-   h3. Passos para Reproduzir (se for Bug, liste passo a passo)
-   h3. Comportamento Esperado vs Atual (se for Bug)
-   h3. Informações Adicionais
-3. NÃO INVENTE dados que não foram fornecidos no texto. Se faltar algo para os tópicos acima, coloque "Não informado no relato original".
-4. Classifique o issuetype corretamente: "Bug", "Story" ou "Task".
+REGRAS DE CLASSIFICAÇÃO:
+Você deve classificar a demanda em um dos 4 tipos abaixo e preencher o JSON com os respectivos 'issuetype' e 'story_type':
+1. BUG: Erro, falha ou comportamento incorreto. (issuetype: "Bug", story_type: nulo)
+2. FEATURE: Nova funcionalidade ou alteração explícita (ex: mudança de texto, botão, ajuste visual). (issuetype: "Story", story_type: "FEATURE")
+3. MELHORIA: O comportamento atual funciona, mas há oportunidade de melhorar usabilidade/experiência. (issuetype: "Story", story_type: "MELHORIA")
+4. TASK: Atividade técnica, tarefa operacional ou investigativa sem regra de negócio. (issuetype: "Task", story_type: nulo)
+
+REGRAS DE ESTRUTURAÇÃO DA DESCRIÇÃO (OBRIGATÓRIO):
+NÃO COPIE E COLE o texto original. Reescreva o texto de forma profissional e técnica, dividindo-o OBRIGATORIAMENTE nas seguintes seções (usando a macro Jira {panel:title=...}):
+
+Se a classificação for TASK:
+{panel:title=Contexto} ... {panel}
+{panel:title=Descrição} ... {panel}
+{panel:title=Observações} ... {panel}
+
+Se a classificação for FEATURE (Story):
+{panel:title=Contexto} ... {panel}
+{panel:title=Descrição} ... {panel}
+{panel:title=Critérios de aceite} ... {panel}
+{panel:title=Observações} ... {panel}
+
+Se a classificação for MELHORIA (Story):
+{panel:title=Contexto} ... {panel}
+{panel:title=Comportamento atual} ... {panel}
+{panel:title=Comportamento esperado} ... {panel}
+{panel:title=Observações} ... {panel}
+
+Se a classificação for BUG:
+{panel:title=Contexto} ... {panel}
+{panel:title=Problema} ... {panel}
+{panel:title=Como replicar} ... {panel}
+{panel:title=Evidências} ... {panel}
+{panel:title=Observações} ... {panel}
 
 ESTRUTURA JSON EXIGIDA:
 Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "description", "client_name", "client_id", "issuetype", "story_type" e "resumo_slack".
 O campo "summary" DEVE começar com o nome do cliente entre colchetes (ex: [Nome do Cliente] Título curto e técnico).
-O campo "resumo_slack" deve conter de 1 a 2 linhas explicando de forma muito resumida sobre o que se trata a demanda.
+O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a demanda.
 
-IMPORTANTE SOBRE A SINTAXE DA DESCRIÇÃO:
-- O campo "description" deve ser OBRIGATORIAMENTE em Jira Wiki Markup (sintaxe do Jira: h3., *negrito*, {panel:title=...}, - bullet points).
-- NÃO USE Markdown padrão (como # para títulos ou ** para negrito).
-- SE houver marcações de anexos no texto original (ex: [Anexo: imagem.png] ou links de imagens), insira EXATAMENTE a sintaxe !imagem.png! (ou !nome_do_arquivo!) na seção "Informações Adicionais" ou "Passos para Reproduzir" para que a imagem apareça embutida no Jira.`;
+IMPORTANTE SOBRE A SINTAXE:
+- Preencha cada {panel} com os detalhes extraídos e reescritos. Se faltar informação para alguma seção, escreva "Não informado no relato original" dentro do painel.
+- ONDE HOUVER anexos no texto original (ex: [Anexo: imagem.png]), insira EXATAMENTE a sintaxe !imagem.png! dentro do painel "Evidências" (se Bug) ou "Observações"/"Descrição".`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
