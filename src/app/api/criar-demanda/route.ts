@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+// Aumenta o timeout para 60s no plano Pro da Vercel (padrão Hobby é 10s)
+export const maxDuration = 60;
 import { GoogleGenAI } from '@google/genai';
 
 // ─── Environment ───
@@ -22,25 +25,33 @@ const REFINAMENTO_TRANSITION_ID = '13';
 async function generateIssueData(texto: string, referencia: string, nomeCliente?: string) {
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-  const prompt = `Você é um assistente técnico especialista em Jira.
-Conteúdo da Demanda: "${texto}"
-Referência: ${referencia}
-Cliente Fornecido: ${nomeCliente || 'Extrair do texto'}
-Lista de clientes: ${CLIENTS_MAPPING}
+  const prompt = `Você é um Analista de Qualidade e Produto (QA/PM) especialista em Jira. Seu objetivo é RECEBER um relato muitas vezes informal ou mal estruturado e REESTRUTURÁ-LO completamente em uma demanda técnica profissional.
 
-Regras:
-- NÃO INVENTE INFORMAÇÕES. Seja DIRETO e OBJETIVO.
-- Classifique: "Bug", "Story" ou "Task".
+Texto Original do Solicitante: "${texto}"
+Referência da Origem: ${referencia}
+Cliente Fornecido: ${nomeCliente || 'Extrair do texto'}
+Lista de clientes disponíveis: ${CLIENTS_MAPPING}
+
+REGRAS DE REESTRUTURAÇÃO DA DESCRIÇÃO (OBRIGATÓRIO):
+1. NÃO COPIE E COLE o texto original. Você DEVE analisar a dor relatada e reescrever o texto de forma profissional, técnica e organizada.
+2. O campo "description" DEVE obrigatoriamente ser estruturado com os seguintes tópicos (usando formatação Jira Wiki Markup):
+   h3. Contexto / Cenário
+   h3. Problema Relatado (ou Objetivo se for Story/Task)
+   h3. Passos para Reproduzir (se for Bug, liste passo a passo)
+   h3. Comportamento Esperado vs Atual (se for Bug)
+   h3. Informações Adicionais
+3. NÃO INVENTE dados que não foram fornecidos no texto. Se faltar algo para os tópicos acima, coloque "Não informado no relato original".
+4. Classifique o issuetype corretamente: "Bug", "Story" ou "Task".
 
 ESTRUTURA JSON EXIGIDA:
 Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "description", "client_name", "client_id", "issuetype", "story_type" e "resumo_slack".
-O campo "summary" DEVE começar com o nome do cliente entre colchetes (ex: [Nome do Cliente] Título).
+O campo "summary" DEVE começar com o nome do cliente entre colchetes (ex: [Nome do Cliente] Título curto e técnico).
 O campo "resumo_slack" deve conter de 1 a 2 linhas explicando de forma muito resumida sobre o que se trata a demanda.
 
-IMPORTANTE SOBRE A DESCRIÇÃO:
-- O campo "description" deve ser em Jira Wiki Markup (sintaxe do Jira: h3., *negrito*, {panel:title=...}, !nome_da_imagem.png!).
-- NÃO USE Markdown padrão nem ADF.
-- SE houver marcações de anexos no texto original (ex: [Anexo: imagem.png]), insira EXATAMENTE a sintaxe !imagem.png! (ou !nome_do_arquivo!) no local correspondente dentro do texto da descrição para que a imagem/anexo apareça inline (embutido) no Jira naquele exato local.`;
+IMPORTANTE SOBRE A SINTAXE DA DESCRIÇÃO:
+- O campo "description" deve ser OBRIGATORIAMENTE em Jira Wiki Markup (sintaxe do Jira: h3., *negrito*, {panel:title=...}, - bullet points).
+- NÃO USE Markdown padrão (como # para títulos ou ** para negrito).
+- SE houver marcações de anexos no texto original (ex: [Anexo: imagem.png] ou links de imagens), insira EXATAMENTE a sintaxe !imagem.png! (ou !nome_do_arquivo!) na seção "Informações Adicionais" ou "Passos para Reproduzir" para que a imagem apareça embutida no Jira.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',

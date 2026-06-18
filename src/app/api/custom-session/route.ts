@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS } from '../_store';
+import { ALLOWED_EMAILS } from '../auth/_store';
 
 export async function GET(request: NextRequest) {
   const session = request.cookies.get('session')?.value;

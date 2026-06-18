@@ -15,7 +15,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 function useSessionAutoRefresh() {
   useEffect(() => {
     const refresh = () => {
-      fetch('/api/auth/custom-session', { method: 'PUT' }).catch(() => {});
+      fetch('/api/custom-session', { method: 'PUT' }).catch(() => {});
     };
     // Refresh immediately on mount, then every 4 hours
     refresh();
