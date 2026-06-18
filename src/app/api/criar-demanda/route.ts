@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Aumenta o timeout para 60s no plano Pro da Vercel (padrão Hobby é 10s)
 export const maxDuration = 60;
 import { GoogleGenAI } from '@google/genai';
+import { CLIENTS } from '@/lib/clients';
 
 // ─── Environment ───
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
