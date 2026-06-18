@@ -76,36 +76,36 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
   try {
     const data = JSON.parse(text);
     
-    // Constrói a descrição Jira Wiki Markup de forma segura
+    // Constrói a descrição Jira Wiki Markup de forma segura com cores/ícones do Jira
     let finalDescription = '';
-    const addPanel = (title: string, content: string) => {
+    const addPanel = (title: string, content: string, type: 'info' | 'tip' | 'warning' | 'note' | 'panel' = 'info') => {
       if (content && content.trim() !== '') {
-        finalDescription += `{panel:title=${title}}\n${content.trim()}\n{panel}\n\n`;
+        finalDescription += `{${type}:title=${title}}\n${content.trim()}\n{${type}}\n\n`;
       }
     };
 
     const s = data.sections || {};
     
     if (data.issuetype === 'Bug') {
-      addPanel('Contexto', s.contexto);
-      addPanel('Problema', s.descricao_ou_problema);
-      addPanel('Como replicar', s.passos_reproduzir);
-      addPanel('Evidências', s.evidencias);
-      addPanel('Observações', s.observacoes);
+      addPanel('Contexto', s.contexto, 'info');
+      addPanel('Problema', s.descricao_ou_problema, 'warning');
+      addPanel('Como replicar', s.passos_reproduzir, 'info');
+      addPanel('Evidências', s.evidencias, 'info');
+      addPanel('Observações', s.observacoes, 'note');
     } else if (data.story_type === 'FEATURE') {
-      addPanel('Contexto', s.contexto);
-      addPanel('Descrição', s.descricao_ou_problema);
-      addPanel('Critérios de aceite', s.comportamento_esperado_ou_aceite);
-      addPanel('Observações', s.observacoes);
+      addPanel('Contexto', s.contexto, 'info');
+      addPanel('Descrição', s.descricao_ou_problema, 'info');
+      addPanel('Critérios de aceite', s.comportamento_esperado_ou_aceite, 'tip');
+      addPanel('Observações', s.observacoes, 'note');
     } else if (data.story_type === 'MELHORIA') {
-      addPanel('Contexto', s.contexto);
-      addPanel('Comportamento atual', s.descricao_ou_problema);
-      addPanel('Comportamento esperado', s.comportamento_esperado_ou_aceite);
-      addPanel('Observações', s.observacoes);
+      addPanel('Contexto', s.contexto, 'info');
+      addPanel('Comportamento atual', s.descricao_ou_problema, 'info');
+      addPanel('Comportamento esperado', s.comportamento_esperado_ou_aceite, 'tip');
+      addPanel('Observações', s.observacoes, 'note');
     } else {
-      addPanel('Contexto', s.contexto);
-      addPanel('Descrição', s.descricao_ou_problema);
-      addPanel('Observações', s.observacoes);
+      addPanel('Contexto', s.contexto, 'info');
+      addPanel('Descrição', s.descricao_ou_problema, 'info');
+      addPanel('Observações', s.observacoes, 'note');
     }
 
     data.description = finalDescription.trim();
