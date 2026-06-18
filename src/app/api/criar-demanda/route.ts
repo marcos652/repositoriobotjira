@@ -39,41 +39,20 @@ Você deve classificar a demanda em um dos 4 tipos abaixo e preencher o JSON com
 3. MELHORIA: O comportamento atual funciona, mas há oportunidade de melhorar usabilidade/experiência. (issuetype: "Story", story_type: "MELHORIA")
 4. TASK: Atividade técnica, tarefa operacional ou investigativa sem regra de negócio. (issuetype: "Task", story_type: nulo)
 
-REGRAS DE ESTRUTURAÇÃO DA DESCRIÇÃO (OBRIGATÓRIO):
-NÃO COPIE E COLE o texto original. Reescreva o texto de forma profissional e técnica, dividindo-o OBRIGATORIAMENTE nas seguintes seções (usando a macro Jira {panel:title=...}):
-
-Se a classificação for TASK:
-{panel:title=Contexto} ... {panel}
-{panel:title=Descrição} ... {panel}
-{panel:title=Observações} ... {panel}
-
-Se a classificação for FEATURE (Story):
-{panel:title=Contexto} ... {panel}
-{panel:title=Descrição} ... {panel}
-{panel:title=Critérios de aceite} ... {panel}
-{panel:title=Observações} ... {panel}
-
-Se a classificação for MELHORIA (Story):
-{panel:title=Contexto} ... {panel}
-{panel:title=Comportamento atual} ... {panel}
-{panel:title=Comportamento esperado} ... {panel}
-{panel:title=Observações} ... {panel}
-
-Se a classificação for BUG:
-{panel:title=Contexto} ... {panel}
-{panel:title=Problema} ... {panel}
-{panel:title=Como replicar} ... {panel}
-{panel:title=Evidências} ... {panel}
-{panel:title=Observações} ... {panel}
+REGRAS DE ESTRUTURAÇÃO:
+NÃO COPIE E COLE o texto original. Reescreva de forma profissional e extraia as informações para preencher o objeto "sections" no JSON. Se uma seção não tiver informação, preencha com "Não informado no relato original".
+- "contexto": Contexto geral.
+- "descricao_ou_problema": A descrição (para Task/Feature), o Comportamento Atual (para Melhoria) ou o Problema (para Bug).
+- "comportamento_esperado_ou_aceite": Critérios de Aceite (para Feature) ou Comportamento Esperado (para Melhoria). (Vazio para Task/Bug).
+- "passos_reproduzir": Passos passo a passo (apenas para Bug).
+- "evidencias": Onde colocar as marcações de imagens (ex: !imagem.png!) se for Bug.
+- "observacoes": Qualquer outra informação, notas ou marcações de imagens (ex: !imagem.png!) se não for Bug.
 
 ESTRUTURA JSON EXIGIDA:
-Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "description", "client_name", "client_id", "issuetype", "story_type" e "resumo_slack".
+Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "client_name", "client_id", "issuetype", "story_type", "resumo_slack" e "sections".
+O "sections" deve ser um objeto com as chaves descritas acima.
 O campo "summary" DEVE começar com o nome do cliente entre colchetes (ex: [Nome do Cliente] Título curto e técnico).
-O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a demanda.
-
-IMPORTANTE SOBRE A SINTAXE:
-- Preencha cada {panel} com os detalhes extraídos e reescritos. Se faltar informação para alguma seção, escreva "Não informado no relato original" dentro do painel.
-- ONDE HOUVER anexos no texto original (ex: [Anexo: imagem.png]), insira EXATAMENTE a sintaxe !imagem.png! dentro do painel "Evidências" (se Bug) ou "Observações"/"Descrição".`;
+O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a demanda.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
@@ -95,7 +74,42 @@ IMPORTANTE SOBRE A SINTAXE:
   }
 
   try {
-    return JSON.parse(text);
+    const data = JSON.parse(text);
+    
+    // Constrói a descrição Jira Wiki Markup de forma segura
+    let finalDescription = '';
+    const addPanel = (title: string, content: string) => {
+      if (content && content.trim() !== '') {
+        finalDescription += `{panel:title=${title}}\n${content.trim()}\n{panel}\n\n`;
+      }
+    };
+
+    const s = data.sections || {};
+    
+    if (data.issuetype === 'Bug') {
+      addPanel('Contexto', s.contexto);
+      addPanel('Problema', s.descricao_ou_problema);
+      addPanel('Como replicar', s.passos_reproduzir);
+      addPanel('Evidências', s.evidencias);
+      addPanel('Observações', s.observacoes);
+    } else if (data.story_type === 'FEATURE') {
+      addPanel('Contexto', s.contexto);
+      addPanel('Descrição', s.descricao_ou_problema);
+      addPanel('Critérios de aceite', s.comportamento_esperado_ou_aceite);
+      addPanel('Observações', s.observacoes);
+    } else if (data.story_type === 'MELHORIA') {
+      addPanel('Contexto', s.contexto);
+      addPanel('Comportamento atual', s.descricao_ou_problema);
+      addPanel('Comportamento esperado', s.comportamento_esperado_ou_aceite);
+      addPanel('Observações', s.observacoes);
+    } else {
+      addPanel('Contexto', s.contexto);
+      addPanel('Descrição', s.descricao_ou_problema);
+      addPanel('Observações', s.observacoes);
+    }
+
+    data.description = finalDescription.trim();
+    return data;
   } catch (e: any) {
     console.error('[Gemini] Failed to parse JSON. Raw output:', text.slice(0, 500));
     throw new Error(`Gemini retornou JSON inválido: ${e.message}`);
