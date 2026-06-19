@@ -6,7 +6,8 @@ import {
   ImagePlus, User, FileText, Hash, Sparkles, Clock,
   Zap, Bot, MessageSquare, ChevronDown, Wand2, ArrowUpRight,
   Layers, Target, PenTool, Upload, Image, Trash2,
-  Mic, MicOff, Eye, EyeOff, Copy, Shield, RotateCcw, AlertCircle
+  Mic, MicOff, Eye, EyeOff, Copy, Shield, RotateCcw, AlertCircle,
+  Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -592,6 +593,20 @@ export default function NovaDemandaPage() {
                     <span /><span /><span />
                   </div>
                   <span className="nd-editor-title">demanda.md</span>
+
+                  {/* Toolbar */}
+                  <div style={{ marginLeft: '16px', display: 'flex', gap: '2px', alignItems: 'center' }}>
+                     <button type="button" onClick={() => editor?.chain().focus().toggleBold().run()} className={`nd-toolbar-btn ${editor?.isActive('bold') ? 'active' : ''}`} title="Negrito"><Bold size={13} /></button>
+                     <button type="button" onClick={() => editor?.chain().focus().toggleItalic().run()} className={`nd-toolbar-btn ${editor?.isActive('italic') ? 'active' : ''}`} title="Itálico"><Italic size={13} /></button>
+                     <button type="button" onClick={() => editor?.chain().focus().toggleStrike().run()} className={`nd-toolbar-btn ${editor?.isActive('strike') ? 'active' : ''}`} title="Tachado"><Strikethrough size={13} /></button>
+                     <div style={{ width: '1px', height: '14px', background: 'var(--border-secondary)', margin: '0 4px' }} />
+                     <button type="button" onClick={() => editor?.chain().focus().toggleBulletList().run()} className={`nd-toolbar-btn ${editor?.isActive('bulletList') ? 'active' : ''}`} title="Lista"><List size={13} /></button>
+                     <button type="button" onClick={() => editor?.chain().focus().toggleOrderedList().run()} className={`nd-toolbar-btn ${editor?.isActive('orderedList') ? 'active' : ''}`} title="Lista Numerada"><ListOrdered size={13} /></button>
+                     <div style={{ width: '1px', height: '14px', background: 'var(--border-secondary)', margin: '0 4px' }} />
+                     <button type="button" onClick={() => editor?.chain().focus().toggleBlockquote().run()} className={`nd-toolbar-btn ${editor?.isActive('blockquote') ? 'active' : ''}`} title="Citação"><Quote size={13} /></button>
+                     <button type="button" onClick={() => editor?.chain().focus().toggleCodeBlock().run()} className={`nd-toolbar-btn ${editor?.isActive('codeBlock') ? 'active' : ''}`} title="Código"><Code size={13} /></button>
+                  </div>
+
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
                     {texto.trim() && (
                       <span className="nd-draft-badge">
@@ -1134,7 +1149,21 @@ export default function NovaDemandaPage() {
           border: none; outline: none; resize: none; font-size: 14px; line-height: 1.85;
           color: var(--text-primary); font-family: inherit;
         }
-        .nd-editor-textarea::placeholder { color: var(--text-tertiary); opacity: 0.5; }
+        
+        /* Tiptap Toolbar & ProseMirror */
+        .nd-toolbar-btn {
+           display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+           border-radius: 4px; border: none; background: transparent; color: var(--text-tertiary); cursor: pointer; transition: 0.2s;
+        }
+        .nd-toolbar-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+        .nd-toolbar-btn.active { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+
+        .ProseMirror { min-height: 220px; outline: none; }
+        .ProseMirror p { margin-bottom: 0.5em; }
+        .ProseMirror ul { list-style-type: disc; margin-left: 20px; margin-bottom: 0.5em; }
+        .ProseMirror ol { list-style-type: decimal; margin-left: 20px; margin-bottom: 0.5em; }
+        .ProseMirror blockquote { border-left: 3px solid var(--border-secondary); padding-left: 10px; color: var(--text-secondary); margin-bottom: 0.5em; }
+        .ProseMirror pre { background: var(--bg-input); padding: 10px; border-radius: 6px; font-family: monospace; margin-bottom: 0.5em; }
 
         /* Meta toggle */
         .nd-meta-toggle {
