@@ -4,6 +4,19 @@ import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 60;
 import { GoogleGenAI } from '@google/genai';
 import { CLIENTS } from '@/lib/clients';
+import { backofficeEndpoints, slcEndpoints, cnabEndpoints } from '@/lib/endpoints';
+
+const ALL_ENDPOINTS = [
+  ...backofficeEndpoints,
+  ...slcEndpoints,
+  ...cnabEndpoints
+];
+const DOCS_SUMMARY = JSON.stringify(ALL_ENDPOINTS.map(e => ({
+  path: e.path,
+  title: e.title,
+  description: e.description,
+  params: e.params
+})));
 
 // ─── Environment ───
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
@@ -57,6 +70,11 @@ Identifique se o problema/demanda ocorre em um dos seguintes painéis/produtos e
 - Regulatório (ID: "10229")
 - Gateway (ID: "10225")
 - Registradora (ID: "10230")
+
+VALIDAÇÃO COM DOCUMENTAÇÃO OFICIAL (docs.movingpay.dev):
+Abaixo está o resumo dos endpoints oficiais da nossa API. Se o solicitante estiver reportando um Bug, Melhoria ou Dúvida sobre alguma API ou funcionalidade técnica, você DEVE cruzar as informações com esta documentação.
+Se identificar que o usuário está chamando uma rota que existe na doc, aponte isso na seção "observacoes". Se ele reportar a falta de um parâmetro que é obrigatório na doc, alerte sobre isso. Use esse conhecimento para enriquecer a seção "contexto" ou "observacoes" com links mentais para a documentação real.
+DOCUMENTAÇÃO: ${DOCS_SUMMARY}
 
 ESTRUTURA JSON EXIGIDA:
 Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "client_name", "client_id", "issuetype", "story_type", "produto_id", "resumo_slack" e "sections".
