@@ -49,8 +49,17 @@ NÃO COPIE E COLE o texto original. Reescreva de forma profissional e extraia as
 - "evidencias": Onde colocar as marcações de imagens (ex: !imagem.png!) se for Bug.
 - "observacoes": Qualquer outra informação, notas ou marcações de imagens (ex: !imagem.png!) se não for Bug.
 
+REGRAS DE IDENTIFICAÇÃO DE PRODUTO:
+Identifique se o problema/demanda ocorre em um dos seguintes painéis/produtos e retorne o ID correspondente na chave "produto_id". Caso não consiga identificar, retorne null.
+- Console (ID: "10226")
+- Vendedor (ID: "10227")
+- Estabelecimento (ID: "10228")
+- Regulatório (ID: "10229")
+- Gateway (ID: "10225")
+- Registradora (ID: "10230")
+
 ESTRUTURA JSON EXIGIDA:
-Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "client_name", "client_id", "issuetype", "story_type", "resumo_slack" e "sections".
+Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "client_name", "client_id", "issuetype", "story_type", "produto_id", "resumo_slack" e "sections".
 O "sections" deve ser um objeto com as chaves descritas acima.
 O campo "summary" DEVE começar com o nome do cliente seguido de um hífen (ex: Nome do Cliente - Título curto e técnico). NÃO use colchetes.
 O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a demanda.`;
@@ -149,6 +158,9 @@ async function createJiraIssue(issueData: any) {
   }
   if (issueData.issuetype === 'Story' && issueData.story_type) {
     fields.customfield_10402 = { id: issueData.story_type?.toUpperCase() === 'FEATURE' ? '10189' : '10190' };
+  }
+  if (issueData.produto_id) {
+    fields.customfield_10436 = [{ id: String(issueData.produto_id) }];
   }
 
   // 1. Create issue using v2 API to support Wiki Markup directly
