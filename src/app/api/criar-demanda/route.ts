@@ -101,17 +101,17 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
       addPanel('Observações', s.observacoes, 'note');
     } else if (data.story_type === 'FEATURE') {
       addPanel('Contexto', s.contexto, 'info');
-      addPanel('Problema', s.descricao_ou_problema, 'warning');
+      addPanel('Descrição', s.descricao_ou_problema, 'info');
       addPanel('Critérios de aceite', s.comportamento_esperado_ou_aceite, 'tip');
       addPanel('Observações', s.observacoes, 'note');
     } else if (data.story_type === 'MELHORIA') {
       addPanel('Contexto', s.contexto, 'info');
-      addPanel('Problema', s.descricao_ou_problema, 'warning');
+      addPanel('Comportamento atual', s.descricao_ou_problema, 'warning');
       addPanel('Comportamento esperado', s.comportamento_esperado_ou_aceite, 'tip');
       addPanel('Observações', s.observacoes, 'note');
     } else {
       addPanel('Contexto', s.contexto, 'info');
-      addPanel('Problema', s.descricao_ou_problema, 'warning');
+      addPanel('Descrição', s.descricao_ou_problema, 'info');
       addPanel('Observações', s.observacoes, 'note');
     }
 
