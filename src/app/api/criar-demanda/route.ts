@@ -85,7 +85,7 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
         if (type === 'info') colors = '|bgColor=#DEEBFF|titleBGColor=#DEEBFF';
         else if (type === 'tip') colors = '|bgColor=#E3FCEF|titleBGColor=#E3FCEF';
         else if (type === 'warning') colors = '|bgColor=#FFEBE6|titleBGColor=#FFEBE6';
-        else if (type === 'note') colors = '|bgColor=#FFFAE6|titleBGColor=#FFFAE6';
+        else if (type === 'note') colors = '|bgColor=#EAE6FF|titleBGColor=#EAE6FF';
         
         finalDescription += `{panel:title=${title}${colors}}\n${content.trim()}\n{panel}\n\n`;
       }
