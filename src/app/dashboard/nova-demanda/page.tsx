@@ -628,8 +628,8 @@ export default function NovaDemandaPage() {
                 {showPreview && texto ? (
                   <div className="nd-preview" dangerouslySetInnerHTML={{ __html: texto }} />
                 ) : (
-                  <div className="nd-editor-textarea" style={{ padding: '16px' }} onClick={() => editor?.commands.focus()}>
-                    <EditorContent editor={editor} />
+                  <div className="nd-editor-textarea" style={{ padding: '16px', minHeight: '220px', display: 'flex', flexDirection: 'column' }} onClick={() => editor?.commands.focus()}>
+                    <EditorContent editor={editor} className="tiptap-wrapper" style={{ flexGrow: 1 }} />
                   </div>
                 )}
               </div>
@@ -1158,7 +1158,8 @@ export default function NovaDemandaPage() {
         .nd-toolbar-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
         .nd-toolbar-btn.active { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
 
-        .ProseMirror { min-height: 220px; outline: none; }
+        .tiptap-wrapper { flex-grow: 1; display: flex; flex-direction: column; min-height: 220px; }
+        .ProseMirror { flex-grow: 1; min-height: 220px !important; outline: none !important; }
         .ProseMirror p { margin-bottom: 0.5em; }
         .ProseMirror ul { list-style-type: disc; margin-left: 20px; margin-bottom: 0.5em; }
         .ProseMirror ol { list-style-type: decimal; margin-left: 20px; margin-bottom: 0.5em; }
