@@ -77,11 +77,17 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
   try {
     const data = JSON.parse(text);
     
-    // Constrói a descrição Jira Wiki Markup de forma segura com cores/ícones do Jira
+    // Constrói a descrição Jira Wiki Markup usando {panel} com as cores oficiais do Jira
     let finalDescription = '';
     const addPanel = (title: string, content: string, type: 'info' | 'tip' | 'warning' | 'note' | 'panel' = 'info') => {
       if (content && content.trim() !== '') {
-        finalDescription += `{${type}:title=${title}}\n${content.trim()}\n{${type}}\n\n`;
+        let colors = '';
+        if (type === 'info') colors = '|bgColor=#DEEBFF|titleBGColor=#DEEBFF';
+        else if (type === 'tip') colors = '|bgColor=#E3FCEF|titleBGColor=#E3FCEF';
+        else if (type === 'warning') colors = '|bgColor=#FFEBE6|titleBGColor=#FFEBE6';
+        else if (type === 'note') colors = '|bgColor=#FFFAE6|titleBGColor=#FFFAE6';
+        
+        finalDescription += `{panel:title=${title}${colors}}\n${content.trim()}\n{panel}\n\n`;
       }
     };
 
