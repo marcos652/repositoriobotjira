@@ -284,6 +284,14 @@ export default function NovaDemandaPage() {
       textareaRef.current?.focus();
       return;
     }
+
+    // Validation — mandatory meta fields
+    if (!nomeCliente.trim() || !referencia.trim() || !prioridade || !urgencia) {
+      setShowMeta(true);
+      setValidationWarn('É obrigatório preencher Cliente, Referência, Prioridade e Urgência.');
+      return;
+    }
+
     setValidationWarn('');
     setLoading(true);
     setResult(null);
