@@ -52,7 +52,7 @@ NÃO COPIE E COLE o texto original. Reescreva de forma profissional e extraia as
 ESTRUTURA JSON EXIGIDA:
 Retorne APENAS UM JSON VÁLIDO com chaves: "summary", "client_name", "client_id", "issuetype", "story_type", "resumo_slack" e "sections".
 O "sections" deve ser um objeto com as chaves descritas acima.
-O campo "summary" DEVE começar com o nome do cliente entre colchetes (ex: [Nome do Cliente] Título curto e técnico).
+O campo "summary" DEVE começar com o nome do cliente seguido de um hífen (ex: Nome do Cliente - Título curto e técnico). NÃO use colchetes.
 O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a demanda.`;
 
   const response = await ai.models.generateContent({
