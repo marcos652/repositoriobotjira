@@ -257,7 +257,7 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { texto, nome_cliente, referencia = 'Painel Externo', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado } = body;
+    const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado } = body;
 
     if (!GEMINI_API_KEY || !JIRA_EMAIL || !JIRA_TOKEN) {
       return NextResponse.json({ error: 'Servidor mal configurado — variáveis de ambiente faltando', success: false }, { status: 500 });

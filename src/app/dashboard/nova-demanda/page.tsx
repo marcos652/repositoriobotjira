@@ -85,7 +85,7 @@ export default function NovaDemandaPage() {
   // Core form state
   const [texto, setTexto] = useState('');
   const [nomeCliente, setNomeCliente] = useState('');
-  const [referencia, setReferencia] = useState('Painel Externo');
+  const [referencia, setReferencia] = useState('CONSOLE');
   const [prioridade, setPrioridade] = useState('');
   const [urgencia, setUrgencia] = useState('');
   const [urlsImagens, setUrlsImagens] = useState<string[]>([]);
@@ -153,7 +153,7 @@ export default function NovaDemandaPage() {
       const draft = localStorage.getItem('jiraops-demanda-draft');
       if (draft) {
         const d = JSON.parse(draft);
-        if (d.texto) { setTexto(d.texto); setNomeCliente(d.nomeCliente || ''); setReferencia(d.referencia || 'Painel Externo'); setPrioridade(d.prioridade || ''); setUrgencia(d.urgencia || ''); setShowMeta(!!d.nomeCliente || !!d.prioridade || !!d.urgencia); }
+        if (d.texto) { setTexto(d.texto); setNomeCliente(d.nomeCliente || ''); setReferencia(d.referencia || 'CONSOLE'); setPrioridade(d.prioridade || ''); setUrgencia(d.urgencia || ''); setShowMeta(!!d.nomeCliente || !!d.prioridade || !!d.urgencia); }
       }
     } catch {}
   }, []);
@@ -381,7 +381,7 @@ export default function NovaDemandaPage() {
         const newHistory = [{ texto: texto.trim().slice(0, 120), nomeCliente, referencia, prioridade, urgencia, time: now, status: 'success' as const, response: data }, ...history];
         setHistory(newHistory);
         saveHistory(newHistory);
-        setTexto(''); setNomeCliente(''); setUrlsImagens([]); setReferencia('Painel Externo'); setPrioridade(''); setUrgencia(''); setShowMeta(false);
+        setTexto(''); setNomeCliente(''); setUrlsImagens([]); setReferencia('CONSOLE'); setPrioridade(''); setUrgencia(''); setShowMeta(false);
         clearDraft();
         setCurrentBodyParams(null);
       } else {
@@ -720,7 +720,7 @@ export default function NovaDemandaPage() {
                     </div>
                     <div className="nd-input-group">
                       <label><Hash size={11} /> Referência</label>
-                      <input value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="Painel Externo" />
+                      <input value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="CONSOLE" />
                     </div>
                     <div className="nd-input-group">
                       <label><Target size={11} /> Prioridade</label>
