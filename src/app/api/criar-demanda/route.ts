@@ -26,6 +26,7 @@ const SLACK_TOKEN = process.env.SLACK_TOKEN;
 const SLACK_CHANNEL = process.env.SLACK_CHANNEL || 'C09SDGH8EBT';
 const JIRA_ASSIGNEE_ID = process.env.JIRA_ASSIGNEE_ID || '712020:e1b18321-5808-4927-be15-24f3756422ab';
 const JIRA_BASE_URL = 'https://movingpay.atlassian.net';
+const ROVO_AGENT_ACCOUNT_ID = process.env.ROVO_AGENT_ACCOUNT_ID;
 
 function getJiraAuth() {
   return Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
@@ -227,6 +228,46 @@ async function notifySlack(issueKey: string, issueUrl: string, clientName: strin
   }).catch(() => {}); // non-critical
 }
 
+// ─── Agente Rovo ───
+async function callRovoAgent(issueKey: string) {
+  if (!ROVO_AGENT_ACCOUNT_ID) return;
+  const jiraAuth = getJiraAuth();
+  
+  const commentBody = {
+    body: {
+      version: 1,
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "mention",
+              attrs: {
+                id: ROVO_AGENT_ACCOUNT_ID
+              }
+            },
+            {
+              type: "text",
+              text: " Por favor, faça a análise inicial desta demanda de acordo com as suas instruções."
+            }
+          ]
+        }
+      ]
+    }
+  };
+
+  await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/comment`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${jiraAuth}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(commentBody)
+  }).catch(err => console.error('Erro ao chamar o agente Rovo:', err));
+}
+
 // ─── Attachments ───
 async function uploadAttachments(issueKey: string, arquivos: {url: string, filename?: string}[]) {
   if (!arquivos || arquivos.length === 0) return;
@@ -335,6 +376,9 @@ export async function POST(request: NextRequest) {
     // Step 4: Notify Slack (fire and forget)
     const clientFinal = nome_cliente || issueData.client_name || 'NÃO IDENTIFICADO';
     notifySlack(issueKey, issueUrl, clientFinal, issueData.resumo_slack || '');
+
+    // Step 5: Call Rovo Agent if configured (fire and forget)
+    callRovoAgent(issueKey);
 
     return NextResponse.json({
       success: true,
