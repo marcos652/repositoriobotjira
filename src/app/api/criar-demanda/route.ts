@@ -373,12 +373,14 @@ export async function POST(request: NextRequest) {
       await uploadAttachments(issueKey, arquivosParaEnviar);
     }
 
-    // Step 4: Notify Slack (fire and forget)
+    // Step 4: Notify Slack and Call Rovo Agent concurrently before returning response
+    // Na Vercel, não podemos usar "fire and forget" sem await, pois a função serverless congela imediatamente após o return
     const clientFinal = nome_cliente || issueData.client_name || 'NÃO IDENTIFICADO';
-    notifySlack(issueKey, issueUrl, clientFinal, issueData.resumo_slack || '');
-
-    // Step 5: Call Rovo Agent if configured (fire and forget)
-    callRovoAgent(issueKey);
+    
+    await Promise.allSettled([
+      notifySlack(issueKey, issueUrl, clientFinal, issueData.resumo_slack || ''),
+      callRovoAgent(issueKey)
+    ]);
 
     return NextResponse.json({
       success: true,
