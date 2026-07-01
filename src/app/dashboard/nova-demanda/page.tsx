@@ -107,6 +107,7 @@ export default function NovaDemandaPage() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [currentBodyParams, setCurrentBodyParams] = useState<any>(null);
   const [validationWarn, setValidationWarn] = useState('');
+  const [isEditingPreview, setIsEditingPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -363,11 +364,89 @@ export default function NovaDemandaPage() {
     }
   };
 
+  // Rebuild Jira Wiki Markup description from sections (mirrors API logic)
+  const rebuildDescription = (data: any) => {
+    const s = data.sections || {};
+    let desc = '';
+    const addPanel = (title: string, content: any, type: 'info' | 'tip' | 'warning' | 'note' = 'info') => {
+      let contentStr = typeof content === 'string' ? content : content ? JSON.stringify(content) : '';
+      if (contentStr && contentStr.trim() !== '' && contentStr !== '{}' && contentStr !== '[]') {
+        let colors = '';
+        if (type === 'info') colors = '|bgColor=#DEEBFF|titleBGColor=#DEEBFF';
+        else if (type === 'tip') colors = '|bgColor=#E3FCEF|titleBGColor=#E3FCEF';
+        else if (type === 'warning') colors = '|bgColor=#FFEBE6|titleBGColor=#FFEBE6';
+        else if (type === 'note') colors = '|bgColor=#EAE6FF|titleBGColor=#EAE6FF';
+        desc += `{panel:title=${title}${colors}}\n${contentStr.trim()}\n{panel}\n\n`;
+      }
+    };
+    if (data.issuetype === 'Bug') {
+      addPanel('Contexto', s.contexto, 'info');
+      addPanel('Problema', s.descricao_ou_problema, 'warning');
+      addPanel('Como replicar', s.passos_reproduzir, 'info');
+      addPanel('Evidências', s.evidencias, 'info');
+      addPanel('Observações', s.observacoes, 'note');
+    } else if (data.story_type === 'FEATURE') {
+      addPanel('Contexto', s.contexto, 'info');
+      addPanel('Descrição', s.descricao_ou_problema, 'info');
+      addPanel('Critérios de aceite', s.comportamento_esperado_ou_aceite, 'tip');
+      addPanel('Observações', s.observacoes, 'note');
+    } else if (data.story_type === 'MELHORIA') {
+      addPanel('Contexto', s.contexto, 'info');
+      addPanel('Comportamento atual', s.descricao_ou_problema, 'warning');
+      addPanel('Comportamento esperado', s.comportamento_esperado_ou_aceite, 'tip');
+      addPanel('Observações', s.observacoes, 'note');
+    } else {
+      addPanel('Contexto', s.contexto, 'info');
+      addPanel('Descrição', s.descricao_ou_problema, 'info');
+      addPanel('Observações', s.observacoes, 'note');
+    }
+    return desc.trim();
+  };
+
+  // Get the section config (labels) based on issue type
+  const getSectionConfig = (data: any) => {
+    if (!data?.sections) return [];
+    const s = data.sections;
+    if (data.issuetype === 'Bug') {
+      return [
+        { key: 'contexto', label: '📋 Contexto', color: '#3B82F6' },
+        { key: 'descricao_ou_problema', label: '⚠️ Problema', color: '#EF4444' },
+        { key: 'passos_reproduzir', label: '🔁 Como Replicar', color: '#3B82F6' },
+        { key: 'evidencias', label: '📸 Evidências', color: '#3B82F6' },
+        { key: 'observacoes', label: '📝 Observações', color: '#8B5CF6' },
+      ].filter(sec => s[sec.key] && String(s[sec.key]).trim());
+    } else if (data.story_type === 'FEATURE') {
+      return [
+        { key: 'contexto', label: '📋 Contexto', color: '#3B82F6' },
+        { key: 'descricao_ou_problema', label: '📄 Descrição', color: '#3B82F6' },
+        { key: 'comportamento_esperado_ou_aceite', label: '✅ Critérios de Aceite', color: '#22C55E' },
+        { key: 'observacoes', label: '📝 Observações', color: '#8B5CF6' },
+      ].filter(sec => s[sec.key] && String(s[sec.key]).trim());
+    } else if (data.story_type === 'MELHORIA') {
+      return [
+        { key: 'contexto', label: '📋 Contexto', color: '#3B82F6' },
+        { key: 'descricao_ou_problema', label: '⚠️ Comportamento Atual', color: '#EF4444' },
+        { key: 'comportamento_esperado_ou_aceite', label: '✅ Comportamento Esperado', color: '#22C55E' },
+        { key: 'observacoes', label: '📝 Observações', color: '#8B5CF6' },
+      ].filter(sec => s[sec.key] && String(s[sec.key]).trim());
+    } else {
+      return [
+        { key: 'contexto', label: '📋 Contexto', color: '#3B82F6' },
+        { key: 'descricao_ou_problema', label: '📄 Descrição', color: '#3B82F6' },
+        { key: 'observacoes', label: '📝 Observações', color: '#8B5CF6' },
+      ].filter(sec => s[sec.key] && String(s[sec.key]).trim());
+    }
+  };
+
   const confirmCreate = async () => {
     if (!previewData || !currentBodyParams) return;
     setLoading(true);
     setProgressStep(0);
-    setPreviewData(null); // Fecha o modal de preview
+
+    // Rebuild description from edited sections before sending
+    const finalPreviewData = { ...previewData, description: rebuildDescription(previewData) };
+    setPreviewData(null);
+    setIsEditingPreview(false);
 
     // Simulate progress steps for actual creation
     const stepInterval = setInterval(() => {
@@ -375,7 +454,7 @@ export default function NovaDemandaPage() {
     }, 2000);
 
     try {
-      const bodyFinal = { ...currentBodyParams, issueDataPreGerado: previewData };
+      const bodyFinal = { ...currentBodyParams, issueDataPreGerado: finalPreviewData };
       const res = await fetch('/api/criar-demanda', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -544,21 +623,71 @@ export default function NovaDemandaPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                   <Sparkles size={18} color="#8B5CF6" />
                   <h2 style={{ fontSize: '18px', fontWeight: 500, margin: 0 }}>Revisão da IA ({previewData.issuetype || 'Task'})</h2>
-                </div>
-                
-                <div style={{ background: '#1E293B', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #334155' }}>
-                  <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '4px' }}>Título gerado:</div>
-                  <strong style={{ fontSize: '15px' }}>{previewData.summary}</strong>
+                  <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <PenTool size={11} /> Clique nos campos para editar
+                  </span>
                 </div>
 
-                <div style={{ background: '#1E293B', padding: '16px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #334155', maxHeight: '400px', overflowY: 'auto' }}>
-                   <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '8px' }}>Descrição estruturada:</div>
-                   <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px', color: '#CBD5E1', fontFamily: 'monospace' }}>{previewData.description}</pre>
+                {/* Título */}
+                <div style={{ background: '#1E293B', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #334155' }}>
+                  <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Título</div>
+                  <input
+                    type="text"
+                    value={previewData.summary}
+                    onChange={(e) => setPreviewData({ ...previewData, summary: e.target.value })}
+                    style={{
+                      width: '100%',
+                      background: '#0F172A',
+                      border: '1px solid #334155',
+                      color: '#F1F5F9',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* Seções editáveis */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px', maxHeight: '450px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {getSectionConfig(previewData).map((sec) => (
+                    <div key={sec.key} style={{ background: '#1E293B', padding: '14px', borderRadius: '8px', border: '1px solid #334155' }}>
+                      <div style={{ fontSize: '12px', color: sec.color, marginBottom: '6px', fontWeight: 600 }}>
+                        {sec.label}
+                      </div>
+                      <textarea
+                        value={previewData.sections[sec.key] || ''}
+                        onChange={(e) => setPreviewData({
+                          ...previewData,
+                          sections: { ...previewData.sections, [sec.key]: e.target.value }
+                        })}
+                        style={{
+                          width: '100%',
+                          minHeight: '80px',
+                          background: '#0F172A',
+                          border: '1px solid #334155',
+                          color: '#CBD5E1',
+                          fontSize: '13px',
+                          fontFamily: 'monospace',
+                          padding: '10px 12px',
+                          borderRadius: '6px',
+                          outline: 'none',
+                          resize: 'vertical',
+                          lineHeight: '1.6',
+                          boxSizing: 'border-box',
+                        }}
+                        rows={Math.max(3, String(previewData.sections[sec.key] || '').split('\n').length)}
+                      />
+                    </div>
+                  ))}
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center' }}>
                   {loading && <Loader2 size={16} className="animate-spin" color="#8B5CF6" />}
-                  <button type="button" onClick={() => setPreviewData(null)} disabled={loading} style={{ background: 'transparent', border: '1px solid #334155', color: '#CBD5E1', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                  <button type="button" onClick={() => { setPreviewData(null); setIsEditingPreview(false); }} disabled={loading} style={{ background: 'transparent', border: '1px solid #334155', color: '#CBD5E1', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer' }}>
                     Voltar e Editar
                   </button>
                   <button type="button" onClick={confirmCreate} disabled={loading} className="nd-submit-btn" style={{ width: 'auto' }}>

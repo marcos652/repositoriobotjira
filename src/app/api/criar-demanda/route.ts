@@ -85,13 +85,37 @@ O "sections" deve ser um objeto com as chaves descritas acima.
 O campo "summary" DEVE começar com o nome do cliente seguido de um hífen (ex: Nome do Cliente - Título curto e técnico). NÃO use colchetes.
 O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a demanda.`;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-    },
-  });
+  let response;
+  let retries = 3;
+  let delay = 2000;
+  
+  while (retries > 0) {
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+      break;
+    } catch (e: any) {
+      retries--;
+      const errorStr = typeof e === 'object' ? JSON.stringify(e) + String(e.message || '') : String(e);
+      const isRetryable = errorStr.includes('503') || errorStr.includes('UNAVAILABLE') || errorStr.includes('high demand') || errorStr.includes('429');
+      
+      if (retries === 0 || !isRetryable) {
+        throw e;
+      }
+      console.warn(`[Gemini] API indisponível, tentando novamente em ${delay}ms... (${retries} tentativas restantes)`);
+      await new Promise(res => setTimeout(res, delay));
+      delay *= 2;
+    }
+  }
+
+  if (!response) {
+    throw new Error('Falha ao comunicar com a API do Gemini após várias tentativas.');
+  }
 
   let text = response.text?.trim() || '';
   
