@@ -60,8 +60,11 @@ NÃO COPIE E COLE o texto original. Reescreva de forma profissional e extraia as
 - "descricao_ou_problema": A descrição (para Task/Feature), o Comportamento Atual (para Melhoria) ou o Problema (para Bug).
 - "comportamento_esperado_ou_aceite": Critérios de Aceite (para Feature) ou Comportamento Esperado (para Melhoria). (Vazio para Task/Bug).
 - "passos_reproduzir": Passos passo a passo (apenas para Bug).
-- "evidencias": Onde colocar as marcações de imagens (ex: !imagem.png!) se for Bug.
-- "observacoes": Qualquer outra informação, notas ou marcações de imagens (ex: !imagem.png!) se não for Bug.
+- "evidencias": Onde colocar as marcações de imagens (ex: !imagem.png!) se for Bug e a imagem não fizer parte da descrição principal.
+- "observacoes": Qualquer outra informação, notas ou marcações de imagens adicionais.
+
+IMPORTANTE SOBRE IMAGENS E ANEXOS:
+MANTENHA AS MARCAÇÕES DE IMAGEM (no formato !nome_do_arquivo.ext!) EXATAMENTE no mesmo contexto/seção em que apareceram no texto original. Por exemplo, se a imagem (!imagem.png!) estava explicando o problema, mantenha-a na seção "descricao_ou_problema" ou "passos_reproduzir". A pessoa precisa que a imagem fique na descrição na ordem que ela escolheu.
 
 REGRAS DE IDENTIFICAÇÃO DE PRODUTO:
 Identifique se o problema/demanda ocorre em um dos seguintes painéis/produtos e retorne o ID correspondente na chave "produto_id". Caso não consiga identificar, retorne null.
@@ -315,12 +318,12 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
           if (ext.includes('sheet')) ext = 'xlsx';
           
           const filename = originalFilename || `anexo_${index + 1}.${ext.replace('+', '').replace('-', '')}`;
-          const fileObj = new File([buffer], filename, { type: mimeType });
+          const blob = new Blob([buffer], { type: mimeType });
           
           const formData = new FormData();
-          formData.append('file', fileObj);
+          formData.append('file', blob, filename);
 
-          await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
+          const res = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
             method: 'POST',
             headers: {
               'Authorization': `Basic ${jiraAuth}`,
@@ -328,19 +331,23 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
             },
             body: formData as any
           });
+          
+          if (!res.ok) {
+            const errText = await res.text().catch(() => 'unknown error');
+            console.error(`Falha ao enviar anexo ${filename} para o Jira: HTTP ${res.status} - ${errText}`);
+          }
         }
       } else if (dataUrl.startsWith('http')) {
         // Trata URL normal de imagem (digitada manualmente)
-        const res = await fetch(dataUrl);
-        if (res.ok) {
-          const blob = await res.blob();
+        const resUrl = await fetch(dataUrl);
+        if (resUrl.ok) {
+          const blob = await resUrl.blob();
           const filename = originalFilename || new URL(dataUrl).pathname.split('/').pop() || `anexo_${index + 1}`;
-          const fileObj = new File([blob], filename, { type: blob.type });
           
           const formData = new FormData();
-          formData.append('file', fileObj);
+          formData.append('file', blob, filename);
 
-          await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
+          const res = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, {
             method: 'POST',
             headers: {
               'Authorization': `Basic ${jiraAuth}`,
@@ -348,6 +355,11 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
             },
             body: formData as any
           });
+          
+          if (!res.ok) {
+            const errText = await res.text().catch(() => 'unknown error');
+            console.error(`Falha ao enviar anexo ${filename} para o Jira: HTTP ${res.status} - ${errText}`);
+          }
         }
       }
     } catch (err) {

@@ -311,8 +311,8 @@ export default function NovaDemandaPage() {
         const ext = src.split(';')[0].split('/')[1] || 'png';
         const filename = img.getAttribute('alt') || `imagem_colada_${Date.now()}_${index}.${ext}`;
         extractedArquivos.push({ url: src, filename });
-        // Substituir a imagem pelo marcador de texto
-        const textNode = doc.createTextNode(`\n[Anexo: ${filename}]\n`);
+        // Substituir a imagem pelo marcador de texto formato Jira wiki
+        const textNode = doc.createTextNode(` !${filename}! `);
         img.parentNode?.replaceChild(textNode, img);
       }
     });

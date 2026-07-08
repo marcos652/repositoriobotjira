@@ -41,9 +41,9 @@ export async function POST(request: NextRequest) {
 
     // Generate a display name
     const ext = file.name.split('.').pop() || 'file';
-    const timestamp = Date.now();
     const random = Math.random().toString(36).slice(2, 8);
-    const filename = `${file.name.replace(/\.[^.]+$/, '')}_${random}.${ext}`;
+    const safeName = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `${safeName}_${random}.${ext}`;
 
     return NextResponse.json({
       url: dataUrl,
