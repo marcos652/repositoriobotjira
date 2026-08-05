@@ -13,6 +13,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import ImageExtension from '@tiptap/extension-image';
 import { CLIENTS } from '@/lib/clients';
+import { buildDescription, getSectionConfig } from '@/lib/issuePanels';
 
 interface DemandaResult {
   success: boolean;
@@ -31,11 +32,30 @@ interface HistoryItem {
   response?: any;
 }
 
+// Os esqueletos abaixo usam os mesmos rótulos/emojis das seções que a IA extrai
+// (ver src/lib/issuePanels.ts) — o que a pessoa preenche aqui é o que ela vê
+// de volta no preview antes de criar a demanda.
 const TEMPLATES = [
-  { icon: '🐛', label: 'Bug Report', prompt: 'Encontrei um bug onde...', shortcut: '1' },
-  { icon: '✨', label: 'Nova Feature', prompt: 'Preciso de uma funcionalidade que...', shortcut: '2' },
-  { icon: '🔧', label: 'Melhoria', prompt: 'Gostaria de melhorar...', shortcut: '3' },
-  { icon: '📋', label: 'Task', prompt: 'Precisamos realizar a seguinte tarefa...', shortcut: '4' },
+  {
+    icon: '🐛', label: 'Bug Report', shortcut: '1',
+    hint: 'Contexto, problema, passos e evidências',
+    prompt: `<p><strong>📋 Contexto:</strong> </p><p><strong>⚠️ Problema:</strong> </p><p><strong>🔁 Como replicar:</strong></p><ol><li></li><li></li></ol><p><strong>📸 Evidências:</strong> <em>(cole prints com Ctrl+V ou arraste os arquivos)</em></p>`,
+  },
+  {
+    icon: '✨', label: 'Nova Feature', shortcut: '2',
+    hint: 'Contexto, descrição e critérios de aceite',
+    prompt: `<p><strong>📋 Contexto:</strong> </p><p><strong>📄 Descrição:</strong> </p><p><strong>✅ Critérios de aceite:</strong></p><ul><li></li><li></li></ul>`,
+  },
+  {
+    icon: '🔧', label: 'Melhoria', shortcut: '3',
+    hint: 'Comportamento atual vs. esperado',
+    prompt: `<p><strong>📋 Contexto:</strong> </p><p><strong>⚠️ Comportamento atual:</strong> </p><p><strong>✅ Comportamento esperado:</strong> </p>`,
+  },
+  {
+    icon: '📋', label: 'Task', shortcut: '4',
+    hint: 'Contexto e descrição da tarefa',
+    prompt: `<p><strong>📋 Contexto:</strong> </p><p><strong>📄 Descrição:</strong> </p>`,
+  },
 ];
 
 const PRIORITIES = [
@@ -96,7 +116,7 @@ export default function NovaDemandaPage() {
   const [result, setResult] = useState<DemandaResult | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>(loadHistory);
   const [activeView, setActiveView] = useState<'editor' | 'history'>('editor');
-  const [showMeta, setShowMeta] = useState(false);
+  const [showMeta, setShowMeta] = useState(true);
   const [focusEditor, setFocusEditor] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -107,7 +127,6 @@ export default function NovaDemandaPage() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [currentBodyParams, setCurrentBodyParams] = useState<any>(null);
   const [validationWarn, setValidationWarn] = useState('');
-  const [isEditingPreview, setIsEditingPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -144,7 +163,9 @@ export default function NovaDemandaPage() {
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(() => {
       if (texto.trim()) {
-        try { localStorage.setItem('jiraops-demanda-draft', JSON.stringify({ texto, nomeCliente, referencia, prioridade, urgencia })); } catch {}
+        // Remove imagens embutidas em base64 antes de salvar — evita estourar a quota do localStorage
+        const textoParaDraft = texto.replace(/<img[^>]*src="data:[^"]*"[^>]*>/g, '<p><em>[imagem removida do rascunho — anexe novamente se necessário]</em></p>');
+        try { localStorage.setItem('jiraops-demanda-draft', JSON.stringify({ texto: textoParaDraft, nomeCliente, referencia, prioridade, urgencia })); } catch {}
       }
     }, 500);
   }, [texto, nomeCliente, referencia, prioridade, urgencia]);
@@ -190,10 +211,10 @@ export default function NovaDemandaPage() {
         editor?.commands.setContent(data.text);
         setTexto(data.text);
       } else {
-        alert(data.error || 'Erro ao aprimorar texto');
+        setResult({ success: false, error: data.error || 'Erro ao aprimorar texto' });
       }
     } catch (err) {
-      alert('Falha na conexão com a API de aprimoramento');
+      setResult({ success: false, error: 'Falha na conexão com a API de aprimoramento' });
     } finally {
       setEnhancing(false);
     }
@@ -204,11 +225,11 @@ export default function NovaDemandaPage() {
   const uploadFile = async (file: File) => {
     const isAllowed = ALLOWED_TYPES.some(t => file.type.startsWith(t));
     if (!isAllowed) {
-      alert(`Tipo de arquivo não suportado: ${file.type}`);
+      setResult({ success: false, error: `Tipo de arquivo não suportado: ${file.type}` });
       return;
     }
     if (file.size > 15 * 1024 * 1024) {
-      alert('Arquivo muito grande (máx 15MB)');
+      setResult({ success: false, error: 'Arquivo muito grande (máx 15MB)' });
       return;
     }
     setUploading(true);
@@ -220,24 +241,27 @@ export default function NovaDemandaPage() {
       if (res.ok) {
         const isImage = file.type.startsWith('image/');
         const preview = isImage ? URL.createObjectURL(file) : undefined;
-        // Use displayName if available, fallback to filename or original name
-        const finalFilename = data.displayName || data.filename || file.name;
+        const finalFilename = data.displayName || file.name;
         const img: UploadedImage = { url: data.url, filename: finalFilename, preview, isImage, type: file.type };
         setUploadedImages(prev => [...prev, img]);
         setUrlsImagens(prev => [...prev, data.url]);
-        
-        // Insert visual image into the editor
+
+        // Insere sempre no final do texto, como um bloco próprio — fica "texto em cima, imagem embaixo"
+        // em vez de entrar no meio da frase onde o cursor estava.
+        const insertion = isImage
+          ? `<p><img src="${data.url}" alt="${finalFilename}" style="max-width: 100%; max-height: 300px; border-radius: 8px;" /></p>`
+          : `<p>📎 <a href="${data.url}" target="_blank" rel="noopener noreferrer">${finalFilename}</a></p>`;
         if (editor) {
-          editor.commands.insertContent(`<br/><img src="${data.url}" alt="${finalFilename}" style="max-width: 100%; max-height: 300px; border-radius: 8px;" /><br/>`);
+          editor.chain().focus('end').insertContent(insertion).run();
         } else {
-          setTexto(prev => prev + `<br/><img src="${data.url}" alt="${finalFilename}" style="max-width: 100%; max-height: 300px; border-radius: 8px;" /><br/>`);
+          setTexto(prev => prev + insertion);
         }
       } else {
-        alert(data.error || 'Erro no upload');
+        setResult({ success: false, error: data.error || 'Erro no upload' });
       }
     } catch (err) {
       console.error('Upload failed:', err);
-      alert('Falha no upload do arquivo');
+      setResult({ success: false, error: 'Falha no upload do arquivo' });
     } finally {
       setUploading(false);
     }
@@ -287,10 +311,10 @@ export default function NovaDemandaPage() {
       return;
     }
 
-    // Validation — mandatory meta fields
-    if (!nomeCliente.trim() || !referencia.trim() || !prioridade || !urgencia) {
+    // Validation — mandatory meta fields (Prioridade/Urgência têm "Auto"/"Normal" como escolha válida, não são obrigatórios)
+    if (!nomeCliente.trim() || !referencia.trim()) {
       setShowMeta(true);
-      setValidationWarn('É obrigatório preencher Cliente, Referência, Prioridade e Urgência.');
+      setValidationWarn('É obrigatório preencher Cliente e Referência.');
       return;
     }
 
@@ -333,7 +357,7 @@ export default function NovaDemandaPage() {
       body.arquivos = Array.from(map.values());
     }
     if (prioridade) body.prioridade = prioridade;
-    if (urgencia) body.texto = `[${urgencia.toUpperCase()}] ${body.texto}`;
+    if (urgencia) body.urgencia = urgencia;
 
     // Simulate progress steps
     const stepInterval = setInterval(() => {
@@ -364,89 +388,14 @@ export default function NovaDemandaPage() {
     }
   };
 
-  // Rebuild Jira Wiki Markup description from sections (mirrors API logic)
-  const rebuildDescription = (data: any) => {
-    const s = data.sections || {};
-    let desc = '';
-    const addPanel = (title: string, content: any, type: 'info' | 'tip' | 'warning' | 'note' = 'info') => {
-      let contentStr = typeof content === 'string' ? content : content ? JSON.stringify(content) : '';
-      if (contentStr && contentStr.trim() !== '' && contentStr !== '{}' && contentStr !== '[]') {
-        let colors = '';
-        if (type === 'info') colors = '|bgColor=#DEEBFF|titleBGColor=#DEEBFF';
-        else if (type === 'tip') colors = '|bgColor=#E3FCEF|titleBGColor=#E3FCEF';
-        else if (type === 'warning') colors = '|bgColor=#FFEBE6|titleBGColor=#FFEBE6';
-        else if (type === 'note') colors = '|bgColor=#EAE6FF|titleBGColor=#EAE6FF';
-        desc += `{panel:title=${title}${colors}}\n${contentStr.trim()}\n{panel}\n\n`;
-      }
-    };
-    if (data.issuetype === 'Bug') {
-      addPanel('Contexto', s.contexto, 'info');
-      addPanel('Problema', s.descricao_ou_problema, 'warning');
-      addPanel('Como replicar', s.passos_reproduzir, 'info');
-      addPanel('Evidências', s.evidencias, 'info');
-      addPanel('Observações', s.observacoes, 'note');
-    } else if (data.story_type === 'FEATURE') {
-      addPanel('Contexto', s.contexto, 'info');
-      addPanel('Descrição', s.descricao_ou_problema, 'info');
-      addPanel('Critérios de aceite', s.comportamento_esperado_ou_aceite, 'tip');
-      addPanel('Observações', s.observacoes, 'note');
-    } else if (data.story_type === 'MELHORIA') {
-      addPanel('Contexto', s.contexto, 'info');
-      addPanel('Comportamento atual', s.descricao_ou_problema, 'warning');
-      addPanel('Comportamento esperado', s.comportamento_esperado_ou_aceite, 'tip');
-      addPanel('Observações', s.observacoes, 'note');
-    } else {
-      addPanel('Contexto', s.contexto, 'info');
-      addPanel('Descrição', s.descricao_ou_problema, 'info');
-      addPanel('Observações', s.observacoes, 'note');
-    }
-    return desc.trim();
-  };
-
-  // Get the section config (labels) based on issue type
-  const getSectionConfig = (data: any) => {
-    if (!data?.sections) return [];
-    const s = data.sections;
-    if (data.issuetype === 'Bug') {
-      return [
-        { key: 'contexto', label: '📋 Contexto', color: '#3B82F6' },
-        { key: 'descricao_ou_problema', label: '⚠️ Problema', color: '#EF4444' },
-        { key: 'passos_reproduzir', label: '🔁 Como Replicar', color: '#3B82F6' },
-        { key: 'evidencias', label: '📸 Evidências', color: '#3B82F6' },
-        { key: 'observacoes', label: '📝 Observações', color: '#8B5CF6' },
-      ].filter(sec => s[sec.key] && String(s[sec.key]).trim());
-    } else if (data.story_type === 'FEATURE') {
-      return [
-        { key: 'contexto', label: '📋 Contexto', color: '#3B82F6' },
-        { key: 'descricao_ou_problema', label: '📄 Descrição', color: '#3B82F6' },
-        { key: 'comportamento_esperado_ou_aceite', label: '✅ Critérios de Aceite', color: '#22C55E' },
-        { key: 'observacoes', label: '📝 Observações', color: '#8B5CF6' },
-      ].filter(sec => s[sec.key] && String(s[sec.key]).trim());
-    } else if (data.story_type === 'MELHORIA') {
-      return [
-        { key: 'contexto', label: '📋 Contexto', color: '#3B82F6' },
-        { key: 'descricao_ou_problema', label: '⚠️ Comportamento Atual', color: '#EF4444' },
-        { key: 'comportamento_esperado_ou_aceite', label: '✅ Comportamento Esperado', color: '#22C55E' },
-        { key: 'observacoes', label: '📝 Observações', color: '#8B5CF6' },
-      ].filter(sec => s[sec.key] && String(s[sec.key]).trim());
-    } else {
-      return [
-        { key: 'contexto', label: '📋 Contexto', color: '#3B82F6' },
-        { key: 'descricao_ou_problema', label: '📄 Descrição', color: '#3B82F6' },
-        { key: 'observacoes', label: '📝 Observações', color: '#8B5CF6' },
-      ].filter(sec => s[sec.key] && String(s[sec.key]).trim());
-    }
-  };
-
   const confirmCreate = async () => {
     if (!previewData || !currentBodyParams) return;
     setLoading(true);
     setProgressStep(0);
 
-    // Rebuild description from edited sections before sending
-    const finalPreviewData = { ...previewData, description: rebuildDescription(previewData) };
+    // Rebuild description from edited sections before sending (mirrors server logic via shared lib)
+    const finalPreviewData = { ...previewData, description: buildDescription(previewData) };
     setPreviewData(null);
-    setIsEditingPreview(false);
 
     // Simulate progress steps for actual creation
     const stepInterval = setInterval(() => {
@@ -495,7 +444,7 @@ export default function NovaDemandaPage() {
       return;
     }
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { alert('Seu navegador não suporta reconhecimento de voz'); return; }
+    if (!SpeechRecognition) { setResult({ success: false, error: 'Seu navegador não suporta reconhecimento de voz (use Chrome ou Edge)' }); return; }
     const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
     recognition.continuous = true;
@@ -687,7 +636,7 @@ export default function NovaDemandaPage() {
 
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center' }}>
                   {loading && <Loader2 size={16} className="animate-spin" color="#8B5CF6" />}
-                  <button type="button" onClick={() => { setPreviewData(null); setIsEditingPreview(false); }} disabled={loading} style={{ background: 'transparent', border: '1px solid #334155', color: '#CBD5E1', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                  <button type="button" onClick={() => setPreviewData(null)} disabled={loading} style={{ background: 'transparent', border: '1px solid #334155', color: '#CBD5E1', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer' }}>
                     Voltar e Editar
                   </button>
                   <button type="button" onClick={confirmCreate} disabled={loading} className="nd-submit-btn" style={{ width: 'auto' }}>
@@ -705,9 +654,10 @@ export default function NovaDemandaPage() {
                   </p>
                   <div className="nd-templates-grid">
                     {TEMPLATES.map((t) => (
-                      <button key={t.label} type="button" onClick={() => applyTemplate(t.prompt)} className="nd-template-card">
+                      <button key={t.label} type="button" onClick={() => applyTemplate(t.prompt)} className="nd-template-card" title={t.hint}>
                         <span className="nd-template-icon">{t.icon}</span>
                         <span className="nd-template-label">{t.label}</span>
+                        <span className="nd-template-hint">{t.hint}</span>
                         <kbd className="nd-template-kbd">⌃{t.shortcut}</kbd>
                       </button>
                     ))}
@@ -1028,8 +978,8 @@ export default function NovaDemandaPage() {
                   <Bot size={15} color="#fff" />
                 </div>
                 <div>
-                  <p className="nd-connection-name">API Bot Jira</p>
-                  <p className="nd-connection-url">apibotjira.vercel.app</p>
+                  <p className="nd-connection-name">Jira + IA (Gemini)</p>
+                  <p className="nd-connection-url">movingpay.atlassian.net</p>
                 </div>
                 <div className="nd-connection-status">
                   <div className="nd-pulse-sm" />
@@ -1255,6 +1205,7 @@ export default function NovaDemandaPage() {
         .nd-template-card:hover { border-color: var(--accent-blue); background: var(--accent-blue-light); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
         .nd-template-icon { font-size: 20px; }
         .nd-template-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+        .nd-template-hint { font-size: 9px; line-height: 1.3; color: var(--text-tertiary); text-align: center; }
 
         /* Editor */
         .nd-editor {

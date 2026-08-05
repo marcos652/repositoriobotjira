@@ -5,6 +5,7 @@ export const maxDuration = 60;
 import { GoogleGenAI } from '@google/genai';
 import { CLIENTS } from '@/lib/clients';
 import { backofficeEndpoints, slcEndpoints, cnabEndpoints } from '@/lib/endpoints';
+import { buildDescription } from '@/lib/issuePanels';
 
 const ALL_ENDPOINTS = [
   ...backofficeEndpoints,
@@ -37,14 +38,21 @@ const CLIENTS_MAPPING = CLIENTS.map(c => `${c.name}: ${c.id}`).join(', ') + ', G
 const REFINAMENTO_TRANSITION_ID = '13';
 
 // ─── Gemini ───
-async function generateIssueData(texto: string, referencia: string, nomeCliente?: string) {
+async function generateIssueData(texto: string, referencia: string, nomeCliente?: string, urgencia?: string) {
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+  const urgenciaLabel = urgencia === 'critico'
+    ? 'CRÍTICO — sistema/produção parada, tratar como prioridade máxima'
+    : urgencia === 'urgente'
+      ? 'Urgente'
+      : 'Normal';
 
   const prompt = `Você é um Analista de Qualidade e Produto (QA/PM) especialista em Jira. Seu objetivo é RECEBER um relato muitas vezes informal ou mal estruturado e REESTRUTURÁ-LO completamente em uma demanda técnica profissional, SEGUINDO RIGOROSAMENTE as regras da empresa.
 
 Texto Original do Solicitante: "${texto}"
 Referência da Origem: ${referencia}
 Cliente Fornecido: ${nomeCliente || 'Extrair do texto'}
+Urgência informada pelo solicitante: ${urgenciaLabel}
 Lista de clientes disponíveis: ${CLIENTS_MAPPING}
 
 REGRAS DE CLASSIFICAÇÃO:
@@ -133,52 +141,23 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
 
   try {
     const data = JSON.parse(text);
-    
-    // Constrói a descrição Jira Wiki Markup usando {panel} com as cores oficiais do Jira
-    let finalDescription = '';
-    const addPanel = (title: string, content: any, type: 'info' | 'tip' | 'warning' | 'note' | 'panel' = 'info') => {
-      let contentStr = '';
-      if (typeof content === 'string') {
-        contentStr = content;
-      } else if (content) {
-        contentStr = JSON.stringify(content);
-      }
-      if (contentStr && contentStr.trim() !== '' && contentStr !== '{}' && contentStr !== '[]') {
-        let colors = '';
-        if (type === 'info') colors = '|bgColor=#DEEBFF|titleBGColor=#DEEBFF';
-        else if (type === 'tip') colors = '|bgColor=#E3FCEF|titleBGColor=#E3FCEF';
-        else if (type === 'warning') colors = '|bgColor=#FFEBE6|titleBGColor=#FFEBE6';
-        else if (type === 'note') colors = '|bgColor=#EAE6FF|titleBGColor=#EAE6FF';
-        
-        finalDescription += `{panel:title=${title}${colors}}\n${contentStr.trim()}\n{panel}\n\n`;
-      }
-    };
 
-    const s = data.sections || {};
-    
-    if (data.issuetype === 'Bug') {
-      addPanel('Contexto', s.contexto, 'info');
-      addPanel('Problema', s.descricao_ou_problema, 'warning');
-      addPanel('Como replicar', s.passos_reproduzir, 'info');
-      addPanel('Evidências', s.evidencias, 'info');
-      addPanel('Observações', s.observacoes, 'note');
-    } else if (data.story_type === 'FEATURE') {
-      addPanel('Contexto', s.contexto, 'info');
-      addPanel('Descrição', s.descricao_ou_problema, 'info');
-      addPanel('Critérios de aceite', s.comportamento_esperado_ou_aceite, 'tip');
-      addPanel('Observações', s.observacoes, 'note');
-    } else if (data.story_type === 'MELHORIA') {
-      addPanel('Contexto', s.contexto, 'info');
-      addPanel('Comportamento atual', s.descricao_ou_problema, 'warning');
-      addPanel('Comportamento esperado', s.comportamento_esperado_ou_aceite, 'tip');
-      addPanel('Observações', s.observacoes, 'note');
-    } else {
-      addPanel('Contexto', s.contexto, 'info');
-      addPanel('Descrição', s.descricao_ou_problema, 'info');
-      addPanel('Observações', s.observacoes, 'note');
+    // Rede de segurança: o Gemini às vezes "esquece" de manter a marcação !arquivo.ext! quando
+    // o relato é muito curto/vago (ex: só a imagem, sem texto explicando o que ela mostra).
+    // Sem isso a imagem vira só um anexo solto no Jira, sem aparecer na descrição.
+    const markers = Array.from(new Set(texto.match(/!([\w-]+\.[a-zA-Z0-9]{2,5})!/g) || []));
+    if (markers.length > 0) {
+      data.sections = data.sections || {};
+      const currentText = Object.values(data.sections).filter((v: any) => typeof v === 'string').join(' ');
+      const missing = markers.filter(m => !currentText.includes(m));
+      if (missing.length > 0) {
+        const fallbackKey = data.issuetype === 'Bug' ? 'evidencias' : 'observacoes';
+        data.sections[fallbackKey] = [data.sections[fallbackKey], ...missing].filter(Boolean).join('\n');
+      }
     }
 
-    data.description = finalDescription.trim();
+    // Descrição Jira Wiki Markup construída pela mesma config de seções usada no preview do cliente.
+    data.description = buildDescription(data);
     return data;
   } catch (e: any) {
     console.error('[Gemini] Failed to parse JSON. Raw output:', text.slice(0, 500));
@@ -187,7 +166,11 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
 }
 
 // ─── Jira ───
-async function createJiraIssue(issueData: any) {
+// Valores padrão de Impacto/Saúde quando o solicitante não indica nada mais específico.
+const DEFAULT_IMPACTO_ID = '10001'; // Significant / Large
+const DEFAULT_SAUDE_ID = '10119'; // 🟢
+
+async function createJiraIssue(issueData: any, meta: { prioridade?: string; urgencia?: string } = {}) {
   const jiraAuth = getJiraAuth();
   const jiraHeaders = {
     'Accept': 'application/json',
@@ -203,9 +186,18 @@ async function createJiraIssue(issueData: any) {
     issuetype: { name: issueData.issuetype || 'Task' },
     assignee: { id: JIRA_ASSIGNEE_ID },
     customfield_10015: now.toISOString().split('T')[0], // Start Date
-    customfield_10004: { id: '10001' }, // Impacto
-    customfield_10333: { id: '10119' }, // Saude
+    customfield_10004: { id: DEFAULT_IMPACTO_ID }, // Impacto
+    customfield_10333: { id: DEFAULT_SAUDE_ID }, // Saude
   };
+
+  if (meta.prioridade) {
+    fields.priority = { name: meta.prioridade };
+  }
+
+  const labels: string[] = [];
+  if (meta.urgencia === 'urgente') labels.push('urgente');
+  if (meta.urgencia === 'critico') labels.push('critico-producao-parada');
+  if (labels.length) fields.labels = labels;
 
   if (issueData.client_id && issueData.client_id !== 'N/A' && !isNaN(Number(issueData.client_id))) {
     fields.customfield_10469 = [{ id: String(issueData.client_id) }];
@@ -372,7 +364,7 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado } = body;
+    const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado, prioridade, urgencia } = body;
 
     if (!GEMINI_API_KEY || !JIRA_EMAIL || !JIRA_TOKEN) {
       return NextResponse.json({ error: 'Servidor mal configurado — variáveis de ambiente faltando', success: false }, { status: 500 });
@@ -385,7 +377,7 @@ export async function POST(request: NextRequest) {
       if (!texto || typeof texto !== 'string' || texto.trim().length < 5) {
         return NextResponse.json({ error: 'Texto da demanda é obrigatório', success: false }, { status: 400 });
       }
-      issueData = await generateIssueData(texto.trim(), referencia, nome_cliente);
+      issueData = await generateIssueData(texto.trim(), referencia, nome_cliente, urgencia);
       if (!issueData || !issueData.summary) {
         return NextResponse.json({ error: 'Falha na geração dos dados via Gemini', success: false }, { status: 500 });
       }
@@ -397,7 +389,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 2: Create Jira issue
-    const { issueKey, issueUrl } = await createJiraIssue(issueData);
+    const { issueKey, issueUrl } = await createJiraIssue(issueData, { prioridade, urgencia });
 
     // Step 3: Upload Attachments (se houver)
     // Se "arquivos" estiver presente (novo formato), use-os. Senão, mapeie as urls_imagens (legacy)

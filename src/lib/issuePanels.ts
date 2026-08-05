@@ -1,0 +1,85 @@
+// Single source of truth for how an AI-generated issue's "sections" map to
+// Jira wiki-markup panels (server) and to the editable preview UI (client).
+// Keeping this in one place avoids the description shown in the preview
+// drifting from the description actually sent to Jira.
+
+export type IssueSections = Record<string, string | undefined>;
+
+export interface IssueLike {
+  issuetype?: string;
+  story_type?: string;
+  sections?: IssueSections;
+}
+
+type PanelType = 'info' | 'tip' | 'warning' | 'note';
+
+const PANEL_COLORS: Record<PanelType, string> = {
+  info: '#DEEBFF',
+  tip: '#E3FCEF',
+  warning: '#FFEBE6',
+  note: '#EAE6FF',
+};
+
+interface SectionDef {
+  key: string;
+  title: string;
+  emoji: string;
+  panelType: PanelType;
+  uiColor: string;
+}
+
+function sectionDefs(data: IssueLike): SectionDef[] {
+  if (data.issuetype === 'Bug') {
+    return [
+      { key: 'contexto', title: 'Contexto', emoji: '📋', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'descricao_ou_problema', title: 'Problema', emoji: '⚠️', panelType: 'warning', uiColor: '#EF4444' },
+      { key: 'passos_reproduzir', title: 'Como replicar', emoji: '🔁', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'evidencias', title: 'Evidências', emoji: '📸', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'observacoes', title: 'Observações', emoji: '📝', panelType: 'note', uiColor: '#8B5CF6' },
+    ];
+  }
+  if (data.story_type === 'FEATURE') {
+    return [
+      { key: 'contexto', title: 'Contexto', emoji: '📋', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'descricao_ou_problema', title: 'Descrição', emoji: '📄', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'comportamento_esperado_ou_aceite', title: 'Critérios de aceite', emoji: '✅', panelType: 'tip', uiColor: '#22C55E' },
+      { key: 'observacoes', title: 'Observações', emoji: '📝', panelType: 'note', uiColor: '#8B5CF6' },
+    ];
+  }
+  if (data.story_type === 'MELHORIA') {
+    return [
+      { key: 'contexto', title: 'Contexto', emoji: '📋', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'descricao_ou_problema', title: 'Comportamento atual', emoji: '⚠️', panelType: 'warning', uiColor: '#EF4444' },
+      { key: 'comportamento_esperado_ou_aceite', title: 'Comportamento esperado', emoji: '✅', panelType: 'tip', uiColor: '#22C55E' },
+      { key: 'observacoes', title: 'Observações', emoji: '📝', panelType: 'note', uiColor: '#8B5CF6' },
+    ];
+  }
+  return [
+    { key: 'contexto', title: 'Contexto', emoji: '📋', panelType: 'info', uiColor: '#3B82F6' },
+    { key: 'descricao_ou_problema', title: 'Descrição', emoji: '📄', panelType: 'info', uiColor: '#3B82F6' },
+    { key: 'observacoes', title: 'Observações', emoji: '📝', panelType: 'note', uiColor: '#8B5CF6' },
+  ];
+}
+
+/** Section list for the editable AI-preview UI, labels/colors, non-empty only. */
+export function getSectionConfig(data: IssueLike): { key: string; label: string; color: string }[] {
+  const s = data.sections || {};
+  return sectionDefs(data)
+    .filter(sec => s[sec.key] && String(s[sec.key]).trim())
+    .map(sec => ({ key: sec.key, label: `${sec.emoji} ${sec.title}`, color: sec.uiColor }));
+}
+
+/** Jira wiki-markup description ({panel} blocks) built from the same section config. */
+export function buildDescription(data: IssueLike): string {
+  const s = data.sections || {};
+  let desc = '';
+  for (const sec of sectionDefs(data)) {
+    const raw = s[sec.key];
+    const contentStr = typeof raw === 'string' ? raw : raw ? JSON.stringify(raw) : '';
+    if (contentStr && contentStr.trim() !== '' && contentStr !== '{}' && contentStr !== '[]') {
+      const color = PANEL_COLORS[sec.panelType];
+      desc += `{panel:title=${sec.title}|bgColor=${color}|titleBGColor=${color}}\n${contentStr.trim()}\n{panel}\n\n`;
+    }
+  }
+  return desc.trim();
+}
