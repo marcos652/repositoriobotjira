@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Aumenta o timeout para 60s no plano Pro da Vercel (padrão Hobby é 10s)
 export const maxDuration = 60;
-import { GoogleGenAI } from '@google/genai';
+import { generateText } from '@/lib/aiFallback';
 import { CLIENTS } from '@/lib/clients';
 import { backofficeEndpoints, slcEndpoints, cnabEndpoints } from '@/lib/endpoints';
 import { buildDescription } from '@/lib/issuePanels';
+import { isSafeExternalUrl } from '@/lib/ssrfGuard';
 
 const ALL_ENDPOINTS = [
   ...backofficeEndpoints,
@@ -20,7 +21,6 @@ const DOCS_SUMMARY = JSON.stringify(ALL_ENDPOINTS.map(e => ({
 })));
 
 // ─── Environment ───
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 const JIRA_EMAIL = process.env.JIRA_EMAIL!;
 const JIRA_TOKEN = process.env.JIRA_TOKEN!;
 const SLACK_TOKEN = process.env.SLACK_TOKEN;
@@ -33,14 +33,20 @@ function getJiraAuth() {
   return Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
 }
 
+function getJiraHeaders() {
+  return {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'Authorization': `Basic ${getJiraAuth()}`,
+  };
+}
+
 const CLIENTS_MAPPING = CLIENTS.map(c => `${c.name}: ${c.id}`).join(', ') + ', GERAL MOVINGPAY: N/A, HOLDING: N/A';
 
 const REFINAMENTO_TRANSITION_ID = '13';
 
-// ─── Gemini ───
+// ─── Claude ───
 async function generateIssueData(texto: string, referencia: string, nomeCliente?: string, urgencia?: string) {
-  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
   const urgenciaLabel = urgencia === 'critico'
     ? 'CRÍTICO — sistema/produção parada, tratar como prioridade máxima'
     : urgencia === 'urgente'
@@ -96,40 +102,11 @@ O "sections" deve ser um objeto com as chaves descritas acima.
 O campo "summary" DEVE começar com o nome do cliente seguido de um hífen (ex: Nome do Cliente - Título curto e técnico). NÃO use colchetes.
 O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a demanda.`;
 
-  let response;
-  let retries = 3;
-  let delay = 2000;
-  
-  while (retries > 0) {
-    try {
-      response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
-      break;
-    } catch (e: any) {
-      retries--;
-      const errorStr = typeof e === 'object' ? JSON.stringify(e) + String(e.message || '') : String(e);
-      const isRetryable = errorStr.includes('503') || errorStr.includes('UNAVAILABLE') || errorStr.includes('high demand') || errorStr.includes('429');
-      
-      if (retries === 0 || !isRetryable) {
-        throw e;
-      }
-      console.warn(`[Gemini] API indisponível, tentando novamente em ${delay}ms... (${retries} tentativas restantes)`);
-      await new Promise(res => setTimeout(res, delay));
-      delay *= 2;
-    }
-  }
+  // Gemini primeiro (grátis até a cota diária), Claude como fallback se ele falhar.
+  const { text: generated, provider } = await generateText(prompt, { maxTokens: 4096, jsonMode: true });
+  console.log(`[IA] Demanda gerada via ${provider}`);
+  let text = generated;
 
-  if (!response) {
-    throw new Error('Falha ao comunicar com a API do Gemini após várias tentativas.');
-  }
-
-  let text = response.text?.trim() || '';
-  
   // Remove markdown code fences if present
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
@@ -142,7 +119,7 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
   try {
     const data = JSON.parse(text);
 
-    // Rede de segurança: o Gemini às vezes "esquece" de manter a marcação !arquivo.ext! quando
+    // Rede de segurança: o modelo às vezes "esquece" de manter a marcação !arquivo.ext! quando
     // o relato é muito curto/vago (ex: só a imagem, sem texto explicando o que ela mostra).
     // Sem isso a imagem vira só um anexo solto no Jira, sem aparecer na descrição.
     const markers = Array.from(new Set(texto.match(/!([\w-]+\.[a-zA-Z0-9]{2,5})!/g) || []));
@@ -160,8 +137,8 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
     data.description = buildDescription(data);
     return data;
   } catch (e: any) {
-    console.error('[Gemini] Failed to parse JSON. Raw output:', text.slice(0, 500));
-    throw new Error(`Gemini retornou JSON inválido: ${e.message}`);
+    console.error(`[IA/${provider}] Failed to parse JSON. Raw output:`, text.slice(0, 500));
+    throw new Error(`IA (${provider}) retornou JSON inválido: ${e.message}`);
   }
 }
 
@@ -170,13 +147,13 @@ O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a de
 const DEFAULT_IMPACTO_ID = '10001'; // Significant / Large
 const DEFAULT_SAUDE_ID = '10119'; // 🟢
 
+// Nomes exatos do esquema de prioridade configurado no projeto DSMM — um valor
+// fora dessa lista (ex: cache antigo do navegador, ou outro chamador da API)
+// faz o Jira rejeitar a criação inteira da issue, não só o campo.
+const VALID_PRIORITIES = new Set(['Altíssima', 'Alta', 'Médio', 'Baixa', 'Baixíssima']);
+
 async function createJiraIssue(issueData: any, meta: { prioridade?: string; urgencia?: string } = {}) {
-  const jiraAuth = getJiraAuth();
-  const jiraHeaders = {
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'Authorization': `Basic ${jiraAuth}`,
-  };
+  const jiraHeaders = getJiraHeaders();
 
   const now = new Date();
   const fields: any = {
@@ -190,8 +167,10 @@ async function createJiraIssue(issueData: any, meta: { prioridade?: string; urge
     customfield_10333: { id: DEFAULT_SAUDE_ID }, // Saude
   };
 
-  if (meta.prioridade) {
+  if (meta.prioridade && VALID_PRIORITIES.has(meta.prioridade)) {
     fields.priority = { name: meta.prioridade };
+  } else if (meta.prioridade) {
+    console.warn(`Prioridade ignorada (fora do esquema do Jira): ${meta.prioridade}`);
   }
 
   const labels: string[] = [];
@@ -289,8 +268,9 @@ async function callRovoAgent(issueKey: string) {
 
 // ─── Attachments ───
 async function uploadAttachments(issueKey: string, arquivos: {url: string, filename?: string}[]) {
-  if (!arquivos || arquivos.length === 0) return;
+  if (!arquivos || arquivos.length === 0) return 0;
   const jiraAuth = getJiraAuth();
+  let uploaded = 0;
 
   for (const [index, arq] of arquivos.entries()) {
     try {
@@ -324,14 +304,21 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
             body: formData as any
           });
           
-          if (!res.ok) {
+          if (res.ok) {
+            uploaded++;
+          } else {
             const errText = await res.text().catch(() => 'unknown error');
             console.error(`Falha ao enviar anexo ${filename} para o Jira: HTTP ${res.status} - ${errText}`);
           }
         }
       } else if (dataUrl.startsWith('http')) {
-        // Trata URL normal de imagem (digitada manualmente)
-        const resUrl = await fetch(dataUrl);
+        // Trata URL normal de imagem (digitada manualmente) — só busca se o host
+        // resolver pra um IP público (evita SSRF contra rede interna/metadata).
+        if (!(await isSafeExternalUrl(dataUrl))) {
+          console.error(`Anexo bloqueado (URL não permitida): ${dataUrl}`);
+          continue;
+        }
+        const resUrl = await fetch(dataUrl, { redirect: 'error' });
         if (resUrl.ok) {
           const blob = await resUrl.blob();
           const filename = originalFilename || new URL(dataUrl).pathname.split('/').pop() || `anexo_${index + 1}`;
@@ -348,7 +335,9 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
             body: formData as any
           });
           
-          if (!res.ok) {
+          if (res.ok) {
+            uploaded++;
+          } else {
             const errText = await res.text().catch(() => 'unknown error');
             console.error(`Falha ao enviar anexo ${filename} para o Jira: HTTP ${res.status} - ${errText}`);
           }
@@ -358,6 +347,24 @@ async function uploadAttachments(issueKey: string, arquivos: {url: string, filen
       console.error('Falha ao enviar anexo para o Jira:', err);
     }
   }
+
+  return uploaded;
+}
+
+// O Jira só resolve os marcadores "!arquivo.ext!" da wiki markup para embeds de imagem
+// no momento em que a description é convertida para ADF — e isso já aconteceu na criação
+// da issue, antes dos anexos existirem. Reenviar a mesma description agora que os anexos
+// já estão na issue faz o Jira reconverter e resolver os marcadores corretamente.
+async function refreshDescriptionForAttachments(issueKey: string, description: string) {
+  const res = await fetch(`${JIRA_BASE_URL}/rest/api/2/issue/${issueKey}`, {
+    method: 'PUT',
+    headers: getJiraHeaders(),
+    body: JSON.stringify({ fields: { description } }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => 'unknown error');
+    console.error(`Falha ao reprocessar description com anexos: HTTP ${res.status} - ${errText}`);
+  }
 }
 
 // ─── Route ───
@@ -366,20 +373,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado, prioridade, urgencia } = body;
 
-    if (!GEMINI_API_KEY || !JIRA_EMAIL || !JIRA_TOKEN) {
+    if (!JIRA_EMAIL || !JIRA_TOKEN) {
       return NextResponse.json({ error: 'Servidor mal configurado — variáveis de ambiente faltando', success: false }, { status: 500 });
     }
 
     let issueData = issueDataPreGerado;
 
-    // Step 1: Gemini generates issue data if not provided
+    // Step 1: Claude gera os dados da issue, se ainda não vierem prontos
     if (!issueData) {
       if (!texto || typeof texto !== 'string' || texto.trim().length < 5) {
         return NextResponse.json({ error: 'Texto da demanda é obrigatório', success: false }, { status: 400 });
       }
       issueData = await generateIssueData(texto.trim(), referencia, nome_cliente, urgencia);
       if (!issueData || !issueData.summary) {
-        return NextResponse.json({ error: 'Falha na geração dos dados via Gemini', success: false }, { status: 500 });
+        return NextResponse.json({ error: 'Falha na geração dos dados via IA', success: false }, { status: 500 });
       }
     }
 
@@ -398,7 +405,10 @@ export async function POST(request: NextRequest) {
       : (urls_imagens && urls_imagens.length > 0 ? urls_imagens.map((u: string) => ({ url: u })) : []);
 
     if (arquivosParaEnviar.length > 0) {
-      await uploadAttachments(issueKey, arquivosParaEnviar);
+      const uploaded = await uploadAttachments(issueKey, arquivosParaEnviar);
+      if (uploaded > 0) {
+        await refreshDescriptionForAttachments(issueKey, issueData.description);
+      }
     }
 
     // Step 4: Notify Slack and Call Rovo Agent concurrently before returning response

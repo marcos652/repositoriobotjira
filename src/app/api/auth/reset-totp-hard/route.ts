@@ -1,8 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { isAdmin } from '../_admin';
 
-export async function GET() {
+// Apaga o TOTP de TODOS os usuários — só administrador, nunca sem checagem.
+export async function GET(request: NextRequest) {
+  if (!(await isAdmin(request))) {
+    return NextResponse.json({ error: 'Apenas administradores' }, { status: 403 });
+  }
   try {
     const projectPath = path.join(process.cwd(), 'data', 'totp.json');
     const tmpPath = '/tmp/jiraops-totp.json';

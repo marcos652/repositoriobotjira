@@ -1,44 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS, encrypt, decrypt, IP_TRACKER, TOTP_STORE } from '../_store';
+import { ALLOWED_EMAILS, encrypt, decrypt, IP_TRACKER, TOTP_STORE, REQUEST_LOG_STORE } from '../_store';
+import { createSessionToken } from '@/lib/session';
+import { checkRateLimit } from '@/lib/rateLimit';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
 
+// Código de 6 dígitos tem só 1 milhão de combinações — sem isso, dava pra
+// tentar adivinhar por força bruta. 8 tentativas / 5 min por e-mail.
+function checkTotpAttempts(email: string) {
+  return checkRateLimit(`totp-code:${email}`, 8, 5 * 60_000);
+}
+
 // ── POST: Setup / Verify / Confirm TOTP ──
+// 2º fator obrigatório depois de QUALQUER primeiro login (senha/Firebase OU Google
+// SSO via Auth.js) — só depois de confirmado aqui é que a sessão real é emitida.
 export async function POST(request: NextRequest) {
   try {
     const { email: inputEmail, action, code, setupToken, idToken } = await request.json();
 
-    if (!inputEmail || !idToken) {
-      return NextResponse.json({ error: 'Email e Token obrigatórios' }, { status: 400 });
+    if (!inputEmail) {
+      return NextResponse.json({ error: 'Email obrigatório' }, { status: 400 });
     }
 
     const normalized = inputEmail.trim().toLowerCase();
+    const clientIP = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || '127.0.0.1';
 
     // Sync from Firestore for Vercel persistence
     await ALLOWED_EMAILS.syncWithFirestore();
     await TOTP_STORE.syncWithFirestore();
 
-    // Verify Firebase ID Token via REST API
-    const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY || 'AIzaSyAGFdbWod_EJgh4OC056IvcqT621L9FWUo'}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken })
-    });
-    const verifyData = await verifyRes.json();
+    // Prova de identidade do 1º fator: idToken do Firebase (login por senha) OU,
+    // se ausente, a sessão Auth.js já estabelecida (login via Google SSO).
+    let authEmail: string | null = null;
+    if (idToken) {
+      const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY || 'AIzaSyAGFdbWod_EJgh4OC056IvcqT621L9FWUo'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+      const verifyData = await verifyRes.json();
 
-    if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
-      return NextResponse.json({ error: 'Token inválido ou expirado. Faça login novamente.' }, { status: 401 });
+      if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
+        REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: 'anonymous', identityType: 'anonymous', allowed: false });
+        return NextResponse.json({ error: 'Token inválido ou expirado. Faça login novamente.' }, { status: 401 });
+      }
+      authEmail = verifyData.users[0].email?.toLowerCase() || null;
+    } else {
+      const { auth } = await import('@/auth');
+      const authSession = await auth();
+      authEmail = authSession?.user?.email?.trim().toLowerCase() || null;
     }
 
-    const authEmail = verifyData.users[0].email?.toLowerCase();
+    if (!authEmail) {
+      REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: 'anonymous', identityType: 'anonymous', allowed: false });
+      return NextResponse.json({ error: 'Sessão inválida. Faça login novamente.' }, { status: 401 });
+    }
     if (authEmail !== normalized) {
+      REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: `${authEmail} (declarou ${normalized})`, identityType: 'anonymous', allowed: false });
       return NextResponse.json({ error: 'Email incompatível com a credencial' }, { status: 403 });
     }
 
-    // Check if IP is blocked
-    const clientIP = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || request.headers.get('x-real-ip')
-      || '127.0.0.1';
+    // Identidade confirmada (1º fator válido) — registra pra rastreabilidade,
+    // já que o proxy.ts não tem como saber quem é antes da sessão existir.
+    REQUEST_LOG_STORE.record({
+      method: 'POST',
+      path: '/api/auth/totp',
+      ip: clientIP,
+      who: normalized,
+      identityType: 'user',
+      allowed: true,
+    });
+
+    if (!ALLOWED_EMAILS.includes(normalized)) {
+      return NextResponse.json({ error: 'Email não autorizado. Contate o administrador.' }, { status: 403 });
+    }
+
+    if (ALLOWED_EMAILS.getStatus(normalized) === 'blocked') {
+      return NextResponse.json({ error: 'Acesso bloqueado. Contate o administrador.' }, { status: 403 });
+    }
 
     if (IP_TRACKER.isBlocked(clientIP, normalized)) {
       // Record the failed attempt so the admin can see it and unblock it
@@ -95,6 +136,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Código e token são obrigatórios' }, { status: 400 });
       }
 
+      const attempts = checkTotpAttempts(normalized);
+      if (!attempts.allowed) {
+        return NextResponse.json({ error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' }, { status: 429 });
+      }
+
       const tokenData = decrypt<{ email: string; secret: string; exp: number }>(setupToken);
       if (!tokenData || tokenData.email !== normalized || Date.now() > tokenData.exp) {
         return NextResponse.json({ error: 'Token expirado. Refaça o setup.' }, { status: 400 });
@@ -130,7 +176,7 @@ export async function POST(request: NextRequest) {
         iat: Date.now(),
         exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
       };
-      const sessionValue = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
+      const sessionValue = createSessionToken(sessionPayload);
 
       const response = NextResponse.json({
         success: true,
@@ -153,6 +199,11 @@ export async function POST(request: NextRequest) {
     if (action === 'verify') {
       if (!code) {
         return NextResponse.json({ error: 'Código obrigatório' }, { status: 400 });
+      }
+
+      const attempts = checkTotpAttempts(normalized);
+      if (!attempts.allowed) {
+        return NextResponse.json({ error: 'Muitas tentativas. Aguarde alguns minutos e tente de novo.' }, { status: 429 });
       }
 
       const entry = TOTP_STORE.get(normalized);
@@ -191,7 +242,7 @@ export async function POST(request: NextRequest) {
         iat: Date.now(),
         exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
       };
-      const sessionValue = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
+      const sessionValue = createSessionToken(sessionPayload);
 
       const response = NextResponse.json({
         success: true,
@@ -210,12 +261,10 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    // ── ACTION: reset — Remove TOTP for re-setup ──
-    if (action === 'reset') {
-      TOTP_STORE.remove(normalized);
-      import('@/lib/firebase').then(m => m.saveTotpStoreToFirestore(TOTP_STORE.getRawData()));
-      return NextResponse.json({ success: true, message: 'TOTP resetado. Faça login para configurar novamente.' });
-    }
+    // Sem reset autoatendido aqui: apagar o próprio TOTP só com prova do 1º fator
+    // (senha/Google) permitiria a qualquer um que só roubou a senha rearmar o 2º
+    // fator pro próprio aparelho — anula o propósito do 2FA. Reset é só por admin,
+    // via DELETE abaixo.
 
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 });
   } catch (error: any) {

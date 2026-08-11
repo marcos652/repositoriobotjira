@@ -2,165 +2,175 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-export interface OnboardingClient {
-  id: string;
-  name: string;
-  status: 'Aguardando' | 'Em Andamento' | 'Testes' | 'Concluído';
-  observations: string;
-  startDate: string;
-  lastUpdate: string;
+// ─── Local notes (observations) — keyed by Jira issue key ───
+const NOTES_PATH = () => path.join(process.cwd(), 'data', 'onboarding-notes.json');
+const NOTES_TMP  = '/tmp/jiraops-onboarding-notes.json';
+
+function getWritablePath(): string {
+  try {
+    const p = NOTES_PATH();
+    const dir = path.dirname(p);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+    return p;
+  } catch { return NOTES_TMP; }
 }
 
-const PROJECT_DATA_PATH = () => path.join(process.cwd(), 'data', 'onboarding.json');
-const TMP_DATA_PATH = '/tmp/jiraops-onboarding.json';
-
-function getWritableDataPath(): string {
+function loadNotes(): Record<string, string> {
   try {
-    const projectPath = PROJECT_DATA_PATH();
-    const dataDir = path.dirname(projectPath);
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.accessSync(dataDir, fs.constants.W_OK);
-    return projectPath;
-  } catch {
-    return TMP_DATA_PATH;
-  }
-}
-
-function loadClients(): OnboardingClient[] {
-  let committed: OnboardingClient[] = [];
-  let tmp: OnboardingClient[] = [];
-
-  try {
-    const projectPath = PROJECT_DATA_PATH();
-    if (fs.existsSync(projectPath)) {
-      committed = JSON.parse(fs.readFileSync(projectPath, 'utf-8'));
-    }
+    const p = getWritablePath();
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'));
+    const fallback = NOTES_PATH();
+    if (fs.existsSync(fallback)) return JSON.parse(fs.readFileSync(fallback, 'utf-8'));
   } catch {}
-
-  try {
-    if (fs.existsSync(TMP_DATA_PATH)) {
-      tmp = JSON.parse(fs.readFileSync(TMP_DATA_PATH, 'utf-8'));
-    }
-  } catch {}
-
-  // Merge (tmp overrides committed if there is newer data based on lastUpdate or just merge by ID)
-  const mergedMap = new Map<string, OnboardingClient>();
-  for (const c of committed) mergedMap.set(c.id, c);
-  for (const c of tmp) {
-    const existing = mergedMap.get(c.id);
-    if (!existing || new Date(c.lastUpdate).getTime() > new Date(existing.lastUpdate).getTime()) {
-      mergedMap.set(c.id, c);
-    }
-  }
-
-  // Also check if any from TMP were explicitly deleted? For this simple implementation we'll trust TMP if it exists and has data.
-  // Actually, a simpler way is to just use TMP if it exists, otherwise project path.
-  // Wait, if vercel restarts, TMP is cleared. So if TMP is cleared, we use project path.
-  // But wait, if we delete an item in TMP, the merge will bring it back from committed!
-  // To solve this, let's just use the TMP file exclusively if it exists and was modified recently, OR use a single source of truth approach.
-  // We'll use the same approach as emails: if TMP exists, it usually contains the full array.
-  
-  // So let's just read from Writable path primarily, but if it's empty, fallback to the other.
-  try {
-    const wp = getWritableDataPath();
-    if (fs.existsSync(wp)) {
-      return JSON.parse(fs.readFileSync(wp, 'utf-8'));
-    } else if (wp === TMP_DATA_PATH && fs.existsSync(PROJECT_DATA_PATH())) {
-      // If we are on Vercel and TMP is empty, read from committed data
-      return JSON.parse(fs.readFileSync(PROJECT_DATA_PATH(), 'utf-8'));
-    }
-  } catch (e) {
-    console.error('[Onboarding] Error loading clients:', e);
-  }
-
-  return [];
+  return {};
 }
 
-function saveClients(clients: OnboardingClient[]) {
+function saveNotes(notes: Record<string, string>) {
   try {
-    const wp = getWritableDataPath();
-    const dataDir = path.dirname(wp);
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(wp, JSON.stringify(clients, null, 2), 'utf-8');
-    
-    // Also backup to tmp if wp is project path
-    if (wp !== TMP_DATA_PATH) {
-      try { fs.writeFileSync(TMP_DATA_PATH, JSON.stringify(clients, null, 2), 'utf-8'); } catch {}
-    }
-  } catch (e) {
-    console.error('[Onboarding] Error saving clients:', e);
-  }
+    fs.writeFileSync(getWritablePath(), JSON.stringify(notes, null, 2), 'utf-8');
+  } catch (e) { console.error('[Onboarding] saveNotes error:', e); }
 }
 
+// ─── Jira ───
+const JIRA_BASE  = 'https://movingpay.atlassian.net';
+const BOARD_ID   = 607;
+
+function jiraHeaders() {
+  const email = process.env.JIRA_EMAIL!;
+  const token = process.env.JIRA_API_TOKEN || process.env.JIRA_TOKEN!;
+  return {
+    Authorization: `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+}
+
+// Jira status name → dashboard column
+function mapStatus(jiraStatus: string): string {
+  const s = jiraStatus.toLowerCase().trim();
+  if (['in progress'].includes(s)) return 'Implantando';
+  if (['paused'].includes(s)) return 'Em Pausa';
+  if (['done', 'closed', 'concluído'].includes(s)) return 'Concluído';
+  return 'Pendente'; // "Tarefas pendentes", "Backlog", "To Do"
+}
+
+// Dashboard column → Jira transition ID
+const COLUMN_TRANSITION: Record<string, string> = {
+  'Implantando': '4', // "Iniciar Implantação"
+  'Concluído':   '2', // "Closed"
+};
+
+// ─── GET — fetch from board 607 ───
 export async function GET() {
-  const clients = loadClients();
-  return NextResponse.json({ clients });
-}
-
-export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { name, status, observations } = body;
+    const res = await fetch(
+      `${JIRA_BASE}/rest/agile/1.0/board/${BOARD_ID}/issue?maxResults=100&fields=summary,status,assignee,priority,issuetype,created,updated`,
+      { headers: jiraHeaders() }
+    );
 
-    if (!name) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 });
+    if (!res.ok) throw new Error(`Jira board ${res.status}`);
+    const data = await res.json();
+    const notes = loadNotes();
 
-    const newClient: OnboardingClient = {
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-      name,
-      status: status || 'Aguardando',
-      observations: observations || '',
-      startDate: new Date().toISOString(),
-      lastUpdate: new Date().toISOString(),
-    };
+    const clients = (data.issues as any[]).map((issue: any) => ({
+      id: issue.key,
+      jiraKey: issue.key,
+      name: issue.fields.summary,
+      status: mapStatus(issue.fields.status.name),
+      jiraStatus: issue.fields.status.name,
+      assignee: issue.fields.assignee?.displayName ?? null,
+      assigneeAvatar: issue.fields.assignee?.avatarUrls?.['48x48'] ?? null,
+      observations: notes[issue.key] ?? '',
+      startDate: issue.fields.created,
+      lastUpdate: issue.fields.updated,
+    }));
 
-    const clients = loadClients();
-    clients.push(newClient);
-    saveClients(clients);
-
-    return NextResponse.json({ success: true, client: newClient });
+    return NextResponse.json({ clients });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[Onboarding] GET error:', error);
+    return NextResponse.json({ error: error.message, clients: [] }, { status: 500 });
   }
 }
 
+// ─── PUT — transition in Jira + save local notes ───
 export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { id, name, status, observations } = body;
-
+    const { id, status, observations } = await request.json();
     if (!id) return NextResponse.json({ error: 'ID obrigatório' }, { status: 400 });
 
-    const clients = loadClients();
-    const index = clients.findIndex(c => c.id === id);
+    if (observations !== undefined) {
+      const notes = loadNotes();
+      notes[id] = observations;
+      saveNotes(notes);
+    }
 
-    if (index === -1) return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 });
+    if (status) {
+      const transitionId = COLUMN_TRANSITION[status];
+      if (transitionId) {
+        const res = await fetch(`${JIRA_BASE}/rest/api/3/issue/${id}/transitions`, {
+          method: 'POST',
+          headers: jiraHeaders(),
+          body: JSON.stringify({ transition: { id: transitionId } }),
+        });
+        if (!res.ok) {
+          const err = await res.text().catch(() => '');
+          console.error(`[Onboarding] transition failed for ${id}:`, err);
+        }
+      }
+    }
 
-    clients[index] = {
-      ...clients[index],
-      name: name ?? clients[index].name,
-      status: status ?? clients[index].status,
-      observations: observations ?? clients[index].observations,
-      lastUpdate: new Date().toISOString(),
-    };
-
-    saveClients(clients);
-
-    return NextResponse.json({ success: true, client: clients[index] });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
+// ─── POST — create issue in DSMM project ───
+export async function POST(request: NextRequest) {
+  try {
+    const { name, observations } = await request.json();
+    if (!name) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 });
+
+    const res = await fetch(`${JIRA_BASE}/rest/api/2/issue`, {
+      method: 'POST',
+      headers: jiraHeaders(),
+      body: JSON.stringify({
+        fields: {
+          project: { key: 'DSMM' },
+          summary: name,
+          issuetype: { name: 'Task' },
+        },
+      }),
+    });
+
+    if (!res.ok) throw new Error(`Jira create: ${await res.text().catch(() => '')}`);
+    const created = await res.json();
+    const issueKey = created.key;
+
+    if (observations) {
+      const notes = loadNotes();
+      notes[issueKey] = observations;
+      saveNotes(notes);
+    }
+
+    return NextResponse.json({ success: true, id: issueKey });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// ─── DELETE — transition to Closed in Jira ───
 export async function DELETE(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { id } = body;
-
+    const { id } = await request.json();
     if (!id) return NextResponse.json({ error: 'ID obrigatório' }, { status: 400 });
 
-    let clients = loadClients();
-    clients = clients.filter(c => c.id !== id);
-    saveClients(clients);
+    await fetch(`${JIRA_BASE}/rest/api/3/issue/${id}/transitions`, {
+      method: 'POST',
+      headers: jiraHeaders(),
+      body: JSON.stringify({ transition: { id: '2' } }), // Closed
+    }).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

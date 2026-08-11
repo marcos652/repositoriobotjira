@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import {
   getFirestore, doc, setDoc, getDoc, terminate,
+  collection, addDoc, serverTimestamp,
   type Firestore
 } from "firebase/firestore";
 
@@ -162,6 +163,33 @@ export async function getTotpStoreFromFirestore() {
     console.error(`[Firebase TotpStore] Read error:`, error?.message || error);
   }
   return null;
+}
+
+// Audit trail for every mutating API call — used by proxy.ts to trace who sent
+// what, so suspicious activity (repeated blocks, unknown IPs) can be found later.
+export async function logApiRequest(entry: {
+  method: string;
+  path: string;
+  ip: string;
+  who: string;
+  identityType: 'service' | 'user' | 'anonymous';
+  allowed: boolean;
+  userAgent?: string;
+}) {
+  const db = getDb();
+  if (!db) return;
+  try {
+    await addDoc(collection(db, "api_request_log"), {
+      ...entry,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error: any) {
+    if (isFirestoreError(error)) {
+      await disableFirestore(`API log write failed — ${error?.message?.slice(0, 120) || 'unknown error'}`);
+    } else {
+      console.error(`[Firebase ApiLog] Write error:`, error?.message || error);
+    }
+  }
 }
 
 import { getAuth } from "firebase/auth";

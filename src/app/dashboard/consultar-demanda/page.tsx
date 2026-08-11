@@ -9,10 +9,15 @@ import {
   Paperclip, ListTree, ArrowRight, Timer, ChevronDown,
   Activity, Shield, Calendar, Trash2
 } from 'lucide-react';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 // ─── Types ───
-interface CommentData { id: string; author: string; authorAvatar: string | null; body: string; created: string; }
+interface CommentData { id: string; author: string; authorAvatar: string | null; body: string; bodyHtml: string | null; created: string; }
+interface CommentImage { id: string; filename: string; preview: string; }
 interface PullRequestData { id: string; title: string; status: string; url: string; author: string | null; source: string | null; destination: string | null; reviewers: string[]; }
+interface BranchData { name: string; url: string | null; repository: string | null; lastCommitDate: string | null; lastCommitMessage: string | null; }
+interface BuildData { pipeline: string; buildNumber: number | string | null; url: string | null; state: string | null; lastUpdated: string | null; testResults: { passed: number; failed: number; skipped: number } | null; }
+interface DevSummary { branches: number; commits: number; pullRequests: number; builds: { count: number; state: string | null } }
 interface SubtaskData { key: string; summary: string; status: string; issuetype: string; }
 interface LinkedIssueData { key: string; summary: string; status: string; type: string; direction: string; }
 interface AttachmentData { id: string; filename: string; size: number; mimeType: string; url: string; thumbnail: string | null; author: string; created: string; }
@@ -29,7 +34,7 @@ interface DemandaData {
   labels: string[]; comments: CommentData[]; subtasks: SubtaskData[];
   linkedIssues: LinkedIssueData[]; attachments: AttachmentData[];
   transitions: TransitionData[]; sprint: SprintData | null;
-  pullRequests: PullRequestData[]; changelog: ChangelogEntry[];
+  pullRequests: PullRequestData[]; branches: BranchData[]; builds: BuildData[]; devSummary: DevSummary | null; changelog: ChangelogEntry[];
   timeTracking: TimeTrackingData | null; url: string;
   produto: { id: string; value: string }[];
   saude: { id: string; value: string } | null;
@@ -79,6 +84,10 @@ export default function ConsultarDemandaPage() {
   // New features state
   const [newComment, setNewComment] = useState('');
   const [sendingComment, setSendingComment] = useState(false);
+  const [commentImages, setCommentImages] = useState<CommentImage[]>([]);
+  const [uploadingCommentImage, setUploadingCommentImage] = useState(false);
+  const [commentDragOver, setCommentDragOver] = useState(false);
+  const commentFileInputRef = React.useRef<HTMLInputElement>(null);
   const [transitioning, setTransitioning] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'activity' | 'dev'>('details');
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
@@ -211,16 +220,80 @@ export default function ConsultarDemandaPage() {
     finally { setDeleting(false); }
   };
 
+  // Sobe a imagem já como anexo da issue (endpoint existente) — assim, quando o comentário
+  // referenciar "!nome_do_arquivo!" ela já existe e o Jira consegue resolver o embed.
+  const uploadCommentImage = async (file: File) => {
+    if (!demanda || !file.type.startsWith('image/')) return;
+    if (file.size > 15 * 1024 * 1024) {
+      setUpdateResult({ success: false, message: 'Imagem muito grande (máx 15MB)' });
+      return;
+    }
+    setUploadingCommentImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`/api/demanda/${demanda.issue_key}/anexos`, { method: 'POST', body: formData });
+      const data = await res.json();
+      const attachment = data?.attachments?.[0];
+      if (res.ok && attachment) {
+        const preview = URL.createObjectURL(file);
+        setCommentImages(prev => [...prev, { id: attachment.id, filename: attachment.filename, preview }]);
+      } else {
+        setUpdateResult({ success: false, message: data.error || 'Erro ao enviar imagem' });
+      }
+    } catch {
+      setUpdateResult({ success: false, message: 'Falha no upload da imagem' });
+    } finally {
+      setUploadingCommentImage(false);
+    }
+  };
+
+  const handleCommentPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) uploadCommentImage(file);
+        break;
+      }
+    }
+  };
+
+  const handleCommentDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setCommentDragOver(false);
+    Array.from(e.dataTransfer.files).forEach(uploadCommentImage);
+  };
+
+  const removeCommentImage = (index: number) => {
+    setCommentImages(prev => {
+      const img = prev[index];
+      if (img?.preview) URL.revokeObjectURL(img.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const handleAddComment = async () => {
-    if (!demanda || !newComment.trim()) return;
+    if (!demanda || (!newComment.trim() && commentImages.length === 0)) return;
     setSendingComment(true);
     try {
       const res = await fetch(`/api/demanda/${demanda.issue_key}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'comment', comment: newComment.trim() }),
+        body: JSON.stringify({
+          action: 'comment',
+          comment: newComment.trim(),
+          images: commentImages.map(i => i.filename),
+        }),
       });
       const data = await res.json();
-      if (res.ok && data.success) { setNewComment(''); handleSearch(demanda.issue_key); }
+      if (res.ok && data.success) {
+        setNewComment('');
+        commentImages.forEach(i => URL.revokeObjectURL(i.preview));
+        setCommentImages([]);
+        handleSearch(demanda.issue_key);
+      }
       else setUpdateResult({ success: false, message: data.error || 'Erro ao comentar' });
     } catch { setUpdateResult({ success: false, message: 'Erro de conexão' }); }
     finally { setSendingComment(false); }
@@ -451,7 +524,7 @@ export default function ConsultarDemandaPage() {
                     <textarea value={editTexto} onChange={e => setEditTexto(e.target.value)} rows={6} style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '13px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', lineHeight: 1.6, fontFamily: 'inherit' }} />
                   ) : demanda.textoHtml ? (
                     <div className="jira-description" style={{ padding: '18px 22px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', maxHeight: '600px', overflow: 'auto' }}
-                      dangerouslySetInnerHTML={{ __html: demanda.textoHtml }} />
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(demanda.textoHtml) }} />
                   ) : (
                     <div style={{ padding: '14px 18px', borderRadius: '12px', fontSize: '13px', lineHeight: 1.7, background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '400px', overflow: 'auto' }}>
                       {demanda.texto || 'Sem descrição'}
@@ -682,14 +755,47 @@ export default function ConsultarDemandaPage() {
               <>
                 {/* Add comment */}
                 <div style={{ marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Escreva um comentário..." rows={3}
+                  <div
+                    onDragOver={e => { e.preventDefault(); setCommentDragOver(true); }}
+                    onDragLeave={() => setCommentDragOver(false)}
+                    onDrop={handleCommentDrop}
+                    style={{ borderRadius: '12px', outline: commentDragOver ? '2px dashed var(--accent-blue)' : 'none', transition: 'outline 0.15s' }}
+                  >
+                    <textarea value={newComment} onChange={e => setNewComment(e.target.value)} onPaste={handleCommentPaste}
+                      placeholder="Escreva um comentário... (cole uma imagem com Ctrl+V ou arraste aqui)" rows={3}
                       onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleAddComment(); }}
-                      style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', fontSize: '13px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }} />
+                      style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '13px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6, boxSizing: 'border-box' }} />
                   </div>
+
+                  {(commentImages.length > 0 || uploadingCommentImage) && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                      {commentImages.map((img, i) => (
+                        <div key={img.id} style={{ position: 'relative', width: '56px', height: '56px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-secondary)' }}>
+                          <img src={img.preview} alt={img.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button onClick={() => removeCommentImage(i)} title="Remover" style={{ position: 'absolute', top: '2px', right: '2px', width: '18px', height: '18px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ))}
+                      {uploadingCommentImage && (
+                        <div style={{ width: '56px', height: '56px', borderRadius: '8px', border: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Loader2 size={16} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Ctrl+Enter para enviar</span>
-                    <button onClick={handleAddComment} disabled={sendingComment || !newComment.trim()} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: !newComment.trim() ? 'rgba(99,102,241,0.2)' : 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', border: 'none', cursor: sendingComment ? 'wait' : 'pointer', boxShadow: newComment.trim() ? '0 2px 8px rgba(59,130,246,0.2)' : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <input ref={commentFileInputRef} type="file" accept="image/*" multiple hidden
+                        onChange={e => { Array.from(e.target.files || []).forEach(uploadCommentImage); e.target.value = ''; }} />
+                      <button type="button" onClick={() => commentFileInputRef.current?.click()} title="Anexar imagem"
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', borderRadius: '8px', border: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)', color: 'var(--text-tertiary)', fontSize: '11px', cursor: 'pointer' }}>
+                        <Paperclip size={12} /> Imagem
+                      </button>
+                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Ctrl+Enter para enviar</span>
+                    </div>
+                    <button onClick={handleAddComment} disabled={sendingComment || (!newComment.trim() && commentImages.length === 0)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: (!newComment.trim() && commentImages.length === 0) ? 'rgba(99,102,241,0.2)' : 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', border: 'none', cursor: sendingComment ? 'wait' : 'pointer', boxShadow: (newComment.trim() || commentImages.length > 0) ? '0 2px 8px rgba(59,130,246,0.2)' : 'none' }}>
                       {sendingComment ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar
                     </button>
                   </div>
@@ -714,7 +820,11 @@ export default function ConsultarDemandaPage() {
                           <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{c.author}</span>
                           <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'monospace', marginLeft: 'auto' }}>{formatDateTime(c.created)}</span>
                         </div>
-                        <p style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{c.body}</p>
+                        {c.bodyHtml ? (
+                          <div className="jira-description" dangerouslySetInnerHTML={{ __html: sanitizeHtml(c.bodyHtml) }} />
+                        ) : (
+                          <p style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{c.body}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -762,6 +872,50 @@ export default function ConsultarDemandaPage() {
             {/* ═══ DEV TAB ═══ */}
             {activeTab === 'dev' && (
               <>
+                {/* Resumo — mesmos números do painel "Desenvolvimento" do Jira */}
+                {demanda.devSummary && (demanda.devSummary.branches > 0 || demanda.devSummary.pullRequests > 0 || demanda.devSummary.builds.count > 0) && (
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)' }}>
+                      <GitBranch size={14} style={{ color: 'var(--accent-blue)' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{demanda.devSummary.branches}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>ramificaç{demanda.devSummary.branches === 1 ? 'ão' : 'ões'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)' }}>
+                      <GitPullRequest size={14} style={{ color: 'var(--accent-violet)' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{demanda.devSummary.pullRequests}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>pull request{demanda.devSummary.pullRequests === 1 ? '' : 's'}</span>
+                    </div>
+                    {demanda.devSummary.builds.count > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)' }}>
+                        {demanda.devSummary.builds.state?.toLowerCase().includes('fail') ? (
+                          <AlertTriangle size={14} style={{ color: 'var(--accent-rose)' }} />
+                        ) : (
+                          <CheckCircle2 size={14} style={{ color: 'var(--accent-emerald)' }} />
+                        )}
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{demanda.devSummary.builds.count}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>compilaç{demanda.devSummary.builds.count === 1 ? 'ão' : 'ões'}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Branches */}
+                {demanda.branches.length > 0 && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <label style={S.label}><GitBranch size={12} /> Ramificações ({demanda.branches.length})</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {demanda.branches.map((b, i) => (
+                        <a key={i} href={b.url || undefined} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none', cursor: b.url ? 'pointer' : 'default' }}>
+                          <GitBranch size={12} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace', flexShrink: 0 }}>{b.name}</span>
+                          {b.repository && <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>— {b.repository}</span>}
+                          {b.lastCommitMessage && <span style={{ fontSize: '11px', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.lastCommitMessage}</span>}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* PRs */}
                 {demanda.pullRequests.length > 0 && (
                   <div style={{ marginBottom: '24px' }}>
@@ -790,6 +944,32 @@ export default function ConsultarDemandaPage() {
                   </div>
                 )}
 
+                {/* Builds — mesma tabela do modal "Desenvolvimento" do Jira (Pipeline / build / testes / atualizado) */}
+                {demanda.builds.length > 0 && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <label style={S.label}><CheckCircle2 size={12} /> Builds ({demanda.builds.length})</label>
+                    <div style={{ borderRadius: '12px', border: '1px solid var(--border-secondary)', overflow: 'hidden' }}>
+                      {demanda.builds.map((b, i) => {
+                        const failed = (b.state || '').toLowerCase().includes('fail');
+                        return (
+                          <a key={i} href={b.url || undefined} target="_blank" rel="noopener noreferrer"
+                            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', textDecoration: 'none', background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)', borderBottom: i < demanda.builds.length - 1 ? '1px solid var(--border-secondary)' : 'none', cursor: b.url ? 'pointer' : 'default' }}>
+                            {failed ? <AlertTriangle size={14} style={{ color: 'var(--accent-rose)', flexShrink: 0 }} /> : <CheckCircle2 size={14} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />}
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>{b.pipeline}</span>
+                            {b.buildNumber != null && <span style={{ fontSize: '11px', color: '#818CF8', fontFamily: 'monospace', flexShrink: 0 }}>#{b.buildNumber}</span>}
+                            {b.testResults && (b.testResults.passed + b.testResults.failed + b.testResults.skipped) > 0 && (
+                              <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                                {b.testResults.passed} ok{b.testResults.failed > 0 && `, ${b.testResults.failed} falhas`}{b.testResults.skipped > 0 && `, ${b.testResults.skipped} pulados`}
+                              </span>
+                            )}
+                            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{b.lastUpdated ? timeAgo(b.lastUpdated) : '—'}</span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Subtasks */}
                 {demanda.subtasks.length > 0 && (
                   <div style={{ marginBottom: '24px' }}>
@@ -806,7 +986,7 @@ export default function ConsultarDemandaPage() {
                   </div>
                 )}
 
-                {demanda.pullRequests.length === 0 && demanda.subtasks.length === 0 && (
+                {demanda.pullRequests.length === 0 && demanda.subtasks.length === 0 && demanda.branches.length === 0 && demanda.builds.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-tertiary)' }}>
                     <GitBranch size={28} style={{ opacity: 0.3, marginBottom: '8px' }} />
                     <p style={{ fontSize: '13px', fontWeight: 600 }}>Nenhuma info de desenvolvimento</p>
@@ -839,7 +1019,7 @@ export default function ConsultarDemandaPage() {
         </div>
       )}
 
-      <style jsx>{`
+      <style jsx global>{`
         .cd-root { width: 100%; max-width: 1100px; margin: 0 auto; padding: 8px 0; }
         .cd-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
         @media (max-width: 900px) { .cd-info-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -860,10 +1040,19 @@ export default function ConsultarDemandaPage() {
         .jira-description a:hover { text-decoration: underline; }
         .jira-description strong, .jira-description b { font-weight: 700; color: var(--text-primary); }
         .jira-description em, .jira-description i { font-style: italic; }
-/* Clear all hardcoded Jira backgrounds to avoid white squares */
-        .jira-description * { background-color: transparent !important; }
-        .jira-description table, .jira-description th, .jira-description td, .jira-description tr, .jira-description tbody, .jira-description div, .jira-description span, .jira-description .panel, .jira-description .confluenceTable, .jira-description .confluenceTd, .jira-description .confluenceTh, .jira-description .confluence-information-macro, .jira-description [style*="background"] { background-color: transparent !important; background: transparent !important; }
-        
+/* Keep Jira's own panel colors (igual ao Jira) — só garante texto escuro legível no fundo claro */
+        .jira-description .panel { border-radius: 6px; overflow: hidden; margin: 12px 0; border: none !important; }
+        .jira-description .panelHeader { padding: 8px 12px; font-weight: 700; }
+        .jira-description .panelContent { padding: 10px 12px; }
+        .jira-description .panelContent > :first-child { margin-top: 0; }
+        .jira-description .panelContent > :last-child { margin-bottom: 0; }
+        .jira-description [style*="background-color"],
+        .jira-description [style*="background-color"] p,
+        .jira-description [style*="background-color"] li,
+        .jira-description [style*="background-color"] strong,
+        .jira-description [style*="background-color"] b,
+        .jira-description .confluence-information-macro { color: #172B4D !important; }
+
         .jira-description code { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 2px 6px; border-radius: 4px; background-color: rgba(99,102,241,0.08) !important; color: #A78BFA; }
         .jira-description pre { background-color: rgba(0,0,0,0.2) !important; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 14px 18px; overflow-x: auto; margin: 12px 0; }
         .jira-description pre code { background-color: transparent !important; padding: 0; color: var(--text-secondary); }

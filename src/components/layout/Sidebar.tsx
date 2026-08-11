@@ -80,6 +80,7 @@ const navItems = [
       { label: 'Integrações', href: '/dashboard/integracoes', icon: Zap },
       { label: 'Logs / Auditoria', href: '/dashboard/logs', icon: ScrollText },
       { label: 'Notificações', href: '/dashboard/notificacoes', icon: Bell },
+      { label: 'Usuários', href: '/dashboard/usuarios', icon: Users },
       { label: 'Gerenciar IPs', href: '/dashboard/ips', icon: Globe },
       { label: 'Configurações', href: '/dashboard/configuracoes', icon: Settings },
     ],

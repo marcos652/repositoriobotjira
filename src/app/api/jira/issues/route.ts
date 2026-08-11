@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   const priority = searchParams.get('priority');
   const assignee = searchParams.get('assignee');
   const dateFrom = searchParams.get('dateFrom');
+  const dateTo = searchParams.get('dateTo');
 
   // Build JQL
   const jqlParts: string[] = [`project = ${project}`];
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
   if (priority) jqlParts.push(`priority = ${priority}`);
   if (assignee) jqlParts.push(`assignee = "${assignee}"`);
   if (dateFrom) jqlParts.push(`created >= "${dateFrom}"`);
+  if (dateTo) jqlParts.push(`created <= "${dateTo}"`);
 
   const jql = jqlParts.join(' AND ');
 

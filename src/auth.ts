@@ -22,6 +22,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         console.warn(`[Auth] Blocked Google login for: ${user.email}`);
         return '/login?error=EmailNotAllowed';
       }
+      if (ALLOWED_EMAILS.getStatus(user.email) === 'blocked') {
+        console.warn(`[Auth] Blocked Google login (status=blocked) for: ${user.email}`);
+        return '/login?error=AccountBlocked';
+      }
       return true;
     },
     // Include email in session

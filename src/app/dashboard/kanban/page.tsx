@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Kanban, Loader2, WifiOff, RefreshCw, Trash2
+  Kanban, Loader2, WifiOff, RefreshCw, Trash2, Users, Calendar, ChevronDown
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
@@ -41,17 +41,50 @@ export default function KanbanPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [total, setTotal] = useState(0);
   const [syncingJira, setSyncingJira] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [users, setUsers] = useState<{ displayName: string; avatar: string }[]>([]);
+  const [dateRange, setDateRange] = useState<'all' | '7d' | '30d' | '90d' | 'custom'>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd]   = useState('');
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
 
-  const fetchKanban = useCallback(async (isRefresh = false) => {
+  const fetchKanban = useCallback(async (isRefresh = false, overrideDateRange?: typeof dateRange, overrideStart?: string, overrideEnd?: string) => {
     try {
       if (isRefresh) setRefreshing(true); else setLoading(true);
       setError(null);
 
-      const res = await fetch('/api/jira/issues?project=DSMM');
+      const range   = overrideDateRange ?? dateRange;
+      const start   = overrideStart    ?? customStart;
+      const end     = overrideEnd      ?? customEnd;
+
+      const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
+      const params = new URLSearchParams({ project: 'DSMM' });
+
+      if (range !== 'all') {
+        if (range === 'custom' && start) {
+          params.set('dateFrom', start);
+          if (end) params.set('dateTo', end);
+        } else if (daysMap[range]) {
+          const d = new Date();
+          d.setDate(d.getDate() - daysMap[range]);
+          params.set('dateFrom', d.toISOString().split('T')[0]);
+        }
+      }
+
+      const res = await fetch(`/api/jira/issues?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const issues: JiraIssue[] = data.issues || [];
       setTotal(issues.length);
+
+      const userMap = new Map<string, string>();
+      for (const issue of issues) {
+        const a = issue.fields.assignee;
+        if (a && !userMap.has(a.displayName)) {
+          userMap.set(a.displayName, a.avatarUrls?.['48x48'] || '');
+        }
+      }
+      setUsers(Array.from(userMap.entries()).map(([displayName, avatar]) => ({ displayName, avatar })));
 
       const statusGroups = new Map<string, JiraIssue[]>();
       for (const issue of issues) {
@@ -216,6 +249,12 @@ export default function KanbanPage() {
 
   useEffect(() => { fetchKanban(); }, [fetchKanban]);
 
+  // Re-fetch when date range changes (except custom — waits for user to confirm)
+  useEffect(() => {
+    if (dateRange !== 'custom') fetchKanban(false, dateRange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange]);
+
   // Fix hydration issues with dnd
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -258,12 +297,107 @@ export default function KanbanPage() {
               Kanban Board
               {syncingJira && <Loader2 size={14} className="animate-spin text-indigo-400" />}
             </h1>
-            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>{total} issues • {columns.length} colunas • Jira DSMM</p>
+            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>
+              {total} issues • {columns.length} colunas • Jira DSMM
+              {dateRange !== 'all' && (
+                <span style={{ marginLeft: '6px', color: '#818CF8', fontWeight: 700 }}>
+                  • {dateRange === 'custom' ? `${customStart}${customEnd ? ` → ${customEnd}` : ''}` : dateRange}
+                </span>
+              )}
+            </p>
           </div>
         </div>
-        <button onClick={() => fetchKanban(true)} disabled={refreshing || syncingJira} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Atualizar
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Date filter */}
+          <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: '12px', padding: '4px' }}>
+              <Calendar size={13} style={{ color: 'var(--text-tertiary)', margin: '0 6px' }} />
+              {([
+                { value: 'all',  label: 'Todos' },
+                { value: '7d',   label: '7 dias' },
+                { value: '30d',  label: '30 dias' },
+                { value: '90d',  label: '90 dias' },
+                { value: 'custom', label: 'Personalizado' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setDateRange(opt.value);
+                    if (opt.value === 'custom') setShowCustomPicker(p => !p);
+                    else setShowCustomPicker(false);
+                  }}
+                  style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '4px', background: dateRange === opt.value ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : 'transparent', color: dateRange === opt.value ? '#fff' : 'var(--text-tertiary)' }}
+                >
+                  {opt.label}
+                  {opt.value === 'custom' && <ChevronDown size={11} style={{ transform: showCustomPicker ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom date picker dropdown */}
+            {showCustomPicker && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '14px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', minWidth: '260px' }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', margin: 0 }}>Período personalizado</p>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-tertiary)', display: 'block', marginBottom: '4px' }}>De</label>
+                    <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '12px', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-tertiary)', display: 'block', marginBottom: '4px' }}>Até</label>
+                    <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '12px', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                <button
+                  onClick={() => { if (customStart) { fetchKanban(false, 'custom', customStart, customEnd); setShowCustomPicker(false); } }}
+                  disabled={!customStart}
+                  style={{ padding: '8px', borderRadius: '10px', border: 'none', cursor: customStart ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: '12px', background: customStart ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : 'var(--bg-secondary)', color: customStart ? '#fff' : 'var(--text-tertiary)', transition: 'all 0.15s' }}
+                >
+                  Aplicar filtro
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* User filter */}
+          {users.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: '12px', padding: '6px 10px' }}>
+              <Users size={13} style={{ color: 'var(--text-tertiary)' }} />
+              <button
+                onClick={() => setSelectedUser(null)}
+                title="Todos"
+                style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: selectedUser === null ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : 'transparent', color: selectedUser === null ? '#fff' : 'var(--text-tertiary)' }}
+              >
+                Todos
+              </button>
+              {users.map((u) => {
+                const initials = u.displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+                const isActive = selectedUser === u.displayName;
+                return (
+                  <button
+                    key={u.displayName}
+                    onClick={() => setSelectedUser(isActive ? null : u.displayName)}
+                    title={u.displayName}
+                    style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '3px 8px 3px 4px', borderRadius: '8px', border: isActive ? '2px solid #6366F1' : '2px solid transparent', cursor: 'pointer', transition: 'all 0.15s', background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent' }}
+                  >
+                    {u.avatar ? (
+                      <img src={u.avatar} alt={u.displayName} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 800, color: '#fff' }}>{initials}</div>
+                    )}
+                    <span style={{ fontSize: '11px', fontWeight: isActive ? 700 : 500, color: isActive ? '#818CF8' : 'var(--text-secondary)', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName.split(' ')[0]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <button onClick={() => fetchKanban(true)} disabled={refreshing || syncingJira} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Board */}
@@ -283,14 +417,20 @@ export default function KanbanPage() {
                           <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: col.color }} />
                           <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: col.color }}>{col.title}</span>
                         </div>
-                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', background: `${col.color}15`, color: col.color }}>{col.items.length}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', background: `${col.color}15`, color: col.color }}>
+                          {selectedUser ? col.items.filter(i => i.fields.assignee?.displayName === selectedUser).length : col.items.length}
+                        </span>
                       </div>
 
                       {/* Cards */}
                       <Droppable droppableId={col.id} type="CARD">
-                        {(providedCards) => (
+                        {(providedCards) => {
+                          const visibleItems = selectedUser
+                            ? col.items.filter(i => i.fields.assignee?.displayName === selectedUser)
+                            : col.items;
+                          return (
                           <div ref={providedCards.innerRef} {...providedCards.droppableProps} style={{ padding: '10px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', minHeight: '150px', maxHeight: 'calc(100vh - 250px)' }}>
-                            {col.items.map((issue, cardIndex) => {
+                            {visibleItems.map((issue, cardIndex) => {
                               const tc = typeColor[issue.fields.issuetype.name] || typeColor['Task'];
                               return (
                                 <Draggable key={issue.key} draggableId={issue.key} index={cardIndex}>
@@ -328,11 +468,14 @@ export default function KanbanPage() {
                               );
                             })}
                             {providedCards.placeholder}
-                            {col.items.length === 0 && (
-                              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '11px', fontWeight: 600 }}>Arraste para cá</div>
+                            {visibleItems.length === 0 && (
+                              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '11px', fontWeight: 600 }}>
+                                {selectedUser ? 'Nenhuma issue para este usuário' : 'Arraste para cá'}
+                              </div>
                             )}
                           </div>
-                        )}
+                          );
+                        }}
                       </Droppable>
                     </div>
                   )}

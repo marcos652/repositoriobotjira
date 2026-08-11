@@ -103,6 +103,7 @@ interface SecureEmail {
   addedAt: string;
   addedBy?: string;
   role?: 'admin' | 'user';
+  status?: 'active' | 'blocked';
 }
 
 const DEFAULT_EMAILS = [
@@ -264,8 +265,8 @@ export const ALLOWED_EMAILS = {
     return getStore().has(hash);
   },
 
-  list: (): Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user' }> => {
-    const result: Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user' }> = [];
+  list: (): Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user'; status: 'active' | 'blocked' }> => {
+    const result: Array<{ email: string; addedAt: string; addedBy?: string; isDefault: boolean; role: 'admin' | 'user'; status: 'active' | 'blocked' }> = [];
     const store = getStore();
     let corruptedKeys = [];
     for (const [hash, entry] of store.entries()) {
@@ -277,6 +278,7 @@ export const ALLOWED_EMAILS = {
           addedBy: entry.addedBy,
           isDefault: DEFAULT_EMAILS.includes(email),
           role: entry.role || 'user', // Default existing users to 'user' if not set
+          status: entry.status || 'active',
         });
       } else {
         corruptedKeys.push(hash);
@@ -332,6 +334,27 @@ export const ALLOWED_EMAILS = {
     if (!entry) return 'user';
     if (DEFAULT_EMAILS.includes(email.trim().toLowerCase())) return 'admin'; // Hardcoded defaults are always admin
     return entry.role || 'user';
+  },
+
+  getStatus: (email: string): 'active' | 'blocked' => {
+    const hash = hashEmail(email.trim().toLowerCase());
+    const entry = getStore().get(hash);
+    return entry?.status || 'active';
+  },
+
+  setStatus: (email: string, status: 'active' | 'blocked'): boolean => {
+    const normalized = email.trim().toLowerCase();
+    if (status === 'blocked' && DEFAULT_EMAILS.includes(normalized)) return false; // Cannot block hardcoded admins
+    const hash = hashEmail(normalized);
+    const store = getStore();
+    const entry = store.get(hash);
+    if (!entry) return false;
+
+    entry.status = status;
+    saveEmailsToFile(store);
+    (globalThis as any)[GLOBAL_KEY_TS] = 0;
+    console.log(`[Auth] Set status for ${normalized.slice(0, 3)}*** to ${status}`);
+    return true;
   },
 
   add: (email: string, addedBy?: string, role: 'admin' | 'user' = 'user'): boolean => {
@@ -568,6 +591,18 @@ export const IP_TRACKER = {
     return Array.from(getIPStore().values());
   },
 
+  /** Most recently seen IP entry for an email (used to know "last IP" / power "Banir IP") */
+  getLastForEmail: (email: string): IPEntry | null => {
+    const normalized = email.trim().toLowerCase();
+    let latest: IPEntry | null = null;
+    for (const entry of getIPStore().values()) {
+      if (entry.email === normalized && (!latest || entry.lastSeen > latest.lastSeen)) {
+        latest = entry;
+      }
+    }
+    return latest;
+  },
+
   /** Add a new IP entry manually */
   add: (email: string, ip: string): boolean => {
     const normalized = email.trim().toLowerCase();
@@ -798,5 +833,118 @@ export const TOTP_STORE = {
     } catch (e: any) {
       console.error('[TOTP] Sync failed:', e.message);
     }
+  },
+};
+
+// ═══════════════════════════════════════════
+//  USERS OVERVIEW — merges ALLOWED_EMAILS + IP_TRACKER
+//  for the "Gestão de Usuários" panel
+// ═══════════════════════════════════════════
+
+export interface UserOverview {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'blocked';
+  isDefault: boolean;
+  addedAt: string;
+  lastIp: string | null;
+  lastLogin: string | null;
+  ipBlocked: boolean;
+}
+
+function displayNameFromEmail(email: string): string {
+  const local = email.split('@')[0];
+  return local.split(/[._-]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+}
+
+export function getUsersOverview(): UserOverview[] {
+  return ALLOWED_EMAILS.getRawData()
+    .map((entry: SecureEmail): UserOverview | null => {
+      const email = decryptEmail(entry.encrypted);
+      if (!email) return null;
+      const lastIpEntry = IP_TRACKER.getLastForEmail(email);
+      return {
+        id: entry.hash.slice(0, 8),
+        email,
+        name: displayNameFromEmail(email),
+        role: entry.role || 'user',
+        status: entry.status || 'active',
+        isDefault: DEFAULT_EMAILS.includes(email),
+        addedAt: entry.addedAt,
+        lastIp: lastIpEntry?.ip || null,
+        lastLogin: lastIpEntry?.lastSeen || null,
+        ipBlocked: lastIpEntry?.blocked || false,
+      };
+    })
+    .filter((u): u is UserOverview => u !== null);
+}
+
+// ═══════════════════════════════════════════
+//  REQUEST_LOG_STORE — rastreabilidade de chamadas de escrita na API
+//  (quem, IP, rota, permitida ou não) — usado pelo proxy.ts.
+//  Mesmo padrão do IP_TRACKER (arquivo local, cache em memória);
+//  fallback enquanto o Firestore do projeto não está disponível.
+// ═══════════════════════════════════════════
+
+export interface RequestLogEntry {
+  method: string;
+  path: string;
+  ip: string;
+  who: string;
+  identityType: 'service' | 'user' | 'anonymous';
+  allowed: boolean;
+  createdAt: string;
+}
+
+const GLOBAL_REQLOG_KEY = '__jiraops_request_log_store__';
+const REQLOG_MAX_ENTRIES = 500;
+
+function getRequestLogFilePath(): string {
+  const projectPath = path.join(process.cwd(), 'data', 'request-log.json');
+  const tmpPath = '/tmp/jiraops-request-log.json';
+  try {
+    const dataDir = path.dirname(projectPath);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.accessSync(dataDir, fs.constants.W_OK);
+    return projectPath;
+  } catch {
+    return tmpPath;
+  }
+}
+
+function getRequestLogArray(): RequestLogEntry[] {
+  const g = globalThis as any;
+  if (!g[GLOBAL_REQLOG_KEY]) {
+    g[GLOBAL_REQLOG_KEY] = [];
+    try {
+      const filePath = getRequestLogFilePath();
+      if (fs.existsSync(filePath)) {
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        if (Array.isArray(data)) g[GLOBAL_REQLOG_KEY] = data;
+      }
+    } catch {}
+  }
+  return g[GLOBAL_REQLOG_KEY];
+}
+
+export const REQUEST_LOG_STORE = {
+  record: (entry: Omit<RequestLogEntry, 'createdAt'>): void => {
+    try {
+      const arr = getRequestLogArray();
+      arr.unshift({ ...entry, createdAt: new Date().toISOString() });
+      if (arr.length > REQLOG_MAX_ENTRIES) arr.length = REQLOG_MAX_ENTRIES;
+      const filePath = getRequestLogFilePath();
+      const dataDir = path.dirname(filePath);
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      fs.writeFileSync(filePath, JSON.stringify(arr, null, 2), 'utf-8');
+    } catch (e: any) {
+      console.error('[RequestLog] Failed to persist:', e?.message || e);
+    }
+  },
+
+  getRecent: (limit = 200): RequestLogEntry[] => {
+    return getRequestLogArray().slice(0, limit);
   },
 };

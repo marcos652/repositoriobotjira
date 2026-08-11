@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Hash, Lock, MessageSquare, Send, Loader2, WifiOff, RefreshCw, User, ChevronDown, Search, AtSign, Users } from 'lucide-react';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 interface Channel { id: string; name: string; is_channel: boolean; is_group: boolean; is_im: boolean; is_mpim: boolean; is_member: boolean; topic: string; purpose: string; num_members: number; avatar?: string; user?: string; }
 interface Message { ts: string; text: string; user: string; userName: string; userAvatar: string; subtype: string | null; thread_ts: string | null; reply_count: number; reactions: { name: string; count: number }[]; files: { name: string; url: string }[]; edited: boolean; bot_id: string | null; botName: string | null; }
@@ -324,7 +325,7 @@ export default function SlackPage() {
                         </div>
                       </div>
                     )}
-                    <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', wordBreak: 'break-word' }} dangerouslySetInnerHTML={{ __html: formatSlackText(msg.text) }} />
+                    <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', wordBreak: 'break-word' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(formatSlackText(msg.text)) }} />
                     {msg.reactions.length > 0 && (
                       <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
                         {msg.reactions.map((r, j) => (

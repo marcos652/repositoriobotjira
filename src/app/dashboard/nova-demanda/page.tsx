@@ -14,6 +14,7 @@ import StarterKit from '@tiptap/starter-kit';
 import ImageExtension from '@tiptap/extension-image';
 import { CLIENTS } from '@/lib/clients';
 import { buildDescription, getSectionConfig } from '@/lib/issuePanels';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 interface DemandaResult {
   success: boolean;
@@ -58,14 +59,22 @@ const TEMPLATES = [
   },
 ];
 
+// Os "value" precisam bater exatamente com os nomes do esquema de prioridade
+// configurado no projeto DSMM no Jira (Altíssima/Alta/Médio/Baixa/Baixíssima) —
+// não são os nomes padrão do Jira (Highest/High/...), por isso não é livre escolha.
 const PRIORITIES = [
   { value: '', label: 'Auto (IA decide)', color: '#94A3B8' },
-  { value: 'Highest', label: '🔴 Crítica', color: '#EF4444' },
-  { value: 'High', label: '🟠 Alta', color: '#F97316' },
-  { value: 'Medium', label: '🟡 Média', color: '#EAB308' },
-  { value: 'Low', label: '🟢 Baixa', color: '#22C55E' },
-  { value: 'Lowest', label: '⚪ Mínima', color: '#6B7280' },
+  { value: 'Altíssima', label: '🔴 Crítica', color: '#EF4444' },
+  { value: 'Alta', label: '🟠 Alta', color: '#F97316' },
+  { value: 'Médio', label: '🟡 Média', color: '#EAB308' },
+  { value: 'Baixa', label: '🟢 Baixa', color: '#22C55E' },
+  { value: 'Baixíssima', label: '⚪ Mínima', color: '#6B7280' },
 ];
+
+// Rascunhos/histórico salvos no navegador podem ter um valor antigo (de antes de
+// os nomes serem corrigidos pro esquema do Jira) — nunca reaplica um valor que não
+// esteja mais na lista atual, senão o Jira rejeita a criação com "prioridade inválida".
+const isValidPriority = (v: string) => PRIORITIES.some(p => p.value === v);
 
 const URGENCIES = [
   { value: '', label: 'Normal' },
@@ -136,6 +145,26 @@ export default function NovaDemandaPage() {
     extensions: [StarterKit, ImageExtension.configure({ inline: true })],
     content: texto,
     immediatelyRender: false,
+    editorProps: {
+      // Intercepta a colagem de imagem aqui — dentro do pipeline do próprio ProseMirror —
+      // em vez de um listener global. O handler do ProseMirror roda antes de qualquer
+      // listener em "window", então só aqui dá pra evitar que ele insira o clipboard
+      // bruto como texto (o "MBNDLÇDMÇ..." ilegível) antes do preventDefault surtir efeito.
+      handlePaste: (_view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            event.stopPropagation();
+            const file = item.getAsFile();
+            if (file) uploadFile(file);
+            return true;
+          }
+        }
+        return false;
+      },
+    },
     onUpdate: ({ editor }) => {
       setTexto(editor.getHTML());
       setValidationWarn('');
@@ -176,7 +205,7 @@ export default function NovaDemandaPage() {
       const draft = localStorage.getItem('jiraops-demanda-draft');
       if (draft) {
         const d = JSON.parse(draft);
-        if (d.texto) { setTexto(d.texto); setNomeCliente(d.nomeCliente || ''); setReferencia(d.referencia || 'CONSOLE'); setPrioridade(d.prioridade || ''); setUrgencia(d.urgencia || ''); setShowMeta(!!d.nomeCliente || !!d.prioridade || !!d.urgencia); }
+        if (d.texto) { setTexto(d.texto); setNomeCliente(d.nomeCliente || ''); setReferencia(d.referencia || 'CONSOLE'); setPrioridade(isValidPriority(d.prioridade) ? d.prioridade : ''); setUrgencia(d.urgencia || ''); setShowMeta(!!d.nomeCliente || !!d.prioridade || !!d.urgencia); }
       }
     } catch {}
   }, []);
@@ -267,7 +296,9 @@ export default function NovaDemandaPage() {
     }
   };
 
-  // Handle paste (Ctrl+V image)
+  // Fallback: cola fora do editor (ex.: com foco no campo Cliente/Referência).
+  // Colagens feitas dentro do editor são tratadas por editorProps.handlePaste acima,
+  // que já chama stopPropagation — então não duplica o upload quando o alvo é o editor.
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -470,7 +501,7 @@ export default function NovaDemandaPage() {
     setTexto(item.texto);
     if (item.nomeCliente) setNomeCliente(item.nomeCliente);
     if (item.referencia) setReferencia(item.referencia);
-    if (item.prioridade) setPrioridade(item.prioridade);
+    if (item.prioridade && isValidPriority(item.prioridade)) setPrioridade(item.prioridade);
     if (item.urgencia) setUrgencia(item.urgencia);
     setActiveView('editor');
     setShowMeta(!!(item.nomeCliente || item.prioridade || item.urgencia));
@@ -509,12 +540,6 @@ export default function NovaDemandaPage() {
     <div className="nd-root">
       {/* ───── HERO ───── */}
       <div className="nd-hero">
-        <div className="nd-hero-grid" />
-        <div className="nd-hero-orb nd-hero-orb-1" />
-        <div className="nd-hero-orb nd-hero-orb-2" />
-        <div className="nd-hero-orb nd-hero-orb-3" />
-        <div className="nd-hero-noise" />
-
         <div className="nd-hero-content">
           <div className="nd-hero-left">
             <div className="nd-hero-icon">
@@ -535,7 +560,7 @@ export default function NovaDemandaPage() {
               <span>criada{history.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="nd-bot-status">
-              <div className="nd-pulse" />
+              <div className="nd-status-dot" />
               <Bot size={14} />
               <span>Online</span>
             </div>
@@ -705,7 +730,7 @@ export default function NovaDemandaPage() {
                 </div>
 
                 {showPreview && texto ? (
-                  <div className="nd-preview" dangerouslySetInnerHTML={{ __html: texto }} />
+                  <div className="nd-preview" dangerouslySetInnerHTML={{ __html: sanitizeHtml(texto) }} />
                 ) : (
                   <div className="nd-editor-textarea" style={{ padding: '16px', minHeight: '220px', display: 'flex', flexDirection: 'column' }} onClick={() => editor?.commands.focus()}>
                     <EditorContent editor={editor} className="tiptap-wrapper" style={{ flexGrow: 1 }} />
@@ -1138,39 +1163,26 @@ export default function NovaDemandaPage() {
 
         /* ========== HERO ========== */
         .nd-hero {
-          position: relative; flex-shrink: 0; overflow: hidden;
-          background: linear-gradient(140deg, #080C18 0%, #0F1629 30%, #161340 60%, #0D0B22 100%);
-          border-bottom: 1px solid rgba(255,255,255,0.05);
+          position: relative; flex-shrink: 0;
+          background: var(--bg-secondary);
+          border-bottom: 1px solid var(--border-primary);
         }
-        .nd-hero-grid {
-          position: absolute; inset: 0; opacity: 0.03;
-          background-image: linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px);
-          background-size: 40px 40px;
-        }
-        .nd-hero-noise {
-          position: absolute; inset: 0; opacity: 0.015;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-        }
-        .nd-hero-orb { position: absolute; border-radius: 50%; filter: blur(60px); pointer-events: none; }
-        .nd-hero-orb-1 { width: 250px; height: 250px; background: rgba(99,102,241,0.2); top: -80px; right: 15%; animation: ndOrb 8s ease-in-out infinite; }
-        .nd-hero-orb-2 { width: 180px; height: 180px; background: rgba(168,85,247,0.15); bottom: -60px; left: 25%; animation: ndOrb 11s ease-in-out infinite reverse; }
-        .nd-hero-orb-3 { width: 120px; height: 120px; background: rgba(59,130,246,0.1); top: 30%; right: 40%; animation: ndOrb 14s ease-in-out infinite; }
-        @keyframes ndOrb { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-15px) scale(1.08); } }
 
-        .nd-hero-content { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 28px 32px; }
+        .nd-hero-content { display: flex; align-items: center; justify-content: space-between; padding: 24px 32px; }
         .nd-hero-left { display: flex; align-items: center; gap: 16px; }
         .nd-hero-icon {
-          width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
-          background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #A78BFA 100%);
-          box-shadow: 0 8px 28px rgba(99,102,241,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+          width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+          background: var(--accent-violet);
         }
-        .nd-hero-title { font-size: 20px; font-weight: 800; color: #F1F5F9; letter-spacing: -0.02em; }
-        .nd-hero-subtitle { font-size: 13px; color: rgba(148,163,184,0.65); margin-top: 2px; }
+        .nd-hero-title { font-size: 19px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+        .nd-hero-subtitle { font-size: 13px; color: var(--text-tertiary); margin-top: 2px; }
         .nd-hero-right { display: flex; align-items: center; gap: 10px; }
-        .nd-stat { display: flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); color: rgba(148,163,184,0.6); font-size: 11px; font-weight: 600; }
-        .nd-stat-value { color: #E2E8F0; font-weight: 800; font-variant-numeric: tabular-nums; }
-        .nd-bot-status { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.12); color: #4ADE80; font-size: 11px; font-weight: 700; }
-        .nd-pulse { width: 7px; height: 7px; border-radius: 50%; background: #22C55E; box-shadow: 0 0 8px rgba(34,197,94,0.5); animation: ndP 2s ease-in-out infinite; }
+        .nd-stat { display: flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 999px; background: var(--bg-card); border: 1px solid var(--border-secondary); color: var(--text-tertiary); font-size: 11px; font-weight: 600; }
+        .nd-stat-value { color: var(--text-primary); font-weight: 800; font-variant-numeric: tabular-nums; }
+        .nd-bot-status { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--accent-emerald-light); border: 1px solid var(--accent-emerald-light); color: var(--accent-emerald); font-size: 11px; font-weight: 700; }
+        .nd-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-emerald); }
+
+        /* Usado só pelo indicador de gravação de voz ativa (feedback funcional, não decoração ambiente) */
         @keyframes ndP { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
         /* ========== BODY ========== */

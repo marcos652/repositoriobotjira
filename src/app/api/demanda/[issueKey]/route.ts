@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchDevSummary, fetchDevDetail, enrichWithConflictStatus, type DevCounts } from '@/lib/jira-dev-status';
 
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
 const JIRA_TOKEN = process.env.JIRA_TOKEN;
@@ -54,11 +55,23 @@ export async function GET(
     const data = await issueRes.json();
     const f = data.fields || {};
 
-    // 2) Fetch transitions (available statuses)
-    const [transRes, devInfoRes] = await Promise.all([
+    // 2) Fetch transitions + dev info (branches, PRs, builds — mesmo painel "Desenvolvimento" do Jira).
+    // O summary é buscado antes do detail porque ele diz qual applicationType está de fato
+    // conectado (GitHub, Bitbucket, GitLab...) — chumbar "GitHub" faz a chamada voltar vazia
+    // em silêncio quando o Jira usa outra ferramenta.
+    const [transRes, devSummaryResult] = await Promise.all([
       fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/transitions`, { headers, signal: AbortSignal.timeout(8000) }).catch(() => null),
-      data.id ? fetch(`${JIRA_BASE_URL}/rest/dev-status/latest/issue/detail?issueId=${data.id}&applicationType=GitHub&dataType=pullrequest`, { headers, signal: AbortSignal.timeout(10000) }).catch(() => null) : null,
+      data.id ? fetchDevSummary(JIRA_BASE_URL, headers, data.id) : null,
     ]);
+
+    const { pullRequests: prsWithoutConflict, branches, builds } = devSummaryResult
+      ? await fetchDevDetail(JIRA_BASE_URL, headers, data.id, devSummaryResult.prTypes, devSummaryResult.repoTypes, devSummaryResult.buildTypes)
+      : { pullRequests: [], branches: [], builds: [] };
+    const pullRequests = await enrichWithConflictStatus(prsWithoutConflict);
+    const prInstanceTypes = devSummaryResult?.prTypes || [];
+    const repoInstanceTypes = devSummaryResult?.repoTypes || [];
+    const buildInstanceTypes = devSummaryResult?.buildTypes || [];
+    const devSummary: DevCounts = devSummaryResult?.counts || { branches: 0, commits: 0, pullRequests: 0, builds: { count: 0, state: null } };
 
     // Parse description
     let descriptionText: string | null = null;
@@ -67,11 +80,14 @@ export async function GET(
     }
 
     // Parse comments
+    const renderedComments = data.renderedFields?.comment?.comments || [];
     const comments = (f.comment?.comments || []).map((c: any) => ({
       id: c.id,
       author: c.author?.displayName || 'Desconhecido',
       authorAvatar: c.author?.avatarUrls?.['24x24'] || null,
       body: typeof c.body === 'string' ? c.body : adfToText(c.body).trim(),
+      // HTML já renderizado pelo Jira (com imagens embutidas) — igual ao que o Jira mostra.
+      bodyHtml: renderedComments.find((rc: any) => rc.id === c.id)?.body || null,
       created: c.created,
       updated: c.updated,
     }));
@@ -131,24 +147,6 @@ export async function GET(
       sprint = { id: s.id, name: s.name, state: s.state, startDate: s.startDate, endDate: s.endDate };
     }
 
-    // Parse PRs
-    let pullRequests: any[] = [];
-    if (devInfoRes && devInfoRes.ok) {
-      try {
-        const devData = await devInfoRes.json();
-        for (const repo of (devData?.detail || [])) {
-          for (const pr of (repo.pullRequests || [])) {
-            pullRequests.push({
-              id: pr.id, title: pr.name || pr.title, status: pr.status, url: pr.url,
-              author: pr.author?.name || null, source: pr.source?.branch || null,
-              destination: pr.destination?.branch || null,
-              reviewers: (pr.reviewers || []).map((r: any) => r.name || r.login),
-            });
-          }
-        }
-      } catch {}
-    }
-
     // Parse changelog (activity)
     const changelog = (data.changelog?.histories || []).slice(-20).reverse().map((h: any) => ({
       author: h.author?.displayName || 'Sistema',
@@ -199,6 +197,13 @@ export async function GET(
       transitions,
       sprint,
       pullRequests,
+      branches,
+      builds,
+      devSummary,
+      // Quais applicationType o Jira reportou como conectados (debug — ajuda a diagnosticar
+      // se um PR existir no Jira mas não aparecer aqui: se vier vazio, o próprio Jira não
+      // está retornando nada no /summary para essa issue).
+      devInstanceTypes: { pr: prInstanceTypes, repo: repoInstanceTypes, build: buildInstanceTypes },
       changelog,
       timeTracking,
       url: `${JIRA_BASE_URL}/browse/${data.key || issueKey}`,
@@ -217,7 +222,7 @@ export async function POST(
   try {
     const { issueKey } = await params;
     const body = await request.json();
-    const { action, comment, transitionId } = body;
+    const { action, comment, images, transitionId } = body;
 
     if (!JIRA_EMAIL || !JIRA_TOKEN) {
       return NextResponse.json({ error: 'Credenciais não configuradas' }, { status: 500 });
@@ -227,17 +232,20 @@ export async function POST(
     const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Basic ${jiraAuth}` };
 
     // Add comment
-    if (action === 'comment' && comment) {
-      const adfBody = {
-        type: 'doc', version: 1,
-        content: comment.split('\n').filter(Boolean).map((line: string) => ({
-          type: 'paragraph', content: [{ type: 'text', text: line }],
-        })),
-      };
+    if (action === 'comment' && (comment || (images && images.length > 0))) {
+      // API v2 aceita wiki markup em uma string simples (mesmo esquema já usado na description
+      // da issue) — isso permite referenciar imagens já anexadas via "!nome_do_arquivo.ext!".
+      // As imagens precisam já existir como anexo na issue ANTES deste POST (o Jira só resolve
+      // o marcador para um anexo que já existe no momento em que converte o texto para ADF).
+      let commentBody = comment ? String(comment) : '';
+      if (images && Array.isArray(images) && images.length > 0) {
+        const markers = images.filter(Boolean).map((filename: string) => `!${filename}!`).join('\n');
+        commentBody = commentBody ? `${commentBody}\n${markers}` : markers;
+      }
 
-      const res = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}/comment`, {
+      const res = await fetch(`${JIRA_BASE_URL}/rest/api/2/issue/${issueKey}/comment`, {
         method: 'POST', headers,
-        body: JSON.stringify({ body: adfBody }),
+        body: JSON.stringify({ body: commentBody }),
       });
 
       if (!res.ok) {

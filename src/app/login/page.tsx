@@ -6,7 +6,7 @@ import { Zap, Mail, ArrowRight, ArrowLeft, Loader2, CheckCircle2, Shield, BarCha
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-type Step = 'email';
+type Step = 'email' | 'totp-setup' | 'totp-verify';
 
 function LoginContent() {
   const router = useRouter();
@@ -19,17 +19,80 @@ function LoginContent() {
   const [success, setSuccess] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // ── Estado do 2º fator (Google Authenticator) ──
+  const [totpEmail, setTotpEmail] = useState('');
+  const [totpIdToken, setTotpIdToken] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState('');
+  const [manualSecret, setManualSecret] = useState('');
+  const [setupToken, setSetupToken] = useState('');
+  const [totpCode, setTotpCode] = useState('');
+
   // Check for OAuth errors from callback
   useEffect(() => {
     const err = searchParams.get('error');
     if (err === 'EmailNotAllowed') {
       setError('Email não autorizado. Peça acesso ao administrador.');
+    } else if (err === 'AccountBlocked') {
+      setError('Sua conta foi bloqueada. Contate o administrador.');
     } else if (err) {
       setError('Erro na autenticação. Tente novamente.');
     }
   }, [searchParams]);
 
-  // ── Handle login submit: check Firebase Auth first, then set session ──
+  // Login via Google já concluiu o 1º fator (proxy.ts redireciona pra cá com
+  // ?mfa=pending) — descobre o email da sessão Auth.js e pede o 2º fator.
+  useEffect(() => {
+    if (searchParams.get('mfa') !== 'pending') return;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/session');
+        const data = await res.json();
+        const ssoEmail = data?.user?.email;
+        if (ssoEmail) {
+          await startTotpChallenge(ssoEmail, null);
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // Consulta /api/auth/totp: já tem Authenticator configurado (pede código) ou
+  // não (mostra QR code pra configurar). Vale tanto pro login por senha quanto Google.
+  const startTotpChallenge = async (targetEmail: string, idToken: string | null) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/totp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail, idToken }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Erro ao iniciar verificação em duas etapas.');
+        return;
+      }
+
+      setTotpEmail(targetEmail);
+      setTotpIdToken(idToken);
+
+      if (data.configured) {
+        setStep('totp-verify');
+      } else {
+        setQrCode(data.qrCode);
+        setManualSecret(data.secret);
+        setSetupToken(data.setupToken);
+        setStep('totp-setup');
+      }
+    } catch {
+      setError('Erro de conexão');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Handle login submit: Firebase Auth, depois exige o Google Authenticator ──
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password || isLoading) return;
@@ -37,7 +100,6 @@ function LoginContent() {
     setError(null);
 
     try {
-      // 1. Firebase Authentication
       let idToken = '';
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
@@ -49,19 +111,37 @@ function LoginContent() {
         return;
       }
 
-      // 2. Set Session Cookie
-      const sessionRes = await fetch('/api/custom-session', {
+      await startTotpChallenge(email.trim().toLowerCase(), idToken);
+    } catch {
+      setError('Erro de conexão');
+      setIsLoading(false);
+    }
+  };
+
+  // ── Confirma o primeiro código depois de escanear o QR (configuração inicial) ──
+  const handleConfirmSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!totpCode.trim() || isLoading) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/totp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({
+          email: totpEmail,
+          idToken: totpIdToken,
+          action: 'confirm-setup',
+          code: totpCode.trim(),
+          setupToken,
+        }),
       });
-      const sessionData = await sessionRes.json();
-
-      if (sessionRes.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         setSuccess('Login realizado!');
         setTimeout(() => router.push('/dashboard'), 500);
       } else {
-        setError(sessionData.error || 'Erro ao criar sessão');
+        setError(data.error || 'Código incorreto');
       }
     } catch {
       setError('Erro de conexão');
@@ -69,6 +149,48 @@ function LoginContent() {
       setIsLoading(false);
     }
   };
+
+  // ── Verifica o código do Authenticator já configurado ──
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!totpCode.trim() || isLoading) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/totp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: totpEmail,
+          idToken: totpIdToken,
+          action: 'verify',
+          code: totpCode.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSuccess('Login realizado!');
+        setTimeout(() => router.push('/dashboard'), 500);
+      } else {
+        setError(data.error || 'Código incorreto');
+      }
+    } catch {
+      setError('Erro de conexão');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBackToEmail = () => {
+    setStep('email');
+    setError(null);
+    setTotpCode('');
+    router.replace('/login');
+  };
+
+  // Não há reset autoatendido de TOTP: apagar o próprio 2º fator só com prova do
+  // 1º (senha/Google) permitiria a quem só roubou a senha rearmar o TOTP pro
+  // próprio aparelho. Quem perder o acesso precisa de um admin (DELETE /api/auth/totp).
 
 
 
@@ -155,10 +277,12 @@ function LoginContent() {
           {/* Header */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8FAFC' }}>
-              Entrar no Dashboard
+              {step === 'email' ? 'Entrar no Dashboard' : 'Verificação em duas etapas'}
             </h2>
             <p className="text-sm" style={{ color: '#64748B' }}>
-              Digite seu email corporativo.
+              {step === 'email' && 'Digite seu email corporativo.'}
+              {step === 'totp-setup' && 'Escaneie o QR code com o Google Authenticator.'}
+              {step === 'totp-verify' && `Digite o código gerado pelo Google Authenticator para ${totpEmail}.`}
             </p>
           </div>
 
@@ -298,7 +422,111 @@ function LoginContent() {
             </form>
           )}
 
+          {/* Step 2a: Configurar Google Authenticator (primeiro acesso) */}
+          {step === 'totp-setup' && (
+            <form onSubmit={handleConfirmSetup} className="animate-fade-in">
+              <div className="flex flex-col items-center mb-6">
+                {qrCode && (
+                  <img src={qrCode} alt="QR code do Google Authenticator" width={200} height={200}
+                    className="rounded-xl mb-4" style={{ border: '1px solid #1E293B' }} />
+                )}
+                {manualSecret && (
+                  <div className="w-full text-center mb-4">
+                    <p className="text-[11px] uppercase tracking-wider mb-1" style={{ color: '#475569' }}>
+                      Ou digite manualmente no app
+                    </p>
+                    <code className="text-xs font-mono px-3 py-1.5 rounded-lg inline-block"
+                      style={{ background: '#0F172A', color: '#94A3B8', border: '1px solid #1E293B', letterSpacing: '0.05em' }}>
+                      {manualSecret}
+                    </code>
+                  </div>
+                )}
+              </div>
 
+              <label className="block text-xs font-bold uppercase tracking-wider mb-2"
+                style={{ color: '#475569' }}>Código do Authenticator</label>
+              <div className="flex items-center gap-3 px-4 rounded-xl h-13 mb-6"
+                style={{ background: '#0F172A', border: '1px solid #1E293B' }}>
+                <Smartphone size={16} style={{ color: '#475569', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={totpCode}
+                  onChange={e => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="000000"
+                  required
+                  autoFocus
+                  className="flex-1 bg-transparent border-none outline-none text-sm font-medium py-4 tracking-widest"
+                  style={{ color: '#F8FAFC' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || totpCode.trim().length !== 6}
+                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl text-sm font-bold transition-all"
+                style={{
+                  background: isLoading ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #3B82F6, #6366F1)',
+                  color: '#fff', border: 'none', cursor: isLoading ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 24px rgba(59,130,246,0.3)',
+                }}>
+                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Confirmar e entrar <ArrowRight size={16} /></>}
+              </button>
+
+              <button type="button" onClick={handleBackToEmail}
+                className="w-full flex items-center justify-center gap-2 h-10 mt-3 rounded-xl text-xs font-semibold"
+                style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer' }}>
+                <ArrowLeft size={14} /> Voltar
+              </button>
+            </form>
+          )}
+
+          {/* Step 2b: Digitar código do Authenticator já configurado */}
+          {step === 'totp-verify' && (
+            <form onSubmit={handleVerifyCode} className="animate-fade-in">
+              <label className="block text-xs font-bold uppercase tracking-wider mb-2"
+                style={{ color: '#475569' }}>Código do Authenticator</label>
+              <div className="flex items-center gap-3 px-4 rounded-xl h-13 mb-6"
+                style={{ background: '#0F172A', border: '1px solid #1E293B' }}>
+                <Key size={16} style={{ color: '#475569', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={totpCode}
+                  onChange={e => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="000000"
+                  required
+                  autoFocus
+                  className="flex-1 bg-transparent border-none outline-none text-sm font-medium py-4 tracking-widest"
+                  style={{ color: '#F8FAFC' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || totpCode.trim().length !== 6}
+                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl text-sm font-bold transition-all"
+                style={{
+                  background: isLoading ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #3B82F6, #6366F1)',
+                  color: '#fff', border: 'none', cursor: isLoading ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 24px rgba(59,130,246,0.3)',
+                }}>
+                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <>Entrar <ArrowRight size={16} /></>}
+              </button>
+
+              <p className="w-full text-center mt-4 text-xs" style={{ color: '#475569' }}>
+                Perdeu acesso ao Authenticator? Contate um administrador.
+              </p>
+
+              <button type="button" onClick={handleBackToEmail}
+                className="w-full flex items-center justify-center gap-2 h-10 mt-3 rounded-xl text-xs font-semibold"
+                style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer' }}>
+                <ArrowLeft size={14} /> Voltar
+              </button>
+            </form>
+          )}
 
           {/* Footer */}
           <p className="mt-10 text-center text-[10px]" style={{ color: '#334155' }}>
