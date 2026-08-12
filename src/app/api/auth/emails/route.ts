@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
-  await ALLOWED_EMAILS.syncWithFirestore();
+  await ALLOWED_EMAILS.sync();
 
   return NextResponse.json({
     success: true,
@@ -61,15 +61,11 @@ export async function POST(request: NextRequest) {
     const adminEmail = await getSessionEmail(request);
     const validRole = role === 'admin' ? 'admin' : 'user';
     
-    await ALLOWED_EMAILS.syncWithFirestore(); // Ensure we have latest before adding
+    await ALLOWED_EMAILS.sync(); // Ensure we have latest before adding
     
-    const added = ALLOWED_EMAILS.add(normalized, adminEmail || 'admin', validRole);
+    const added = await ALLOWED_EMAILS.add(normalized, adminEmail || 'admin', validRole);
 
-    if (added) {
-      import('@/lib/firebase').then(m => m.saveAuthStoreToFirestore(ALLOWED_EMAILS.getRawData()));
-    }
-
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: added,
       message: added ? 'Usuário adicionado com sucesso' : 'Email já existe na base local'
     });
@@ -97,14 +93,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Email não está na lista' }, { status: 404 });
     }
 
-    await ALLOWED_EMAILS.syncWithFirestore();
+    await ALLOWED_EMAILS.sync();
 
-    const removed = ALLOWED_EMAILS.remove(normalized);
+    const removed = await ALLOWED_EMAILS.remove(normalized);
     if (!removed) {
       return NextResponse.json({ error: 'Não foi possível remover (usuário não encontrado ou é padrão)' }, { status: 400 });
     }
-
-    import('@/lib/firebase').then(m => m.saveAuthStoreToFirestore(ALLOWED_EMAILS.getRawData()));
 
     return NextResponse.json({
       success: true,
@@ -136,14 +130,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Email não está na lista' }, { status: 404 });
     }
 
-    await ALLOWED_EMAILS.syncWithFirestore();
+    await ALLOWED_EMAILS.sync();
     
-    const updated = ALLOWED_EMAILS.updateRole(normalized, validRole);
+    const updated = await ALLOWED_EMAILS.updateRole(normalized, validRole);
     if (!updated) {
       return NextResponse.json({ error: 'Não foi possível atualizar (usuário não encontrado ou é default)' }, { status: 400 });
     }
-
-    import('@/lib/firebase').then(m => m.saveAuthStoreToFirestore(ALLOWED_EMAILS.getRawData()));
 
     return NextResponse.json({ success: true, message: 'Função atualizada com sucesso' });
   } catch (error: any) {

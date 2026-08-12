@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse, type NextFetchEvent } from 'next/server';
+import { NextRequest, NextResponse, after, type NextFetchEvent } from 'next/server';
 import { IP_TRACKER, ALLOWED_EMAILS, REQUEST_LOG_STORE } from './app/api/auth/_store';
 import { getSessionEmail } from './app/api/auth/_admin';
-import { logApiRequest } from './lib/firebase';
 import { checkRateLimit } from './lib/rateLimit';
 
 // Rotas que chamam IA por requisição — custam dinheiro de verdade por chamada,
@@ -64,7 +63,7 @@ async function resolveApiIdentity(request: NextRequest): Promise<ApiIdentity> {
   return { who: 'anonymous', identityType: 'anonymous', authorized: false };
 }
 
-export async function proxy(request: NextRequest, event: NextFetchEvent) {
+export async function proxy(request: NextRequest, _event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
   const method = request.method;
 
@@ -130,25 +129,18 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     // registra o e-mail real sozinha; registrar "anonymous" aqui só criaria ruído.
     const skipLog = isAuthRoute && identity.identityType === 'anonymous';
     if (!skipLog) {
-      // Grava local (síncrono, sempre funciona) e tenta o Firestore em paralelo,
-      // sem bloquear a resposta — se o Firestore não estiver disponível, o arquivo
-      // local já garante que a chamada apareça no painel.
-      REQUEST_LOG_STORE.record({
+      // Grava local (arquivo, cache rápido) e no Redis (durável entre
+      // instâncias/deploys) — usado pelo painel "Requisições na API". Via
+      // after(): roda toda ida-e-volta ao Redis SEM atrasar a resposta —
+      // isso corre em TODA chamada de API, então bloquear aqui somaria
+      // ~250-400ms em cada requisição da aplicação inteira.
+      after(() => REQUEST_LOG_STORE.record({
         method,
         path: pathname,
         ip,
         who: identity.who,
         identityType: identity.identityType,
         allowed: !blocked,
-      });
-      event.waitUntil(logApiRequest({
-        method,
-        path: pathname,
-        ip,
-        who: identity.who,
-        identityType: identity.identityType,
-        allowed: !blocked,
-        userAgent: request.headers.get('user-agent') || undefined,
       }));
     }
 

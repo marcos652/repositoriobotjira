@@ -1,6 +1,26 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { getRedisClient } from '@/lib/redis';
+
+// Chaves do Redis (Upstash) usadas como fonte de verdade durável — o arquivo
+// local (data/*.json + fallback /tmp) continua existindo como cache rápido em
+// memória/disco, mas some a cada cold start em instâncias serverless
+// diferentes; o Redis é o que garante que usuário criado, TOTP configurado e
+// logs de requisição sobrevivem entre instâncias/deploys na Vercel.
+const REDIS_EMAILS_KEY = 'jiraops:allowed-emails';
+const REDIS_TOTP_KEY = 'jiraops:totp-store';
+const REDIS_REQLOG_KEY = 'jiraops:request-log';
+const REDIS_REQLOG_MAX = 500;
+
+// Cada chamada de sync() custa uma ida e volta de rede (~150-300ms no Upstash).
+// O fluxo de login chama sync() várias vezes em poucos segundos (setup ->
+// confirm-setup, por exemplo) — sem isso, cada etapa pagaria o preço de novo
+// à toa. Não afeta correção: 3s é bem menor que o TTL de cache local (2s já
+// usado em outros lugares deste arquivo) somado à folga de rede.
+const REDIS_SYNC_THROTTLE_MS = 3000;
+const GLOBAL_EMAILS_SYNCED_AT = '__jiraops_email_store_redis_synced_at__';
+const GLOBAL_TOTP_SYNCED_AT = '__jiraops_totp_store_redis_synced_at__';
 
 // Encryption key (32 bytes for AES-256-GCM)
 const ENCRYPTION_KEY = (() => {
@@ -196,7 +216,26 @@ function saveEmailsToFile(store: Map<string, SecureEmail>): void {
   }
 }
 
-import { saveAuthStoreToFirestore, getAuthStoreFromFirestore } from '@/lib/firebase';
+// ── Redis (Upstash) — fonte de verdade durável entre instâncias/deploys ──
+async function pushEmailToRedis(hash: string, entry: SecureEmail): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.hset(REDIS_EMAILS_KEY, { [hash]: JSON.stringify(entry) });
+  } catch (e: any) {
+    console.error('[Auth] Falha ao gravar no Redis:', e?.message || e);
+  }
+}
+
+async function deleteEmailFromRedis(hash: string): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.hdel(REDIS_EMAILS_KEY, hash);
+  } catch (e: any) {
+    console.error('[Auth] Falha ao remover do Redis:', e?.message || e);
+  }
+}
 
 // ── Use globalThis to share across Next.js API routes ──
 const GLOBAL_KEY = '__jiraops_email_store__';
@@ -299,32 +338,39 @@ export const ALLOWED_EMAILS = {
     return Array.from(getStore().values());
   },
 
-  syncWithFirestore: async (): Promise<void> => {
+  // Redis é a fonte durável entre instâncias/deploys. Se já tiver dado lá,
+  // substitui o estado local por ele (fonte de verdade). Se estiver vazio mas
+  // já existir dado local (deploy anterior ao Redis existir), usa o local pra
+  // semear o Redis uma única vez — migra sozinho, sem passo manual.
+  sync: async (): Promise<void> => {
+    const redis = getRedisClient();
+    if (!redis) return;
+    const g = globalThis as any;
+    const now = Date.now();
+    if (g[GLOBAL_EMAILS_SYNCED_AT] && (now - g[GLOBAL_EMAILS_SYNCED_AT]) < REDIS_SYNC_THROTTLE_MS) {
+      return;
+    }
     try {
-      const data = await getAuthStoreFromFirestore();
-      if (data && Array.isArray(data)) {
-        const store = getStore();
-        let changed = false;
-        for (const entry of data) {
-          if (!store.has(entry.hash)) {
-            store.set(entry.hash, entry);
-            changed = true;
-          } else {
-            // Update role if changed
-            const existing = store.get(entry.hash);
-            if (existing && existing.role !== entry.role) {
-              existing.role = entry.role;
-              changed = true;
-            }
-          }
+      // O cliente do Upstash já desserializa JSON automaticamente na leitura
+      // (o valor chega como objeto, não como string) — nada de JSON.parse aqui.
+      const data = await redis.hgetall<Record<string, SecureEmail>>(REDIS_EMAILS_KEY);
+      g[GLOBAL_EMAILS_SYNCED_AT] = now;
+      if (data && Object.keys(data).length > 0) {
+        const fresh = new Map<string, SecureEmail>();
+        for (const [hash, entry] of Object.entries(data)) {
+          fresh.set(hash, entry);
         }
-        if (changed) {
-          saveEmailsToFile(store);
-          (globalThis as any)[GLOBAL_KEY_TS] = 0; // invalidate cache
+        (globalThis as any)[GLOBAL_KEY] = fresh;
+        (globalThis as any)[GLOBAL_KEY_TS] = 0;
+        saveEmailsToFile(fresh);
+      } else {
+        const store = getStore();
+        for (const [hash, entry] of store) {
+          await pushEmailToRedis(hash, entry);
         }
       }
     } catch (e: any) {
-      console.error('[Auth] Sync failed:', e.message);
+      console.error('[Auth] Sync com Redis falhou:', e?.message || e);
     }
   },
 
@@ -342,7 +388,7 @@ export const ALLOWED_EMAILS = {
     return entry?.status || 'active';
   },
 
-  setStatus: (email: string, status: 'active' | 'blocked'): boolean => {
+  setStatus: async (email: string, status: 'active' | 'blocked'): Promise<boolean> => {
     const normalized = email.trim().toLowerCase();
     if (status === 'blocked' && DEFAULT_EMAILS.includes(normalized)) return false; // Cannot block hardcoded admins
     const hash = hashEmail(normalized);
@@ -353,45 +399,49 @@ export const ALLOWED_EMAILS = {
     entry.status = status;
     saveEmailsToFile(store);
     (globalThis as any)[GLOBAL_KEY_TS] = 0;
+    await pushEmailToRedis(hash, entry);
     console.log(`[Auth] Set status for ${normalized.slice(0, 3)}*** to ${status}`);
     return true;
   },
 
-  add: (email: string, addedBy?: string, role: 'admin' | 'user' = 'user'): boolean => {
+  add: async (email: string, addedBy?: string, role: 'admin' | 'user' = 'user'): Promise<boolean> => {
     const normalized = email.trim().toLowerCase();
     if (!normalized.includes('@')) return false;
     const hash = hashEmail(normalized);
     const store = getStore();
     if (store.has(hash)) return false;
-    store.set(hash, {
+    const entry: SecureEmail = {
       hash,
       encrypted: encryptEmail(normalized),
       addedAt: new Date().toISOString(),
       addedBy: addedBy || 'admin',
       role,
-    });
+    };
+    store.set(hash, entry);
     saveEmailsToFile(store); // Persist!
     (globalThis as any)[GLOBAL_KEY_TS] = 0; // Invalidate cache
+    await pushEmailToRedis(hash, entry);
     console.log(`[Auth] Added email: ${normalized.slice(0, 3)}***`);
     return true;
   },
 
-  updateRole: (email: string, role: 'admin' | 'user'): boolean => {
+  updateRole: async (email: string, role: 'admin' | 'user'): Promise<boolean> => {
     const normalized = email.trim().toLowerCase();
     if (DEFAULT_EMAILS.includes(normalized)) return false; // Cannot change hardcoded admins
     const hash = hashEmail(normalized);
     const store = getStore();
     const entry = store.get(hash);
     if (!entry) return false;
-    
+
     entry.role = role;
     saveEmailsToFile(store);
     (globalThis as any)[GLOBAL_KEY_TS] = 0;
+    await pushEmailToRedis(hash, entry);
     console.log(`[Auth] Updated role for ${normalized.slice(0, 3)}*** to ${role}`);
     return true;
   },
 
-  remove: (email: string): boolean => {
+  remove: async (email: string): Promise<boolean> => {
     const normalized = email.trim().toLowerCase();
     if (DEFAULT_EMAILS.includes(normalized)) return false;
     const store = getStore();
@@ -401,6 +451,7 @@ export const ALLOWED_EMAILS = {
     if (removed) {
       saveEmailsToFile(store); // Persist!
       (globalThis as any)[GLOBAL_KEY_TS] = 0; // Invalidate cache
+      await deleteEmailFromRedis(hash);
       console.log(`[Auth] Removed email: ${normalized.slice(0, 3)}***`);
     }
     return removed;
@@ -765,7 +816,25 @@ function saveTOTPStore(): void {
   }
 }
 
-import { saveTotpStoreToFirestore, getTotpStoreFromFirestore } from '@/lib/firebase';
+async function pushTotpToRedis(hash: string, entry: TOTPEntry): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.hset(REDIS_TOTP_KEY, { [hash]: JSON.stringify(entry) });
+  } catch (e: any) {
+    console.error('[TOTP] Falha ao gravar no Redis:', e?.message || e);
+  }
+}
+
+async function deleteTotpFromRedis(hash: string): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.hdel(REDIS_TOTP_KEY, hash);
+  } catch (e: any) {
+    console.error('[TOTP] Falha ao remover do Redis:', e?.message || e);
+  }
+}
 
 function totpEmailHash(email: string): string {
   return crypto.createHash('sha256').update(email.trim().toLowerCase() + ':totp-salt').digest('hex');
@@ -785,24 +854,29 @@ export const TOTP_STORE = {
   },
 
   /** Save TOTP secret for user */
-  set: (email: string, encryptedSecret: string): void => {
+  set: async (email: string, encryptedSecret: string): Promise<void> => {
     const hash = totpEmailHash(email);
     const store = getTOTPStore();
-    store.set(hash, {
+    const entry: TOTPEntry = {
       emailHash: hash,
       encryptedSecret,
       createdAt: new Date().toISOString(),
-    });
+    };
+    store.set(hash, entry);
     saveTOTPStore();
+    await pushTotpToRedis(hash, entry);
     console.log(`[TOTP] Configured for ${email.slice(0, 3)}***`);
   },
 
   /** Remove TOTP for user (reset) */
-  remove: (email: string): boolean => {
+  remove: async (email: string): Promise<boolean> => {
     const hash = totpEmailHash(email);
     const store = getTOTPStore();
     const removed = store.delete(hash);
-    if (removed) saveTOTPStore();
+    if (removed) {
+      saveTOTPStore();
+      await deleteTotpFromRedis(hash);
+    }
     return removed;
   },
 
@@ -813,25 +887,37 @@ export const TOTP_STORE = {
     return Array.from(getTOTPStore().values());
   },
 
-  syncWithFirestore: async (): Promise<void> => {
+  // Mesmo esquema do ALLOWED_EMAILS.sync(): Redis com dado -> substitui local;
+  // Redis vazio com dado local -> semeia o Redis uma vez (migração automática).
+  sync: async (): Promise<void> => {
+    const redis = getRedisClient();
+    if (!redis) return;
+    const g = globalThis as any;
+    const now = Date.now();
+    if (g[GLOBAL_TOTP_SYNCED_AT] && (now - g[GLOBAL_TOTP_SYNCED_AT]) < REDIS_SYNC_THROTTLE_MS) {
+      return;
+    }
     try {
-      const data = await getTotpStoreFromFirestore();
-      if (data && Array.isArray(data)) {
-        const store = getTOTPStore();
-        let changed = false;
-        for (const entry of data) {
-          if (!store.has(entry.emailHash)) {
-            store.set(entry.emailHash, entry);
-            changed = true;
-          }
+      // O cliente do Upstash já desserializa JSON automaticamente na leitura
+      // (o valor chega como objeto, não como string) — nada de JSON.parse aqui.
+      const data = await redis.hgetall<Record<string, TOTPEntry>>(REDIS_TOTP_KEY);
+      g[GLOBAL_TOTP_SYNCED_AT] = now;
+      if (data && Object.keys(data).length > 0) {
+        const fresh = new Map<string, TOTPEntry>();
+        for (const [hash, entry] of Object.entries(data)) {
+          fresh.set(hash, entry);
         }
-        if (changed) {
-          saveTOTPStore();
-          (globalThis as any)[GLOBAL_TOTP_TS] = 0;
+        (globalThis as any)[GLOBAL_TOTP_KEY] = fresh;
+        (globalThis as any)[GLOBAL_TOTP_TS] = 0;
+        saveTOTPStore();
+      } else {
+        const store = getTOTPStore();
+        for (const [hash, entry] of store) {
+          await pushTotpToRedis(hash, entry);
         }
       }
     } catch (e: any) {
-      console.error('[TOTP] Sync failed:', e.message);
+      console.error('[TOTP] Sync com Redis falhou:', e?.message || e);
     }
   },
 };
@@ -930,21 +1016,47 @@ function getRequestLogArray(): RequestLogEntry[] {
 }
 
 export const REQUEST_LOG_STORE = {
-  record: (entry: Omit<RequestLogEntry, 'createdAt'>): void => {
+  // Grava local (rápido, sempre funciona) e no Redis (durável entre
+  // instâncias/deploys) — usado pelo painel "Requisições na API".
+  record: async (entry: Omit<RequestLogEntry, 'createdAt'>): Promise<void> => {
+    const fullEntry: RequestLogEntry = { ...entry, createdAt: new Date().toISOString() };
     try {
       const arr = getRequestLogArray();
-      arr.unshift({ ...entry, createdAt: new Date().toISOString() });
+      arr.unshift(fullEntry);
       if (arr.length > REQLOG_MAX_ENTRIES) arr.length = REQLOG_MAX_ENTRIES;
       const filePath = getRequestLogFilePath();
       const dataDir = path.dirname(filePath);
       if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
       fs.writeFileSync(filePath, JSON.stringify(arr, null, 2), 'utf-8');
     } catch (e: any) {
-      console.error('[RequestLog] Failed to persist:', e?.message || e);
+      console.error('[RequestLog] Failed to persist locally:', e?.message || e);
+    }
+
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        await redis.lpush(REDIS_REQLOG_KEY, JSON.stringify(fullEntry));
+        await redis.ltrim(REDIS_REQLOG_KEY, 0, REDIS_REQLOG_MAX - 1);
+      } catch (e: any) {
+        console.error('[RequestLog] Falha ao gravar no Redis:', e?.message || e);
+      }
     }
   },
 
-  getRecent: (limit = 200): RequestLogEntry[] => {
+  getRecent: async (limit = 200): Promise<RequestLogEntry[]> => {
+    const redis = getRedisClient();
+    if (redis) {
+      try {
+        // O cliente do Upstash já desserializa JSON automaticamente na leitura
+        // (cada item chega como objeto, não como string) — nada de JSON.parse aqui.
+        const raw = await redis.lrange<RequestLogEntry>(REDIS_REQLOG_KEY, 0, limit - 1);
+        if (raw && raw.length > 0) {
+          return raw;
+        }
+      } catch (e: any) {
+        console.error('[RequestLog] Falha ao ler do Redis:', e?.message || e);
+      }
+    }
     return getRequestLogArray().slice(0, limit);
   },
 };

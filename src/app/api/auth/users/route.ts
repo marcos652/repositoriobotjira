@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
-  await ALLOWED_EMAILS.syncWithFirestore();
+  await ALLOWED_EMAILS.sync();
 
   const users = getUsersOverview();
   return NextResponse.json({
@@ -50,12 +50,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Você não pode bloquear sua própria conta' }, { status: 400 });
       }
 
-      const updated = ALLOWED_EMAILS.setStatus(normalized, next);
+      const updated = await ALLOWED_EMAILS.setStatus(normalized, next);
       if (!updated) {
         return NextResponse.json({ error: 'Não foi possível atualizar (usuário padrão/administrador não pode ser bloqueado)' }, { status: 400 });
       }
-
-      import('@/lib/firebase').then(m => m.saveAuthStoreToFirestore(ALLOWED_EMAILS.getRawData()));
 
       return NextResponse.json({
         success: true,

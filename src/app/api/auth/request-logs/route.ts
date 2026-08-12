@@ -9,6 +9,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
-  const logs = REQUEST_LOG_STORE.getRecent(200);
+  const logs = await REQUEST_LOG_STORE.getRecent(200);
   return NextResponse.json({ success: true, logs });
 }

@@ -7,6 +7,7 @@ import { CLIENTS } from '@/lib/clients';
 import { backofficeEndpoints, slcEndpoints, cnabEndpoints } from '@/lib/endpoints';
 import { buildDescription } from '@/lib/issuePanels';
 import { isSafeExternalUrl } from '@/lib/ssrfGuard';
+import { reserveDemandaSlot, releaseDemandaSlot } from '@/lib/demandaLimit';
 
 const ALL_ENDPOINTS = [
   ...backofficeEndpoints,
@@ -369,6 +370,7 @@ async function refreshDescriptionForAttachments(issueKey: string, description: s
 
 // ─── Route ───
 export async function POST(request: NextRequest) {
+  let demandaSlotReserved = false;
   try {
     const body = await request.json();
     const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado, prioridade, urgencia } = body;
@@ -377,15 +379,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Servidor mal configurado — variáveis de ambiente faltando', success: false }, { status: 500 });
     }
 
+    // Limite diário GLOBAL de criação (painel + bot somados, não por usuário) —
+    // reserva a vaga atomicamente antes de gastar IA gerando a demanda; preview
+    // nunca reserva. Se algo falhar depois (IA ou Jira), o catch abaixo devolve
+    // a vaga — só demanda de fato criada consome a cota.
+    if (!previewOnly) {
+      const slot = await reserveDemandaSlot();
+      if (!slot.allowed) {
+        return NextResponse.json(
+          { error: 'Limite diário de 6 demandas atingido (contagem única, somando painel e bot). Tente novamente depois da meia-noite.', success: false },
+          { status: 429 }
+        );
+      }
+      demandaSlotReserved = true;
+    }
+
     let issueData = issueDataPreGerado;
 
     // Step 1: Claude gera os dados da issue, se ainda não vierem prontos
     if (!issueData) {
       if (!texto || typeof texto !== 'string' || texto.trim().length < 5) {
+        if (demandaSlotReserved) await releaseDemandaSlot();
         return NextResponse.json({ error: 'Texto da demanda é obrigatório', success: false }, { status: 400 });
       }
       issueData = await generateIssueData(texto.trim(), referencia, nome_cliente, urgencia);
       if (!issueData || !issueData.summary) {
+        if (demandaSlotReserved) await releaseDemandaSlot();
         return NextResponse.json({ error: 'Falha na geração dos dados via IA', success: false }, { status: 500 });
       }
     }
@@ -431,6 +450,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Erro ao criar demanda:', error);
+    // Falhou depois de reservar a vaga (IA ou Jira) — devolve pra cota diária,
+    // já que nenhuma demanda foi de fato criada.
+    if (demandaSlotReserved) {
+      await releaseDemandaSlot();
+    }
     return NextResponse.json(
       { error: 'Falha ao criar demanda', message: error?.message || String(error), success: false },
       { status: 500 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { ALLOWED_EMAILS, encrypt, decrypt, IP_TRACKER, TOTP_STORE, REQUEST_LOG_STORE } from '../_store';
 import { createSessionToken } from '@/lib/session';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -27,9 +27,10 @@ export async function POST(request: NextRequest) {
       || request.headers.get('x-real-ip')
       || '127.0.0.1';
 
-    // Sync from Firestore for Vercel persistence
-    await ALLOWED_EMAILS.syncWithFirestore();
-    await TOTP_STORE.syncWithFirestore();
+    // Dispara a sincronização com o Redis SEM esperar — ela não depende da
+    // verificação de identidade abaixo, então roda em paralelo com ela (cada
+    // ida-e-volta de rede custa ~150-300ms; em série isso passava de 1s).
+    const syncPromise = Promise.all([ALLOWED_EMAILS.sync(), TOTP_STORE.sync()]);
 
     // Prova de identidade do 1º fator: idToken do Firebase (login por senha) OU,
     // se ausente, a sessão Auth.js já estabelecida (login via Google SSO).
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
       const verifyData = await verifyRes.json();
 
       if (!verifyRes.ok || !verifyData.users || verifyData.users.length === 0) {
-        REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: 'anonymous', identityType: 'anonymous', allowed: false });
+        after(() => REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: 'anonymous', identityType: 'anonymous', allowed: false }));
         return NextResponse.json({ error: 'Token inválido ou expirado. Faça login novamente.' }, { status: 401 });
       }
       authEmail = verifyData.users[0].email?.toLowerCase() || null;
@@ -53,25 +54,30 @@ export async function POST(request: NextRequest) {
       authEmail = authSession?.user?.email?.trim().toLowerCase() || null;
     }
 
+    // Só agora precisamos do resultado do sync (pra checar ALLOWED_EMAILS/TOTP_STORE
+    // adiante) — ele já rodou em paralelo com a verificação de identidade acima.
+    await syncPromise;
+
     if (!authEmail) {
-      REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: 'anonymous', identityType: 'anonymous', allowed: false });
+      after(() => REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: 'anonymous', identityType: 'anonymous', allowed: false }));
       return NextResponse.json({ error: 'Sessão inválida. Faça login novamente.' }, { status: 401 });
     }
     if (authEmail !== normalized) {
-      REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: `${authEmail} (declarou ${normalized})`, identityType: 'anonymous', allowed: false });
+      after(() => REQUEST_LOG_STORE.record({ method: 'POST', path: '/api/auth/totp', ip: clientIP, who: `${authEmail} (declarou ${normalized})`, identityType: 'anonymous', allowed: false }));
       return NextResponse.json({ error: 'Email incompatível com a credencial' }, { status: 403 });
     }
 
     // Identidade confirmada (1º fator válido) — registra pra rastreabilidade,
     // já que o proxy.ts não tem como saber quem é antes da sessão existir.
-    REQUEST_LOG_STORE.record({
+    // Via after(): não bloqueia a resposta com a ida-e-volta ao Redis.
+    after(() => REQUEST_LOG_STORE.record({
       method: 'POST',
       path: '/api/auth/totp',
       ip: clientIP,
       who: normalized,
       identityType: 'user',
       allowed: true,
-    });
+    }));
 
     if (!ALLOWED_EMAILS.includes(normalized)) {
       return NextResponse.json({ error: 'Email não autorizado. Contate o administrador.' }, { status: 403 });
@@ -161,9 +167,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Código incorreto. Tente novamente.' }, { status: 401 });
       }
 
-      // Save the secret using centralized store (persisted to file!)
-      TOTP_STORE.set(normalized, encrypt({ secret: tokenData.secret }));
-      import('@/lib/firebase').then(m => m.saveTotpStoreToFirestore(TOTP_STORE.getRawData()));
+      // Save the secret using centralized store (persisted a arquivo + Redis)
+      await TOTP_STORE.set(normalized, encrypt({ secret: tokenData.secret }));
 
       // Record IP
       IP_TRACKER.record(normalized, clientIP);
@@ -282,6 +287,6 @@ export async function DELETE(request: NextRequest) {
   const { email } = await request.json();
   if (!email) return NextResponse.json({ error: 'Email obrigatório' }, { status: 400 });
   const normalized = email.trim().toLowerCase();
-  const removed = TOTP_STORE.remove(normalized);
+  const removed = await TOTP_STORE.remove(normalized);
   return NextResponse.json({ success: removed, message: removed ? `TOTP resetado para ${normalized}` : 'Nenhum TOTP encontrado' });
 }
