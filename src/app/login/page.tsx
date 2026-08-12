@@ -41,8 +41,14 @@ function LoginContent() {
 
   // Login via Google já concluiu o 1º fator (proxy.ts redireciona pra cá com
   // ?mfa=pending) — descobre o email da sessão Auth.js e pede o 2º fator.
+  // Depende do VALOR (string), não do objeto searchParams inteiro — esse
+  // objeto pode trocar de referência entre renders sem o valor mudar, o que
+  // disparava esse efeito (e a chamada a /api/auth/totp) mais de uma vez.
+  const mfaPending = searchParams.get('mfa') === 'pending';
+  const mfaEffectRanRef = useRef(false);
   useEffect(() => {
-    if (searchParams.get('mfa') !== 'pending') return;
+    if (!mfaPending || mfaEffectRanRef.current) return;
+    mfaEffectRanRef.current = true;
     (async () => {
       try {
         const res = await fetch('/api/auth/session');
@@ -54,7 +60,7 @@ function LoginContent() {
       } catch {}
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [mfaPending]);
 
   // Consulta /api/auth/totp: já tem Authenticator configurado (pede código) ou
   // não (mostra QR code pra configurar). Vale tanto pro login por senha quanto Google.
