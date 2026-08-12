@@ -15,9 +15,11 @@ function getClientIP(request: NextRequest): string {
 
 // Verdadeiro se o usuário foi bloqueado (por status da conta OU por IP banido) —
 // checado em toda requisição, não só no login, para cortar sessões já ativas.
-function isBlockedNow(request: NextRequest, email: string | null): boolean {
+// IP_TRACKER.sync() é throttled (3s) então isso não pesa em toda chamada.
+async function isBlockedNow(request: NextRequest, email: string | null): Promise<boolean> {
   if (!email) return false;
   if (ALLOWED_EMAILS.getStatus(email) === 'blocked') return true;
+  await IP_TRACKER.sync();
   return IP_TRACKER.isBlocked(getClientIP(request), email);
 }
 
@@ -57,7 +59,7 @@ async function resolveApiIdentity(request: NextRequest): Promise<ApiIdentity> {
 
   const email = await getSessionEmail(request);
   if (email) {
-    return { who: email, identityType: 'user', authorized: !isBlockedNow(request, email) };
+    return { who: email, identityType: 'user', authorized: !(await isBlockedNow(request, email)) };
   }
 
   return { who: 'anonymous', identityType: 'anonymous', authorized: false };
@@ -176,7 +178,7 @@ export async function proxy(request: NextRequest, _event: NextFetchEvent) {
   // é a única coisa que concede acesso completo ao painel e à API.
   const sessionEmail = await getSessionEmail(request);
   if (sessionEmail) {
-    if (isBlockedNow(request, sessionEmail)) {
+    if (await isBlockedNow(request, sessionEmail)) {
       return addSecurityHeaders(forbiddenResponse());
     }
     const response = NextResponse.next();
@@ -204,7 +206,7 @@ export async function proxy(request: NextRequest, _event: NextFetchEvent) {
     } catch {}
 
     if (ssoEmail) {
-      if (isBlockedNow(request, ssoEmail)) {
+      if (await isBlockedNow(request, ssoEmail)) {
         return addSecurityHeaders(forbiddenResponse());
       }
       // /login já é público (ver publicRoutes acima) — é lá que o passo de TOTP

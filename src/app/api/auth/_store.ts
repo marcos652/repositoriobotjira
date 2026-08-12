@@ -10,6 +10,7 @@ import { getRedisClient } from '@/lib/redis';
 // logs de requisição sobrevivem entre instâncias/deploys na Vercel.
 const REDIS_EMAILS_KEY = 'jiraops:allowed-emails';
 const REDIS_TOTP_KEY = 'jiraops:totp-store';
+const REDIS_IP_KEY = 'jiraops:ip-tracker';
 const REDIS_REQLOG_KEY = 'jiraops:request-log';
 const REDIS_REQLOG_MAX = 500;
 
@@ -21,6 +22,7 @@ const REDIS_REQLOG_MAX = 500;
 const REDIS_SYNC_THROTTLE_MS = 3000;
 const GLOBAL_EMAILS_SYNCED_AT = '__jiraops_email_store_redis_synced_at__';
 const GLOBAL_TOTP_SYNCED_AT = '__jiraops_totp_store_redis_synced_at__';
+const GLOBAL_IP_SYNCED_AT = '__jiraops_ip_store_redis_synced_at__';
 
 // Encryption key (32 bytes for AES-256-GCM)
 const ENCRYPTION_KEY = (() => {
@@ -338,10 +340,13 @@ export const ALLOWED_EMAILS = {
     return Array.from(getStore().values());
   },
 
-  // Redis é a fonte durável entre instâncias/deploys. Se já tiver dado lá,
-  // substitui o estado local por ele (fonte de verdade). Se estiver vazio mas
-  // já existir dado local (deploy anterior ao Redis existir), usa o local pra
-  // semear o Redis uma única vez — migra sozinho, sem passo manual.
+  // Redis é a fonte durável entre instâncias/deploys — sync() é uma via de
+  // mão única (Redis -> local), nunca o contrário. Local nunca "resemeia" o
+  // Redis aqui: se o Redis estiver vazio (nunca configurado OU limpo de
+  // propósito por um admin), o local também fica vazio. Empurrar dados pro
+  // Redis só acontece nos métodos de escrita (add/remove/etc.), nunca aqui —
+  // senão uma instância com cache antigo em memória ressuscitaria algo que
+  // acabou de ser apagado de propósito.
   sync: async (): Promise<void> => {
     const redis = getRedisClient();
     if (!redis) return;
@@ -355,20 +360,15 @@ export const ALLOWED_EMAILS = {
       // (o valor chega como objeto, não como string) — nada de JSON.parse aqui.
       const data = await redis.hgetall<Record<string, SecureEmail>>(REDIS_EMAILS_KEY);
       g[GLOBAL_EMAILS_SYNCED_AT] = now;
-      if (data && Object.keys(data).length > 0) {
-        const fresh = new Map<string, SecureEmail>();
+      const fresh = new Map<string, SecureEmail>();
+      if (data) {
         for (const [hash, entry] of Object.entries(data)) {
           fresh.set(hash, entry);
         }
-        (globalThis as any)[GLOBAL_KEY] = fresh;
-        (globalThis as any)[GLOBAL_KEY_TS] = 0;
-        saveEmailsToFile(fresh);
-      } else {
-        const store = getStore();
-        for (const [hash, entry] of store) {
-          await pushEmailToRedis(hash, entry);
-        }
       }
+      (globalThis as any)[GLOBAL_KEY] = fresh;
+      (globalThis as any)[GLOBAL_KEY_TS] = 0;
+      saveEmailsToFile(fresh);
     } catch (e: any) {
       console.error('[Auth] Sync com Redis falhou:', e?.message || e);
     }
@@ -519,15 +519,73 @@ function saveIPStore(): void {
   } catch {}
 }
 
+async function pushIpToRedis(key: string, entry: IPEntry): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.hset(REDIS_IP_KEY, { [key]: JSON.stringify(entry) });
+  } catch (e: any) {
+    console.error('[IP] Falha ao gravar no Redis:', e?.message || e);
+  }
+}
+
+async function pushManyIpsToRedis(entries: Array<[string, IPEntry]>): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis || entries.length === 0) return;
+  try {
+    const kv: Record<string, string> = {};
+    for (const [key, entry] of entries) kv[key] = JSON.stringify(entry);
+    await redis.hset(REDIS_IP_KEY, kv);
+  } catch (e: any) {
+    console.error('[IP] Falha ao gravar no Redis:', e?.message || e);
+  }
+}
+
+async function deleteIpFromRedis(key: string): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.hdel(REDIS_IP_KEY, key);
+  } catch (e: any) {
+    console.error('[IP] Falha ao remover do Redis:', e?.message || e);
+  }
+}
+
 export const IP_TRACKER = {
+  // Via de mão única (Redis -> local), mesmo esquema do ALLOWED_EMAILS.sync()
+  // e TOTP_STORE.sync() — nunca "resemeia" o Redis a partir do cache local.
+  sync: async (): Promise<void> => {
+    const redis = getRedisClient();
+    if (!redis) return;
+    const g = globalThis as any;
+    const now = Date.now();
+    if (g[GLOBAL_IP_SYNCED_AT] && (now - g[GLOBAL_IP_SYNCED_AT]) < REDIS_SYNC_THROTTLE_MS) {
+      return;
+    }
+    try {
+      const data = await redis.hgetall<Record<string, IPEntry>>(REDIS_IP_KEY);
+      g[GLOBAL_IP_SYNCED_AT] = now;
+      const fresh = new Map<string, IPEntry>();
+      if (data) {
+        for (const [key, entry] of Object.entries(data)) {
+          fresh.set(key, entry);
+        }
+      }
+      g[GLOBAL_IP_KEY] = fresh;
+      saveIPStore();
+    } catch (e: any) {
+      console.error('[IP] Sync com Redis falhou:', e?.message || e);
+    }
+  },
+
   /** Record a login from an IP */
-  record: (email: string, ip: string, failedAttempt: boolean = false): void => {
+  record: async (email: string, ip: string, failedAttempt: boolean = false): Promise<void> => {
     const normalized = email.trim().toLowerCase();
     const cleanIP = ip.replace('::ffff:', ''); // Normalize IPv4-mapped IPv6
     const key = `${normalized}:${cleanIP}`;
     const store = getIPStore();
     const existing = store.get(key);
-    
+
     if (existing) {
       existing.lastSeen = new Date().toISOString();
       if (!failedAttempt) existing.loginCount++;
@@ -543,6 +601,7 @@ export const IP_TRACKER = {
       });
     }
     saveIPStore();
+    await pushIpToRedis(key, store.get(key)!);
     console.log(`[IP] Recorded login attempt: ${normalized.slice(0, 3)}*** from ${cleanIP}`);
   },
 
@@ -553,7 +612,7 @@ export const IP_TRACKER = {
       const key = `${email.trim().toLowerCase()}:${cleanIP}`;
       const entry = getIPStore().get(key);
       // If entry doesn't exist, it is allowed by default
-      return entry?.blocked ?? false; 
+      return entry?.blocked ?? false;
     }
     // If no email, check if ANY entry for this IP is blocked
     let found = false;
@@ -567,10 +626,11 @@ export const IP_TRACKER = {
   },
 
   /** Block a specific email:ip combination */
-  block: (ip: string, email?: string): boolean => {
+  block: async (ip: string, email?: string): Promise<boolean> => {
     const cleanIP = ip.replace('::ffff:', '');
     const store = getIPStore();
     let found = false;
+    const changed: Array<[string, IPEntry]> = [];
     if (email) {
       // Block only the specific email:ip combo
       const key = `${email.trim().toLowerCase()}:${cleanIP}`;
@@ -578,62 +638,77 @@ export const IP_TRACKER = {
       if (entry) {
         entry.blocked = true;
         found = true;
+        changed.push([key, entry]);
       } else {
         // Create it blocked if it doesn't exist
-        store.set(key, {
+        const newEntry: IPEntry = {
           ip: cleanIP,
           email: email.trim().toLowerCase(),
           firstSeen: new Date().toISOString(),
           lastSeen: new Date().toISOString(),
           blocked: true,
           loginCount: 0,
-        });
+        };
+        store.set(key, newEntry);
         found = true;
+        changed.push([key, newEntry]);
       }
     } else {
       for (const [key, entry] of store) {
         if (entry.ip === cleanIP) {
           entry.blocked = true;
           found = true;
+          changed.push([key, entry]);
         }
       }
     }
-    if (found) saveIPStore();
+    if (found) {
+      saveIPStore();
+      await pushManyIpsToRedis(changed);
+    }
     return found;
   },
 
   /** Unblock a specific email:ip combination */
-  unblock: (ip: string, email?: string): boolean => {
+  unblock: async (ip: string, email?: string): Promise<boolean> => {
     const cleanIP = ip.replace('::ffff:', '');
     const store = getIPStore();
     let found = false;
+    const changed: Array<[string, IPEntry]> = [];
     if (email) {
       const key = `${email.trim().toLowerCase()}:${cleanIP}`;
       const entry = store.get(key);
       if (entry) {
         entry.blocked = false;
         found = true;
+        changed.push([key, entry]);
       } else {
         // Create it unblocked if it doesn't exist (Manual Allow)
-        store.set(key, {
+        const newEntry: IPEntry = {
           ip: cleanIP,
           email: email.trim().toLowerCase(),
           firstSeen: new Date().toISOString(),
           lastSeen: new Date().toISOString(),
           blocked: false,
           loginCount: 0,
-        });
+        };
+        store.set(key, newEntry);
         found = true;
+        changed.push([key, newEntry]);
       }
     } else {
       for (const [key, entry] of store) {
         if (entry.ip === cleanIP) {
           entry.blocked = false;
           found = true;
+          changed.push([key, entry]);
         }
       }
     }
-    if (found) saveIPStore();
+    if (found) {
+      saveIPStore();
+      await pushManyIpsToRedis(changed);
+    }
     return found;
   },
 
@@ -655,28 +730,30 @@ export const IP_TRACKER = {
   },
 
   /** Add a new IP entry manually */
-  add: (email: string, ip: string): boolean => {
+  add: async (email: string, ip: string): Promise<boolean> => {
     const normalized = email.trim().toLowerCase();
     const cleanIP = ip.replace('::ffff:', '').trim();
     if (!normalized || !cleanIP) return false;
     const key = `${normalized}:${cleanIP}`;
     const store = getIPStore();
     if (store.has(key)) return false;
-    store.set(key, {
+    const entry: IPEntry = {
       ip: cleanIP,
       email: normalized,
       firstSeen: new Date().toISOString(),
       lastSeen: new Date().toISOString(),
       blocked: false,
       loginCount: 0,
-    });
+    };
+    store.set(key, entry);
     saveIPStore();
+    await pushIpToRedis(key, entry);
     console.log(`[IP] Manually added: ${normalized.slice(0, 3)}*** → ${cleanIP}`);
     return true;
   },
 
   /** Update an IP entry (change IP or email) */
-  update: (oldEmail: string, oldIP: string, newEmail?: string, newIP?: string): boolean => {
+  update: async (oldEmail: string, oldIP: string, newEmail?: string, newIP?: string): Promise<boolean> => {
     const store = getIPStore();
     const cleanOldIP = oldIP.replace('::ffff:', '').trim();
     const oldKey = `${oldEmail.trim().toLowerCase()}:${cleanOldIP}`;
@@ -690,24 +767,28 @@ export const IP_TRACKER = {
     // Remove old entry
     store.delete(oldKey);
     // Set updated entry
-    store.set(newKey, {
+    const updatedEntry: IPEntry = {
       ...entry,
       ip: updatedIP,
       email: updatedEmail,
-    });
+    };
+    store.set(newKey, updatedEntry);
     saveIPStore();
+    await deleteIpFromRedis(oldKey);
+    await pushIpToRedis(newKey, updatedEntry);
     console.log(`[IP] Updated: ${oldKey} → ${newKey}`);
     return true;
   },
 
   /** Remove an IP entry */
-  remove: (email: string, ip: string): boolean => {
+  remove: async (email: string, ip: string): Promise<boolean> => {
     const store = getIPStore();
     const cleanIP = ip.replace('::ffff:', '').trim();
     const key = `${email.trim().toLowerCase()}:${cleanIP}`;
     const removed = store.delete(key);
     if (removed) {
       saveIPStore();
+      await deleteIpFromRedis(key);
       console.log(`[IP] Removed: ${key}`);
     }
     return removed;
@@ -887,8 +968,11 @@ export const TOTP_STORE = {
     return Array.from(getTOTPStore().values());
   },
 
-  // Mesmo esquema do ALLOWED_EMAILS.sync(): Redis com dado -> substitui local;
-  // Redis vazio com dado local -> semeia o Redis uma vez (migração automática).
+  // Mesmo esquema do ALLOWED_EMAILS.sync(): via de mão única (Redis -> local).
+  // Se o Redis estiver vazio (nunca configurado OU resetado de propósito por
+  // um admin), o local também fica vazio — nunca "resemeia" o Redis a partir
+  // do cache local, senão uma instância com TOTP antigo em memória
+  // ressuscitaria um reset que acabou de acontecer em outra instância.
   sync: async (): Promise<void> => {
     const redis = getRedisClient();
     if (!redis) return;
@@ -902,20 +986,15 @@ export const TOTP_STORE = {
       // (o valor chega como objeto, não como string) — nada de JSON.parse aqui.
       const data = await redis.hgetall<Record<string, TOTPEntry>>(REDIS_TOTP_KEY);
       g[GLOBAL_TOTP_SYNCED_AT] = now;
-      if (data && Object.keys(data).length > 0) {
-        const fresh = new Map<string, TOTPEntry>();
+      const fresh = new Map<string, TOTPEntry>();
+      if (data) {
         for (const [hash, entry] of Object.entries(data)) {
           fresh.set(hash, entry);
         }
-        (globalThis as any)[GLOBAL_TOTP_KEY] = fresh;
-        (globalThis as any)[GLOBAL_TOTP_TS] = 0;
-        saveTOTPStore();
-      } else {
-        const store = getTOTPStore();
-        for (const [hash, entry] of store) {
-          await pushTotpToRedis(hash, entry);
-        }
       }
+      (globalThis as any)[GLOBAL_TOTP_KEY] = fresh;
+      (globalThis as any)[GLOBAL_TOTP_TS] = 0;
+      saveTOTPStore();
     } catch (e: any) {
       console.error('[TOTP] Sync com Redis falhou:', e?.message || e);
     }

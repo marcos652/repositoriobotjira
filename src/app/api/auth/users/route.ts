@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
-  await ALLOWED_EMAILS.sync();
+  await Promise.all([ALLOWED_EMAILS.sync(), IP_TRACKER.sync()]);
 
   const users = getUsersOverview();
   return NextResponse.json({
@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
 
     // ── Banir/Liberar o último IP conhecido do usuário ──
     if (action === 'banLastIp') {
+      await IP_TRACKER.sync();
       const lastIp = IP_TRACKER.getLastForEmail(normalized);
       if (!lastIp) {
         return NextResponse.json({ error: 'Nenhum IP registrado para este usuário ainda' }, { status: 400 });
@@ -71,8 +72,8 @@ export async function POST(request: NextRequest) {
 
       const willBlock = !lastIp.blocked;
       const success = willBlock
-        ? IP_TRACKER.block(lastIp.ip, normalized)
-        : IP_TRACKER.unblock(lastIp.ip, normalized);
+        ? await IP_TRACKER.block(lastIp.ip, normalized)
+        : await IP_TRACKER.unblock(lastIp.ip, normalized);
 
       return NextResponse.json({
         success,

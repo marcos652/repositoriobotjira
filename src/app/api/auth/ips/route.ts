@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
   if (!(await isAdmin(request))) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 403 });
   }
+  await IP_TRACKER.sync();
   return NextResponse.json({ ips: IP_TRACKER.list() });
 }
 
@@ -23,11 +24,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ação é obrigatória' }, { status: 400 });
   }
 
+  await IP_TRACKER.sync();
+
   // ── Block IP ──
   if (action === 'block') {
     const { ip, email } = body;
     if (!ip) return NextResponse.json({ error: 'IP é obrigatório' }, { status: 400 });
-    const success = IP_TRACKER.block(ip, email);
+    const success = await IP_TRACKER.block(ip, email);
     return NextResponse.json({ success, message: success ? `IP ${ip} bloqueado${email ? ` para ${email}` : ''}` : 'IP não encontrado' });
   }
 
@@ -35,7 +38,7 @@ export async function POST(request: NextRequest) {
   if (action === 'unblock') {
     const { ip, email } = body;
     if (!ip) return NextResponse.json({ error: 'IP é obrigatório' }, { status: 400 });
-    const success = IP_TRACKER.unblock(ip, email);
+    const success = await IP_TRACKER.unblock(ip, email);
     return NextResponse.json({ success, message: success ? `IP ${ip} desbloqueado${email ? ` para ${email}` : ''}` : 'IP não encontrado' });
   }
 
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest) {
   if (action === 'add') {
     const { ip, email } = body;
     if (!ip || !email) return NextResponse.json({ error: 'IP e email são obrigatórios' }, { status: 400 });
-    const success = IP_TRACKER.add(email, ip);
+    const success = await IP_TRACKER.add(email, ip);
     return NextResponse.json({ success, message: success ? `IP ${ip} adicionado para ${email}` : 'Entrada já existe' });
   }
 
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
   if (action === 'update') {
     const { oldEmail, oldIP, newEmail, newIP } = body;
     if (!oldEmail || !oldIP) return NextResponse.json({ error: 'Email e IP originais são obrigatórios' }, { status: 400 });
-    const success = IP_TRACKER.update(oldEmail, oldIP, newEmail, newIP);
+    const success = await IP_TRACKER.update(oldEmail, oldIP, newEmail, newIP);
     return NextResponse.json({ success, message: success ? 'Registro atualizado' : 'Registro não encontrado' });
   }
 
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
   if (action === 'remove') {
     const { ip, email } = body;
     if (!ip || !email) return NextResponse.json({ error: 'IP e email são obrigatórios' }, { status: 400 });
-    const success = IP_TRACKER.remove(email, ip);
+    const success = await IP_TRACKER.remove(email, ip);
     return NextResponse.json({ success, message: success ? `Registro ${email}:${ip} removido` : 'Registro não encontrado' });
   }
 

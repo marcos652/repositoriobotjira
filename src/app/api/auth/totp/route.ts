@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     // Dispara a sincronização com o Redis SEM esperar — ela não depende da
     // verificação de identidade abaixo, então roda em paralelo com ela (cada
     // ida-e-volta de rede custa ~150-300ms; em série isso passava de 1s).
-    const syncPromise = Promise.all([ALLOWED_EMAILS.sync(), TOTP_STORE.sync()]);
+    const syncPromise = Promise.all([ALLOWED_EMAILS.sync(), TOTP_STORE.sync(), IP_TRACKER.sync()]);
 
     // Prova de identidade do 1º fator: idToken do Firebase (login por senha) OU,
     // se ausente, a sessão Auth.js já estabelecida (login via Google SSO).
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     if (IP_TRACKER.isBlocked(clientIP, normalized)) {
       // Record the failed attempt so the admin can see it and unblock it
-      IP_TRACKER.record(normalized, clientIP, true);
+      await IP_TRACKER.record(normalized, clientIP, true);
       return NextResponse.json({ error: 'Acesso por IP não autorizado. Contate o administrador para liberação.' }, { status: 403 });
     }
 
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       await TOTP_STORE.set(normalized, encrypt({ secret: tokenData.secret }));
 
       // Record IP
-      IP_TRACKER.record(normalized, clientIP);
+      await IP_TRACKER.record(normalized, clientIP);
 
       // Create session
       const role = ALLOWED_EMAILS.getRole(normalized);
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Record IP
-      IP_TRACKER.record(normalized, clientIP);
+      await IP_TRACKER.record(normalized, clientIP);
 
       // Create session
       const role = ALLOWED_EMAILS.getRole(normalized);
