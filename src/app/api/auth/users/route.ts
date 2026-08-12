@@ -63,6 +63,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Banir/Liberar o último IP conhecido do usuário ──
+    // Bloquear por IP não é confiável sozinho (a pessoa troca de IP e volta a
+    // acessar), então "Banir IP" bloqueia a CONTA por completo também — o
+    // registro do IP fica só como histórico/auditoria de qual endereço foi banido.
     if (action === 'banLastIp') {
       await IP_TRACKER.sync();
       const lastIp = IP_TRACKER.getLastForEmail(normalized);
@@ -71,16 +74,26 @@ export async function POST(request: NextRequest) {
       }
 
       const willBlock = !lastIp.blocked;
+      const adminEmail = await getSessionEmail(request);
+
+      if (willBlock && normalized === adminEmail) {
+        return NextResponse.json({ error: 'Você não pode bloquear sua própria conta' }, { status: 400 });
+      }
+
       const success = willBlock
         ? await IP_TRACKER.block(lastIp.ip, normalized)
         : await IP_TRACKER.unblock(lastIp.ip, normalized);
+
+      if (success) {
+        await ALLOWED_EMAILS.setStatus(normalized, willBlock ? 'blocked' : 'active');
+      }
 
       return NextResponse.json({
         success,
         ip: lastIp.ip,
         blocked: willBlock,
         message: success
-          ? `IP ${lastIp.ip} ${willBlock ? 'banido' : 'liberado'} para ${normalized}`
+          ? `${normalized} ${willBlock ? 'bloqueado (conta + IP)' : 'desbloqueado (conta + IP)'}`
           : 'Não foi possível atualizar o IP',
       });
     }

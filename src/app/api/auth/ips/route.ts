@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { IP_TRACKER } from '../_store';
-import { isAdmin } from '../_admin';
+import { IP_TRACKER, ALLOWED_EMAILS } from '../_store';
+import { isAdmin, getSessionEmail } from '../_admin';
 
 // GET: List all IP records
 export async function GET(request: NextRequest) {
@@ -27,11 +27,23 @@ export async function POST(request: NextRequest) {
   await IP_TRACKER.sync();
 
   // ── Block IP ──
+  // Bloquear só o IP não é confiável (a pessoa troca de IP e volta a acessar)
+  // — quando um email é informado, bloqueia a CONTA por completo também.
   if (action === 'block') {
     const { ip, email } = body;
     if (!ip) return NextResponse.json({ error: 'IP é obrigatório' }, { status: 400 });
+    if (email) {
+      const adminEmail = await getSessionEmail(request);
+      if (email.trim().toLowerCase() === adminEmail) {
+        return NextResponse.json({ error: 'Você não pode bloquear sua própria conta' }, { status: 400 });
+      }
+    }
     const success = await IP_TRACKER.block(ip, email);
-    return NextResponse.json({ success, message: success ? `IP ${ip} bloqueado${email ? ` para ${email}` : ''}` : 'IP não encontrado' });
+    if (success && email) {
+      await ALLOWED_EMAILS.sync();
+      await ALLOWED_EMAILS.setStatus(email.trim().toLowerCase(), 'blocked');
+    }
+    return NextResponse.json({ success, message: success ? `IP ${ip} bloqueado${email ? ` (conta de ${email} também bloqueada)` : ''}` : 'IP não encontrado' });
   }
 
   // ── Unblock IP ──
@@ -39,7 +51,11 @@ export async function POST(request: NextRequest) {
     const { ip, email } = body;
     if (!ip) return NextResponse.json({ error: 'IP é obrigatório' }, { status: 400 });
     const success = await IP_TRACKER.unblock(ip, email);
-    return NextResponse.json({ success, message: success ? `IP ${ip} desbloqueado${email ? ` para ${email}` : ''}` : 'IP não encontrado' });
+    if (success && email) {
+      await ALLOWED_EMAILS.sync();
+      await ALLOWED_EMAILS.setStatus(email.trim().toLowerCase(), 'active');
+    }
+    return NextResponse.json({ success, message: success ? `IP ${ip} desbloqueado${email ? ` (conta de ${email} também desbloqueada)` : ''}` : 'IP não encontrado' });
   }
 
   // ── Add IP manually ──
