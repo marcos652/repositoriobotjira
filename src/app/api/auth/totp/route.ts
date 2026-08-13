@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { ALLOWED_EMAILS, encrypt, decrypt, IP_TRACKER, TOTP_STORE, REQUEST_LOG_STORE } from '../_store';
-import { createSessionToken } from '@/lib/session';
+import {
+  createSessionToken,
+  createTrustToken,
+  verifyTrustToken,
+  SESSION_TTL_MS,
+  SESSION_TTL_SECONDS,
+  TOTP_TRUST_COOKIE,
+  TOTP_TRUST_TTL_SECONDS,
+} from '@/lib/session';
 import { checkRateLimit } from '@/lib/rateLimit';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
@@ -95,6 +103,35 @@ export async function POST(request: NextRequest) {
 
     // ── ACTION: setup — Generate new TOTP secret ──
     if (action === 'setup' || !action) {
+      // ── Dispositivo confiável: 2º fator já aprovado aqui nas últimas 5h ──
+      // Só chega neste ponto quem JÁ provou o 1º fator acima (idToken do Firebase
+      // ou sessão do Google). A marca de confiança nunca concede acesso sozinha —
+      // ela só dispensa o SEGUNDO fator, e por isso é checada depois da
+      // verificação de identidade, não antes.
+      const trusted = verifyTrustToken(request.cookies.get(TOTP_TRUST_COOKIE)?.value);
+      if (trusted && trusted.email === normalized && TOTP_STORE.has(normalized)) {
+        await IP_TRACKER.record(normalized, clientIP);
+        const response = NextResponse.json({
+          success: true,
+          trusted: true,
+          message: 'Dispositivo já verificado. Login realizado!',
+          user: { email: normalized },
+        });
+        response.cookies.set('session', createSessionToken({
+          email: normalized,
+          role: ALLOWED_EMAILS.getRole(normalized),
+          iat: Date.now(),
+          exp: Date.now() + SESSION_TTL_MS,
+        }), {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: SESSION_TTL_SECONDS,
+          path: '/',
+        });
+        return response;
+      }
+
       // Check if already has TOTP configured (uses centralized persisted store)
       if (TOTP_STORE.has(normalized)) {
         return NextResponse.json({
@@ -175,11 +212,12 @@ export async function POST(request: NextRequest) {
 
       // Create session
       const role = ALLOWED_EMAILS.getRole(normalized);
+      const issuedAt = Date.now();
       const sessionPayload = {
         email: normalized,
         role,
-        iat: Date.now(),
-        exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        iat: issuedAt,
+        exp: issuedAt + SESSION_TTL_MS,
       };
       const sessionValue = createSessionToken(sessionPayload);
 
@@ -193,7 +231,17 @@ export async function POST(request: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60,
+        maxAge: SESSION_TTL_SECONDS,
+        path: '/',
+      });
+
+      // Marca este navegador como verificado por 5h. Sobrevive ao logout de
+      // propósito: é o que evita repetir o código a cada entrada.
+      response.cookies.set(TOTP_TRUST_COOKIE, createTrustToken(normalized), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: TOTP_TRUST_TTL_SECONDS,
         path: '/',
       });
 
@@ -241,11 +289,12 @@ export async function POST(request: NextRequest) {
 
       // Create session
       const role = ALLOWED_EMAILS.getRole(normalized);
+      const issuedAt = Date.now();
       const sessionPayload = {
         email: normalized,
         role,
-        iat: Date.now(),
-        exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        iat: issuedAt,
+        exp: issuedAt + SESSION_TTL_MS,
       };
       const sessionValue = createSessionToken(sessionPayload);
 
@@ -259,7 +308,17 @@ export async function POST(request: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 30 * 24 * 60 * 60,
+        maxAge: SESSION_TTL_SECONDS,
+        path: '/',
+      });
+
+      // Marca este navegador como verificado por 5h. Sobrevive ao logout de
+      // propósito: é o que evita repetir o código a cada entrada.
+      response.cookies.set(TOTP_TRUST_COOKIE, createTrustToken(normalized), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: TOTP_TRUST_TTL_SECONDS,
         path: '/',
       });
 
