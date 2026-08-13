@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
+import { DM_Sans } from "next/font/google";
 import "./globals.css";
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-dm-sans",
+});
 
 export const metadata: Metadata = {
   title: "JiraOps Dashboard — Gestão Operacional em Tempo Real",
@@ -13,12 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" data-theme="dark" data-scroll-behavior="smooth" className="h-full antialiased">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      </head>
-      <body className="min-h-full flex flex-col" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <html lang="pt-BR" data-theme="dark" data-scroll-behavior="smooth" className={`${dmSans.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col">
         {children}
         <script
           dangerouslySetInnerHTML={{

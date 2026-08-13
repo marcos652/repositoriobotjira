@@ -1,221 +1,336 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Command, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import {
-  Search, LayoutDashboard, Headphones, Code2, Sparkles, ClipboardList,
-  Kanban, CalendarDays, BarChart3, FileBarChart, Shield, Users,
-  GitBranch, Building2, BookOpen, Bot, Zap, ScrollText, Bell,
-  Settings, ArrowRight, Command, Hash,
-} from 'lucide-react';
 
-interface CommandItem {
-  id: string;
-  label: string;
+import {
+  navigationSections,
+  settingsNavigationItem,
+  type NavigationItem,
+} from '@/config/navigation';
+
+interface CommandItem extends NavigationItem {
   section: string;
-  icon: React.ReactNode;
-  action: () => void;
-  keywords?: string[];
 }
+
+const COMMAND_ITEMS: CommandItem[] = [
+  ...navigationSections.flatMap((section) =>
+    section.items.map((item) => ({ ...item, section: section.label })),
+  ),
+  { ...settingsNavigationItem, section: 'Sistema' },
+];
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<Element | null>(null);
   const router = useRouter();
+
+  const close = useCallback(() => {
+    setOpen(false);
+    window.setTimeout(() => {
+      if (triggerRef.current instanceof HTMLElement) triggerRef.current.focus();
+    }, 0);
+  }, []);
 
   const navigate = useCallback((path: string) => {
     router.push(path);
     setOpen(false);
   }, [router]);
 
-  const items: CommandItem[] = [
-    { id: 'nova', label: 'Nova Demanda', section: 'Ações', icon: <Sparkles size={16} />, action: () => navigate('/dashboard/nova-demanda'), keywords: ['criar', 'new', 'demanda'] },
-    { id: 'search', label: 'Consultar Demanda', section: 'Ações', icon: <Search size={16} />, action: () => navigate('/dashboard/consultar-demanda'), keywords: ['buscar', 'search', 'find'] },
-    { id: 'overview', label: 'Overview', section: 'Navegação', icon: <LayoutDashboard size={16} />, action: () => navigate('/dashboard'), keywords: ['home', 'inicio'] },
-    { id: 'suporte', label: 'Suporte', section: 'Navegação', icon: <Headphones size={16} />, action: () => navigate('/dashboard/suporte'), keywords: ['support', 'ticket'] },
-    { id: 'dev', label: 'Desenvolvimento', section: 'Navegação', icon: <Code2 size={16} />, action: () => navigate('/dashboard/dev'), keywords: ['dev', 'engineering'] },
-    { id: 'backlog', label: 'Backlog', section: 'Planejamento', icon: <ClipboardList size={16} />, action: () => navigate('/dashboard/backlog') },
-    { id: 'kanban', label: 'Kanban Board', section: 'Planejamento', icon: <Kanban size={16} />, action: () => navigate('/dashboard/kanban') },
-    { id: 'calendar', label: 'Calendário', section: 'Planejamento', icon: <CalendarDays size={16} />, action: () => navigate('/dashboard/calendario') },
-    { id: 'metrics', label: 'Métricas', section: 'Análise', icon: <BarChart3 size={16} />, action: () => navigate('/dashboard/metricas') },
-    { id: 'reports', label: 'Relatórios', section: 'Análise', icon: <FileBarChart size={16} />, action: () => navigate('/dashboard/relatorios') },
-    { id: 'sla', label: 'SLA / Contratos', section: 'Análise', icon: <Shield size={16} />, action: () => navigate('/dashboard/sla') },
-    { id: 'team', label: 'Equipe', section: 'Análise', icon: <Users size={16} />, action: () => navigate('/dashboard/equipe') },
-    { id: 'releases', label: 'Releases', section: 'Análise', icon: <GitBranch size={16} />, action: () => navigate('/dashboard/releases') },
-    { id: 'clients', label: 'Clientes', section: 'Gestão', icon: <Building2 size={16} />, action: () => navigate('/dashboard/clientes') },
-    { id: 'knowledge', label: 'Base de Conhecimento', section: 'Gestão', icon: <BookOpen size={16} />, action: () => navigate('/dashboard/knowledge') },
-    { id: 'automations', label: 'Automações', section: 'Gestão', icon: <Bot size={16} />, action: () => navigate('/dashboard/automacoes') },
-    { id: 'integrations', label: 'Integrações', section: 'Sistema', icon: <Zap size={16} />, action: () => navigate('/dashboard/integracoes') },
-    { id: 'logs', label: 'Logs / Auditoria', section: 'Sistema', icon: <ScrollText size={16} />, action: () => navigate('/dashboard/logs') },
-    { id: 'notifications', label: 'Notificações', section: 'Sistema', icon: <Bell size={16} />, action: () => navigate('/dashboard/notificacoes') },
-    { id: 'settings', label: 'Configurações', section: 'Sistema', icon: <Settings size={16} />, action: () => navigate('/dashboard/configuracoes') },
-  ];
+  const filtered = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
+    if (!normalizedQuery) return COMMAND_ITEMS;
 
-  const filtered = query.trim()
-    ? items.filter(item => {
-        const q = query.toLowerCase();
-        return item.label.toLowerCase().includes(q) ||
-          item.section.toLowerCase().includes(q) ||
-          item.keywords?.some(k => k.includes(q));
-      })
-    : items;
+    return COMMAND_ITEMS.filter((item) => {
+      const searchable = [item.label, item.section, item.description, ...(item.keywords ?? [])]
+        .join(' ')
+        .toLocaleLowerCase('pt-BR');
+      return searchable.includes(normalizedQuery);
+    });
+  }, [query]);
 
-  // Group by section
-  const sections: Record<string, CommandItem[]> = {};
-  filtered.forEach(item => {
-    if (!sections[item.section]) sections[item.section] = [];
-    sections[item.section].push(item);
-  });
+  const groupedItems = useMemo(() => {
+    return filtered.reduce<Record<string, CommandItem[]>>((groups, item) => {
+      (groups[item.section] ??= []).push(item);
+      return groups;
+    }, {});
+  }, [filtered]);
 
-  // Keyboard shortcut: Cmd+K / Ctrl+K
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setOpen(prev => !prev);
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        triggerRef.current = document.activeElement;
+        setOpen((current) => !current);
         setQuery('');
         setSelected(0);
+        return;
       }
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, []);
 
-  // Focus input when opening
+      if (event.key === 'Escape' && open) {
+        event.preventDefault();
+        close();
+        return;
+      }
+
+      if (event.key === 'Tab' && open && dialogRef.current) {
+        const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+          'input, button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        )).filter((element) => element.offsetParent !== null);
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (!first || !last) return;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleShortcut);
+    return () => document.removeEventListener('keydown', handleShortcut);
+  }, [close, open]);
+
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 50);
+    if (!open) return;
+    const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
-  // Keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelected(s => Math.min(s + 1, filtered.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelected(s => Math.max(s - 1, 0));
-    } else if (e.key === 'Enter' && filtered[selected]) {
-      filtered[selected].action();
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setSelected((current) => Math.min(current + 1, Math.max(filtered.length - 1, 0)));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setSelected((current) => Math.max(current - 1, 0));
+    } else if (event.key === 'Enter' && filtered[selected]) {
+      event.preventDefault();
+      navigate(filtered[selected].href);
     }
   };
 
   if (!open) return null;
 
+  const resultCount = filtered.length;
+
   return (
     <div
       className="animate-backdrop"
-      onClick={() => setOpen(false)}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) close();
+      }}
       style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: 'clamp(72px, 14vh, 136px) 16px 24px',
         background: 'var(--bg-overlay)',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        paddingTop: '15vh',
       }}
     >
-      <div
+      <section
+        ref={dialogRef}
+        aria-labelledby="command-palette-title"
+        aria-modal="true"
         className="animate-modal"
-        onClick={e => e.stopPropagation()}
+        role="dialog"
         style={{
-          width: '100%', maxWidth: 560,
-          background: 'var(--bg-card-solid)',
-          border: '1px solid var(--border-primary)',
-          borderRadius: 'var(--radius-xl)',
-          boxShadow: 'var(--shadow-xl)',
+          width: '100%',
+          maxWidth: 560,
           overflow: 'hidden',
+          border: '1px solid var(--border-primary)',
+          borderRadius: 'var(--radius-surface)',
+          background: 'var(--bg-card-solid)',
         }}
       >
-        {/* Search input */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 18px',
-          borderBottom: '1px solid var(--border-primary)',
-        }}>
-          <Search size={18} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+        <h2 id="command-palette-title" className="sr-only">Navegação rápida</h2>
+
+        <div
+          style={{
+            display: 'flex',
+            minHeight: 64,
+            alignItems: 'center',
+            gap: 12,
+            padding: '12px 20px',
+            borderBottom: '1px solid var(--border-primary)',
+          }}
+        >
+          <Search aria-hidden="true" size={19} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
           <input
             ref={inputRef}
-            value={query}
-            onChange={e => { setQuery(e.target.value); setSelected(0); }}
+            aria-autocomplete="list"
+            aria-controls="command-palette-results"
+            aria-expanded="true"
+            aria-label="Buscar páginas"
+            aria-activedescendant={filtered[selected] ? `command-${filtered[selected].href}` : undefined}
+            autoComplete="off"
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setSelected(0);
+            }}
             onKeyDown={handleKeyDown}
-            placeholder="Buscar páginas, ações..."
+            placeholder="Buscar páginas e recursos..."
+            role="combobox"
+            value={query}
             style={{
-              flex: 1, background: 'transparent', border: 'none', outline: 'none',
-              color: 'var(--text-primary)', fontSize: 15,
+              minWidth: 0,
+              flex: 1,
+              border: 0,
+              outline: 0,
+              background: 'transparent',
+              color: 'var(--text-primary)',
               fontFamily: 'var(--font-sans)',
+              fontSize: 15,
+              lineHeight: '24px',
             }}
           />
-          <kbd style={{
-            fontSize: 11, padding: '2px 6px',
-            borderRadius: 4, background: 'var(--bg-input)',
-            color: 'var(--text-tertiary)',
-            border: '1px solid var(--border-primary)',
-          }}>
-            ESC
+          <kbd
+            style={{
+              flexShrink: 0,
+              padding: '3px 7px',
+              border: '1px solid var(--border-primary)',
+              borderRadius: 6,
+              background: 'var(--bg-input)',
+              color: 'var(--text-tertiary)',
+              fontSize: 11,
+            }}
+          >
+            Esc
           </kbd>
         </div>
 
-        {/* Results */}
-        <div style={{ maxHeight: 400, overflowY: 'auto', padding: '8px 0' }}>
-          {filtered.length === 0 && (
-            <p style={{ padding: '24px 18px', color: 'var(--text-tertiary)', textAlign: 'center', fontSize: 13 }}>
-              Nenhum resultado para &quot;{query}&quot;
-            </p>
-          )}
-          {Object.entries(sections).map(([section, sectionItems]) => (
-            <div key={section}>
-              <p style={{
-                padding: '8px 18px 4px', fontSize: 10, fontWeight: 700,
-                textTransform: 'uppercase', letterSpacing: '0.08em',
-                color: 'var(--text-tertiary)',
-              }}>
-                {section}
+        <div
+          id="command-palette-results"
+          role="listbox"
+          aria-label={`${resultCount} páginas encontradas`}
+          style={{ maxHeight: 'min(52vh, 440px)', overflowY: 'auto', padding: '10px' }}
+        >
+          {resultCount === 0 ? (
+            <div style={{ padding: '36px 20px', textAlign: 'center' }}>
+              <p style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 500 }}>
+                Nenhum resultado encontrado
               </p>
-              {sectionItems.map(item => {
-                const globalIdx = filtered.indexOf(item);
-                const isSelected = globalIdx === selected;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={item.action}
-                    onMouseEnter={() => setSelected(globalIdx)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      width: '100%', padding: '10px 18px', border: 'none',
-                      cursor: 'pointer', textAlign: 'left',
-                      fontSize: 13, fontFamily: 'var(--font-sans)',
-                      background: isSelected ? 'var(--accent-blue-light)' : 'transparent',
-                      color: isSelected ? 'var(--accent-blue)' : 'var(--text-primary)',
-                      transition: 'background 0.1s, color 0.1s',
-                    }}
-                  >
-                    <span style={{ color: isSelected ? 'var(--accent-blue)' : 'var(--text-tertiary)' }}>
-                      {item.icon}
-                    </span>
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    {isSelected && <ArrowRight size={14} style={{ color: 'var(--accent-blue)' }} />}
-                  </button>
-                );
-              })}
+              <p style={{ marginTop: 4, color: 'var(--text-tertiary)', fontSize: 13 }}>
+                Tente outro termo para localizar uma página.
+              </p>
             </div>
-          ))}
+          ) : (
+            Object.entries(groupedItems).map(([section, items]) => (
+              <div key={section} role="group" aria-label={section} style={{ paddingBottom: 6 }}>
+                <p
+                  style={{
+                    padding: '8px 10px 5px',
+                    color: 'var(--text-tertiary)',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    lineHeight: '20px',
+                  }}
+                >
+                  {section}
+                </p>
+                {items.map((item) => {
+                  const itemIndex = filtered.indexOf(item);
+                  const isSelected = itemIndex === selected;
+                  const Icon = item.icon;
+
+                  return (
+                    <button
+                      id={`command-${item.href}`}
+                      key={item.href}
+                      aria-selected={isSelected}
+                      onClick={() => navigate(item.href)}
+                      onMouseEnter={() => setSelected(itemIndex)}
+                      role="option"
+                      type="button"
+                      style={{
+                        display: 'flex',
+                        width: '100%',
+                        minHeight: 48,
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '8px 10px',
+                        border: 0,
+                        borderRadius: 'var(--radius-control)',
+                        background: isSelected ? 'var(--accent-blue-light)' : 'transparent',
+                        color: isSelected ? 'var(--accent-blue)' : 'var(--text-primary)',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-sans)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          display: 'grid',
+                          width: 32,
+                          height: 32,
+                          flexShrink: 0,
+                          placeItems: 'center',
+                          border: '1px solid var(--border-secondary)',
+                          borderRadius: 8,
+                          background: 'var(--bg-secondary)',
+                          color: isSelected ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                        }}
+                      >
+                        <Icon size={17} />
+                      </span>
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{ display: 'block', fontSize: 14, fontWeight: 500, lineHeight: '20px' }}>
+                          {item.label}
+                        </span>
+                        <span
+                          style={{
+                            display: 'block',
+                            overflow: 'hidden',
+                            color: 'var(--text-tertiary)',
+                            fontSize: 12,
+                            lineHeight: '18px',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {item.description}
+                        </span>
+                      </span>
+                      {isSelected && <ArrowRight aria-hidden="true" size={16} />}
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </div>
 
-        {/* Footer */}
-        <div style={{
-          padding: '10px 18px', borderTop: '1px solid var(--border-primary)',
-          display: 'flex', alignItems: 'center', gap: 16, fontSize: 11,
-          color: 'var(--text-tertiary)',
-        }}>
+        <footer
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            padding: '10px 20px',
+            borderTop: '1px solid var(--border-primary)',
+            color: 'var(--text-tertiary)',
+            fontSize: 11,
+            lineHeight: '18px',
+          }}
+        >
           <span>↑↓ navegar</span>
-          <span>↵ selecionar</span>
-          <span>esc fechar</span>
+          <span>↵ abrir</span>
           <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Command size={11} /> K para buscar
+            <Command aria-hidden="true" size={12} /> K
           </span>
-        </div>
-      </div>
+        </footer>
+      </section>
     </div>
   );
 }

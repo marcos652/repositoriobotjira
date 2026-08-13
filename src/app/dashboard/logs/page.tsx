@@ -1,6 +1,7 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect, @next/next/no-img-element */
 import React, { useEffect, useState } from 'react';
-import { ScrollText, Loader2, WifiOff, RefreshCw, Search, Filter, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
+import { ScrollText, Loader2, WifiOff, RefreshCw, Search, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 
 interface LogEntry { issueKey: string; summary: string; author: string; authorAvatar: string | null; date: string; field: string; from: string; to: string; }
 
@@ -55,7 +56,7 @@ export default function LogsPage() {
     finally { setLoading(false); setRefreshing(false); }
   }
 
-  async function fetchRequestLogs(isRefresh = false) {
+  async function fetchRequestLogs() {
     try {
       setReqLoading(true);
       const res = await fetch('/api/auth/request-logs');
@@ -63,8 +64,8 @@ export default function LogsPage() {
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setReqLogs(data.logs || []);
       setReqError(null);
-    } catch (e: any) {
-      setReqError(e.message || String(e));
+    } catch (e) {
+      setReqError(e instanceof Error ? e.message : String(e));
     } finally {
       setReqLoading(false);
       setReqLoaded(true);
@@ -87,60 +88,50 @@ export default function LogsPage() {
     return true;
   });
 
-  const tabButtonStyle = (active: boolean): React.CSSProperties => ({
-    padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
-    background: active ? 'rgba(245,158,11,0.1)' : 'transparent',
-    border: active ? '1px solid rgba(245,158,11,0.25)' : '1px solid transparent',
-    color: active ? '#FBBF24' : 'var(--text-tertiary)', cursor: 'pointer',
-  });
-
   return (
-    <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="logs-root animate-fade-in">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.12)' }}>
-            <ScrollText size={20} style={{ color: '#FBBF24' }} />
-          </div>
+      <div className="logs-header">
+        <div>
           <div>
-            <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Logs & Auditoria</h1>
-            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>
+            <h1 className="logs-title">Logs & Auditoria</h1>
+            <p className="logs-subtitle">
               {tab === 'jira' ? `${filtered.length} de ${logs.length} atividades • Changelog do Jira` : `${filteredReqLogs.length} de ${reqLogs.length} requisições registradas`}
             </p>
           </div>
         </div>
-        <button onClick={() => tab === 'jira' ? fetchData(true) : fetchRequestLogs(true)} disabled={tab === 'jira' ? refreshing : reqLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        <button className="logs-refresh" onClick={() => tab === 'jira' ? fetchData(true) : fetchRequestLogs()} disabled={tab === 'jira' ? refreshing : reqLoading}>
           <RefreshCw size={14} className={(tab === 'jira' ? refreshing : reqLoading) ? 'animate-spin' : ''} /> Atualizar
         </button>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
-        <button style={tabButtonStyle(tab === 'jira')} onClick={() => setTab('jira')}>Atividade no Jira</button>
-        <button style={tabButtonStyle(tab === 'requests')} onClick={() => setTab('requests')}>Requisições na API</button>
+      <div className="logs-tabs">
+        <button className={`logs-tab ${tab === 'jira' ? 'logs-tab-active' : ''}`} onClick={() => setTab('jira')}>Atividade no Jira</button>
+        <button className={`logs-tab ${tab === 'requests' ? 'logs-tab-active' : ''}`} onClick={() => setTab('requests')}>Requisições na API</button>
       </div>
 
       {tab === 'jira' ? (
         loading ? (
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-4"><Loader2 size={36} className="animate-spin" style={{ color: '#F59E0B' }} /><p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando logs do Jira...</p></div>
+          <div className="logs-state"><Loader2 size={36} className="animate-spin" style={{ color: '#F59E0B' }} /><p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando logs do Jira...</p></div>
         ) : error ? (
-          <div className="flex items-center justify-center h-[60vh]"><div className="text-center space-y-5"><WifiOff size={28} style={{ color: '#FB7185' }} /><p style={{ color: 'var(--text-primary)' }}>Erro</p><button onClick={() => fetchData()} style={{ padding: '8px 20px', borderRadius: '12px', background: 'linear-gradient(135deg, #F59E0B, #F97316)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Tentar novamente</button></div></div>
+          <div className="logs-state"><div className="text-center space-y-5"><WifiOff size={28} style={{ color: '#FB7185' }} /><p style={{ color: 'var(--text-primary)' }}>Erro</p><button className="logs-retry" onClick={() => fetchData()}>Tentar novamente</button></div></div>
         ) : (
           <>
             {/* Filters */}
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 14px', height: '40px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)' }}>
+            <div className="logs-filters">
+              <div className="logs-search">
                 <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
                 <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por issue, autor..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '13px' }} />
               </div>
-              <select value={filterField} onChange={e => setFilterField(e.target.value)} style={{ padding: '0 12px', height: '40px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', cursor: 'pointer' }}>
+              <select className="logs-select" value={filterField} onChange={e => setFilterField(e.target.value)}>
                 <option value="all">Todos os campos</option>
                 {fields.map(f => <option key={f} value={f}>{fieldLabels[f] || f}</option>)}
               </select>
             </div>
 
             {/* Timeline */}
-            <div style={{ flex: 1, overflow: 'auto', borderRadius: '16px', border: '1px solid var(--border-primary)', background: 'var(--bg-card)' }}>
+            <div className="logs-panel">
               {filtered.length === 0 ? (
                 <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
                   <ScrollText size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
@@ -149,16 +140,16 @@ export default function LogsPage() {
               ) : (
                 <div style={{ padding: '8px' }}>
                   {filtered.map((log, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '12px', padding: '14px 16px', borderBottom: i < filtered.length - 1 ? '1px solid var(--border-secondary)' : 'none', transition: 'background 0.1s' }} onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <div className="logs-row" key={i} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border-secondary)' : 'none' }}>
                       {log.authorAvatar ? <img src={log.authorAvatar} alt="" style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0 }} /> : (
-                        <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, background: '#6366F1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
                           {log.author.charAt(0).toUpperCase()}
                         </div>
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{log.author}</span>
-                          <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: 'rgba(99,102,241,0.08)', color: '#818CF8' }}>{log.issueKey}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '8px', background: 'rgba(99,102,241,0.08)', color: '#818CF8' }}>{log.issueKey}</span>
                           <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'monospace', marginLeft: 'auto' }}>{timeAgo(log.date)}</span>
                         </div>
                         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -176,24 +167,24 @@ export default function LogsPage() {
         )
       ) : (
         reqLoading && !reqLoaded ? (
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-4"><Loader2 size={36} className="animate-spin" style={{ color: '#F59E0B' }} /><p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando requisições...</p></div>
+          <div className="logs-state"><Loader2 size={36} className="animate-spin" style={{ color: '#F59E0B' }} /><p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando requisições...</p></div>
         ) : reqError ? (
-          <div className="flex items-center justify-center h-[60vh]"><div className="text-center space-y-5"><ShieldX size={28} style={{ color: '#FB7185' }} /><p style={{ color: 'var(--text-primary)' }}>{reqError}</p></div></div>
+          <div className="logs-state"><div className="text-center space-y-5"><ShieldX size={28} style={{ color: '#FB7185' }} /><p style={{ color: 'var(--text-primary)' }}>{reqError}</p></div></div>
         ) : (
           <>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 14px', height: '40px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)', fontSize: '12px' }}>
+            <div className="logs-filters">
+              <div className="logs-request-info">
                 <ShieldAlert size={14} />
                 IP, e-mail/usuário e rota de toda chamada POST/PUT/DELETE — mais recentes primeiro
               </div>
-              <select value={reqFilter} onChange={e => setReqFilter(e.target.value as any)} style={{ padding: '0 12px', height: '40px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', cursor: 'pointer' }}>
+              <select className="logs-select" value={reqFilter} onChange={e => setReqFilter(e.target.value as 'all' | 'allowed' | 'blocked')}>
                 <option value="all">Todas</option>
                 <option value="allowed">Só permitidas</option>
                 <option value="blocked">Só bloqueadas</option>
               </select>
             </div>
 
-            <div style={{ flex: 1, overflow: 'auto', borderRadius: '16px', border: '1px solid var(--border-primary)', background: 'var(--bg-card)' }}>
+            <div className="logs-panel">
               {filteredReqLogs.length === 0 ? (
                 <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
                   <ShieldCheck size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
@@ -202,13 +193,13 @@ export default function LogsPage() {
               ) : (
                 <div style={{ padding: '8px' }}>
                   {filteredReqLogs.map((log, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px 16px', borderBottom: i < filteredReqLogs.length - 1 ? '1px solid var(--border-secondary)' : 'none' }}>
+                    <div className="logs-row logs-request-row" key={i} style={{ borderBottom: i < filteredReqLogs.length - 1 ? '1px solid var(--border-secondary)' : 'none' }}>
                       {log.allowed
                         ? <ShieldCheck size={18} style={{ color: '#4ADE80', flexShrink: 0 }} />
                         : <ShieldX size={18} style={{ color: '#FB7185', flexShrink: 0 }} />}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px', flexWrap: 'wrap' }}>
-                          <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: 'rgba(99,102,241,0.08)', color: '#818CF8' }}>{log.method}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '8px', background: 'rgba(99,102,241,0.08)', color: '#818CF8' }}>{log.method}</span>
                           <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-primary)' }}>{log.path}</span>
                           <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'monospace', marginLeft: 'auto' }}>{timeAgo(log.createdAt)}</span>
                         </div>
@@ -225,6 +216,42 @@ export default function LogsPage() {
           </>
         )
       )}
+
+      <style jsx>{`
+        .logs-root { display: flex; flex-direction: column; gap: 24px; min-width: 0; min-height: 0; height: 100%; }
+        .logs-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; flex-shrink: 0; }
+        .logs-title { margin: 0; color: var(--text-primary); font-size: 32px; font-weight: 500; line-height: 36px; letter-spacing: -.02em; }
+        .logs-subtitle { margin: 6px 0 0; color: var(--text-tertiary); font-size: 14px; }
+        .logs-refresh { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-card); color: var(--text-secondary); font: 600 12px var(--font-sans); cursor: pointer; transition: background .15s, color .15s; }
+        .logs-refresh:hover:not(:disabled) { background: var(--bg-secondary); color: var(--text-primary); }
+        .logs-refresh:disabled { opacity: .55; cursor: not-allowed; }
+        .logs-tabs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .logs-tab { min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-card); color: var(--text-tertiary); font: 600 12px var(--font-sans); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+        .logs-tab:hover { background: var(--bg-secondary); color: var(--text-secondary); }
+        .logs-tab-active { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.25); color: #FBBF24; }
+        .logs-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .logs-search, .logs-request-info { flex: 1 1 260px; min-width: 0; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-card); }
+        .logs-request-info { color: var(--text-tertiary); font-size: 12px; }
+        .logs-select { height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-card); color: var(--text-primary); font: 600 12px var(--font-sans); cursor: pointer; outline: none; }
+        .logs-select:focus { border-color: #F59E0B; }
+        .logs-panel { flex: 1; min-height: 300px; overflow: auto; border-radius: 24px; border: 1px solid var(--border-primary); background: var(--bg-card); }
+        .logs-row { display: flex; gap: 12px; padding: 16px 18px; transition: background .15s; }
+        .logs-row:hover { background: var(--bg-secondary); }
+        .logs-request-row { align-items: center; }
+        .logs-state { flex: 1; min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; border-radius: 24px; border: 1px solid var(--border-primary); background: var(--bg-card); }
+        .logs-retry { min-height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid #F59E0B; background: #F59E0B; color: #fff; font: 700 13px var(--font-sans); cursor: pointer; }
+        @media (max-width: 640px) {
+          .logs-root { height: auto; }
+          .logs-title { font-size: 28px; line-height: 34px; }
+          .logs-refresh { width: 100%; }
+          .logs-tabs { display: grid; grid-template-columns: 1fr 1fr; }
+          .logs-filters { align-items: stretch; }
+          .logs-search, .logs-request-info, .logs-select { width: 100%; }
+          .logs-request-info { height: auto; min-height: 48px; padding-top: 8px; padding-bottom: 8px; }
+          .logs-panel, .logs-state { min-height: 420px; }
+          .logs-row { padding: 14px; }
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,22 +1,41 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Bell, Menu, Moon, Search, Sun, X } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useFilters } from '@/contexts/FilterContext';
-import { DateRange } from '@/types';
-import {
-  Sun, Moon, Bell, Search, RefreshCw, Download, X
-} from 'lucide-react';
+import type { DateRange } from '@/types';
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
+  onMenuOpen: () => void;
 }
 
-export default function Header({ title, subtitle }: HeaderProps) {
+function getInitials(email: string): string {
+  const parts = email.split('@')[0].split(/[._-]/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : email.slice(0, 2)).toUpperCase();
+}
+
+function getDisplayName(email: string): string {
+  return email
+    .split('@')[0]
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((part) => `${part[0].toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
+export default function Header({ title, subtitle, onMenuOpen }: HeaderProps) {
+  const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
   const { filters, setDateRange, hasActiveFilters, clearFilters } = useFilters();
+  const [userEmail, setUserEmail] = useState('');
+  const [userImage, setUserImage] = useState('');
 
+  const showsDateFilter = ['/dashboard', '/dashboard/suporte', '/dashboard/dev'].includes(pathname);
   const dateRanges: { label: string; value: DateRange }[] = [
     { label: 'Hoje', value: 'today' },
     { label: '7 dias', value: '7d' },
@@ -24,188 +43,81 @@ export default function Header({ title, subtitle }: HeaderProps) {
     { label: '90 dias', value: '90d' },
   ];
 
+  useEffect(() => {
+    fetch('/api/custom-session')
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.user?.email) return;
+        setUserEmail(data.user.email);
+        setUserImage(data.user.image || '');
+      })
+      .catch(() => {});
+  }, []);
+
+  const openCommandPalette = () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
+  };
+
   return (
-    <header
-      className="sticky top-0 z-30 transition-all duration-300"
-      style={{
-        background: 'rgba(10, 14, 26, 0.75)',
-        borderBottom: '1px solid var(--border-primary)',
-        backdropFilter: 'blur(24px) saturate(1.2)',
-        WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
-      }}
-    >
-      {/* ── Main row ── */}
-      <div className="flex items-center justify-between px-8 py-4">
+    <header className="dashboard-topbar">
+      <div className="dashboard-topbar__breadcrumb">
+        <button
+          type="button"
+          className="dashboard-icon-button dashboard-topbar__menu"
+          onClick={onMenuOpen}
+          aria-label="Abrir menu"
+          aria-controls="dashboard-sidebar"
+        >
+          <Menu size={20} />
+        </button>
+        <nav aria-label="Navegação estrutural">
+          <Link href="/dashboard">JiraOps</Link>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{title}</span>
+        </nav>
+        {subtitle && <span className="dashboard-topbar__context">{subtitle}</span>}
+      </div>
 
-        {/* Left: Title + live badge */}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {title}
-            </h1>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
-              style={{ background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' }}>
-              <span className="live-dot" style={{ width: '6px', height: '6px' }} />
-              Ao vivo
-            </div>
-          </div>
-          {subtitle && (
-            <p className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
-              {subtitle}
-            </p>
-          )}
-        </div>
-
-        {/* Center: Date Range Pills */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 p-1.5 rounded-[16px] relative"
-            style={{
-              background: 'rgba(5, 8, 15, 0.6)',
-              border: '1px solid rgba(255,255,255,0.03)',
-              boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.6), inset 0 1px 2px rgba(0,0,0,0.4)',
-            }}>
-            {dateRanges.map(({ label, value }) => {
-              const isActive = filters.dateRange === value;
-              return (
-                <button
-                  key={value}
-                  onClick={() => setDateRange(value)}
-                  className="relative z-10 px-5 py-1.5 rounded-[12px] text-[13px] font-extrabold transition-all duration-300 cursor-pointer overflow-hidden group flex items-center justify-center"
-                  style={{
-                    minWidth: '85px',
-                    color: isActive ? '#fff' : 'rgba(255,255,255,0.4)',
-                    background: isActive ? 'linear-gradient(180deg, rgba(99,102,241,0.15) 0%, rgba(79,70,229,0.4) 100%)' : 'transparent',
-                    border: isActive ? '1px solid rgba(129,140,248,0.4)' : '1px solid transparent',
-                    boxShadow: isActive ? '0 4px 12px rgba(79,70,229,0.3), inset 0 1px 0 rgba(255,255,255,0.2)' : 'none',
-                  }}
-                >
-                  {/* Subtle active glow bar at the top */}
-                  {isActive && (
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[30px] h-[2px] rounded-b-full transition-all duration-500"
-                      style={{ background: '#A5B4FC', boxShadow: '0 0 10px 2px rgba(165,180,252,0.6)' }} />
-                  )}
-                  
-                  <span className="relative z-10 transition-colors duration-300 group-hover:text-white"
-                    style={{ textShadow: isActive ? '0 1px 4px rgba(0,0,0,0.6)' : 'none' }}>
-                    {label}
-                  </span>
-
-                  {/* Hover subtle glow for inactive items */}
-                  {!isActive && (
-                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-[10px]" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {hasActiveFilters && (
+      {showsDateFilter && (
+        <div className="dashboard-topbar__period" aria-label="Período dos dados">
+          {dateRanges.map(({ label, value }) => (
             <button
-              onClick={clearFilters}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 cursor-pointer"
-              style={{ background: 'var(--accent-rose-light)', color: 'var(--accent-rose)', border: '1px solid rgba(244,63,94,0.15)' }}
+              key={value}
+              type="button"
+              onClick={() => setDateRange(value)}
+              aria-pressed={filters.dateRange === value}
+              className={filters.dateRange === value ? 'is-active' : ''}
             >
-              <X size={12} />
-              Limpar filtros
-            </button>
-          )}
-        </div>
-
-        {/* Right: Action buttons */}
-        <div className="flex items-center gap-2">
-          {[
-            { icon: <Search size={16} />, title: 'Buscar', color: 'var(--accent-blue)' },
-            { icon: <RefreshCw size={16} />, title: 'Sincronizar com Jira', color: 'var(--accent-violet)' },
-            { icon: <Download size={16} />, title: 'Exportar', color: 'var(--accent-emerald)' },
-          ].map((btn) => (
-            <button
-              key={btn.title}
-              className="p-2.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 border cursor-pointer"
-              style={{
-                background: 'rgba(15, 23, 42, 0.5)',
-                color: 'var(--text-tertiary)',
-                borderColor: 'var(--border-primary)',
-              }}
-              title={btn.title}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = btn.color;
-                e.currentTarget.style.borderColor = btn.color;
-                e.currentTarget.style.boxShadow = `0 0 16px ${btn.color}20`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-tertiary)';
-                e.currentTarget.style.borderColor = 'var(--border-primary)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              {btn.icon}
+              {label}
             </button>
           ))}
+          {hasActiveFilters && (
+            <button type="button" className="dashboard-topbar__clear" onClick={clearFilters} aria-label="Limpar filtros">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
-          {/* Notifications */}
-          <button
-            className="relative p-2.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 border cursor-pointer"
-            style={{
-              background: 'rgba(15, 23, 42, 0.5)',
-              color: 'var(--text-tertiary)',
-              borderColor: 'var(--border-primary)',
-            }}
-            title="Notificações"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--accent-rose)';
-              e.currentTarget.style.borderColor = 'var(--accent-rose)';
-              e.currentTarget.style.boxShadow = '0 0 16px rgba(244,63,94,0.15)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'var(--text-tertiary)';
-              e.currentTarget.style.borderColor = 'var(--border-primary)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            <Bell size={16} />
-            <span className="absolute top-2 right-2 w-2 h-2 rounded-full"
-              style={{ background: 'var(--accent-rose)', boxShadow: '0 0 8px var(--accent-rose)' }} />
-          </button>
-
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-2.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 border cursor-pointer"
-            style={{
-              background: 'rgba(15, 23, 42, 0.5)',
-              color: 'var(--text-tertiary)',
-              borderColor: 'var(--border-primary)',
-            }}
-            title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--accent-amber)';
-              e.currentTarget.style.borderColor = 'var(--accent-amber)';
-              e.currentTarget.style.boxShadow = '0 0 16px rgba(245,158,11,0.15)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'var(--text-tertiary)';
-              e.currentTarget.style.borderColor = 'var(--border-primary)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-
-          {/* Separator */}
-          <div className="w-px h-7 mx-1" style={{ background: 'var(--border-primary)' }} />
-
-          {/* User Avatar */}
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-extrabold cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95"
-            style={{
-              background: 'var(--gradient-primary)',
-              color: '#fff',
-              boxShadow: 'var(--shadow-glow-blue)',
-            }}
-            title="Minha conta"
-          >
-            MV
-          </div>
+      <div className="dashboard-topbar__actions">
+        <button type="button" className="dashboard-icon-button" onClick={openCommandPalette} aria-label="Buscar" title="Buscar (Ctrl+K)">
+          <Search size={18} />
+        </button>
+        <Link className="dashboard-icon-button" href="/dashboard/notificacoes" aria-label="Notificações">
+          <Bell size={18} />
+          <span className="dashboard-topbar__notification-dot" />
+        </Link>
+        <button type="button" className="dashboard-icon-button" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}>
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+        <div className="dashboard-topbar__profile">
+          {userImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={userImage} alt="" />
+          ) : (
+            <span aria-hidden="true">{userEmail ? getInitials(userEmail) : 'JO'}</span>
+          )}
+          <strong>{userEmail ? getDisplayName(userEmail) : 'JiraOps'}</strong>
         </div>
       </div>
     </header>

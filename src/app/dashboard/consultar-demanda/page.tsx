@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Search, Loader2, CheckCircle2, AlertTriangle, X, ExternalLink,
+  Search, Loader2, CheckCircle2, AlertTriangle, X,
   FileText, User, Tag, Clock, Edit3, Save, ArrowUpRight,
   Sparkles, Building2, MessageCircle, GitBranch,
   GitPullRequest, GitMerge, Send, Copy, Link2,
@@ -25,6 +25,7 @@ interface TransitionData { id: string; name: string; to: string; }
 interface ChangelogEntry { author: string; authorAvatar: string | null; created: string; items: { field: string; from: string; to: string; }[]; }
 interface SprintData { id: number; name: string; state: string; startDate: string; endDate: string; }
 interface TimeTrackingData { originalEstimate: string | null; remainingEstimate: string | null; timeSpent: string | null; }
+interface SearchResultData { key: string; summary: string; status: string; statusCategory: string | null; assignee: string; created: string | null; }
 
 interface DemandaData {
   success: boolean; issue_key: string; summary: string | null; texto: string | null; textoHtml: string | null;
@@ -69,7 +70,7 @@ export default function ConsultarDemandaPage() {
   const [editPriority, setEditPriority] = useState('');
   const [editAssignee, setEditAssignee] = useState('');
   const [editAssigneeId, setEditAssigneeId] = useState('');
-  const [editReporter, setEditReporter] = useState('');
+  const [, setEditReporter] = useState('');
   const [editCliente, setEditCliente] = useState('');
   const [editProduto, setEditProduto] = useState<string[]>([]);
   const [editSaude, setEditSaude] = useState('');
@@ -79,7 +80,7 @@ export default function ConsultarDemandaPage() {
   const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updateResult, setUpdateResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchResultData[] | null>(null);
 
   // New features state
   const [newComment, setNewComment] = useState('');
@@ -135,7 +136,7 @@ export default function ConsultarDemandaPage() {
           setEditAssigneeId(data.assigneeId || '');
           setEditReporter(data.reporter || '');
           setEditCliente(data.nome_cliente || '');
-          setEditProduto(data.produto?.map((p: any) => p.id) || []);
+          setEditProduto(data.produto?.map((p: { id: string }) => p.id) || []);
           setEditSaude(data.saude?.id || '');
           setEditImpacto(data.impacto?.id || '');
           setEditDataInicio(data.dataInicio || '');
@@ -161,6 +162,7 @@ export default function ConsultarDemandaPage() {
     finally { setLoading(false); }
   }, [searchKey]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- initializes browser-backed search state and URL selection */
   useEffect(() => { 
     setSearchHistory(loadHistory()); 
     // Check URL for ?key= param
@@ -173,11 +175,12 @@ export default function ConsultarDemandaPage() {
       }
     }
   }, [handleSearch]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleUpdate = async () => {
     if (!demanda) return;
     setUpdating(true); setUpdateResult(null);
-    const body: any = {};
+    const body: Record<string, string | string[]> = {};
     if (editTexto !== (demanda.texto || '')) body.description = editTexto;
     if (editSummary !== (demanda.summary || '')) body.summary = editSummary;
     if (editPriority !== (demanda.priority || '')) body.priority = editPriority;
@@ -322,67 +325,61 @@ export default function ConsultarDemandaPage() {
 
   const issueTypeColor = (type: string | null) => {
     switch (type) {
-      case 'Bug': return { bg: 'rgba(244,63,94,0.12)', color: '#FB7185', border: 'rgba(244,63,94,0.15)' };
-      case 'Story': return { bg: 'rgba(34,197,94,0.12)', color: '#4ADE80', border: 'rgba(34,197,94,0.15)' };
-      default: return { bg: 'rgba(59,130,246,0.12)', color: '#60A5FA', border: 'rgba(59,130,246,0.15)' };
+      case 'Bug': return { bg: 'var(--accent-rose-light)', color: 'var(--accent-rose-soft)', border: 'var(--accent-rose-light)' };
+      case 'Story': return { bg: 'var(--accent-emerald-light)', color: 'var(--accent-green-soft)', border: 'var(--accent-emerald-light)' };
+      default: return { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue-soft)', border: 'var(--accent-blue-light)' };
     }
   };
 
   const statusColor = (cat: string | null) => {
     switch (cat) {
-      case 'done': return { bg: 'rgba(34,197,94,0.1)', color: '#4ADE80', border: 'rgba(34,197,94,0.12)' };
-      case 'indeterminate': return { bg: 'rgba(59,130,246,0.1)', color: '#60A5FA', border: 'rgba(59,130,246,0.12)' };
-      default: return { bg: 'rgba(245,158,11,0.1)', color: '#FBBF24', border: 'rgba(245,158,11,0.12)' };
+      case 'done': return { bg: 'var(--accent-emerald-light)', color: 'var(--accent-green-soft)', border: 'var(--accent-emerald-light)' };
+      case 'indeterminate': return { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue-soft)', border: 'var(--accent-blue-light)' };
+      default: return { bg: 'var(--accent-amber-light)', color: 'var(--accent-amber-soft)', border: 'var(--accent-amber-light)' };
     }
   };
 
   const S = {
     label: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' } as React.CSSProperties,
-    card: { padding: '14px 18px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)' } as React.CSSProperties,
+    card: { padding: '16px 18px', borderRadius: '16px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)' } as React.CSSProperties,
     badge: (bg: string, color: string, border: string): React.CSSProperties => ({ padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', background: bg, color, border: `1px solid ${border}` }),
-    tab: (active: boolean): React.CSSProperties => ({ padding: '10px 18px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', border: 'none', transition: 'all 0.15s', background: active ? 'rgba(99,102,241,0.1)' : 'transparent', color: active ? '#818CF8' : 'var(--text-tertiary)' }),
+    tab: (active: boolean): React.CSSProperties => ({ padding: '10px 18px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', border: 'none', background: active ? 'var(--accent-violet-light)' : 'transparent', color: active ? 'var(--accent-indigo-soft)' : 'var(--text-tertiary)' }),
   };
 
   return (
     <div className="cd-root animate-fade-in">
 
       {/* Header */}
-      <div style={{ marginBottom: '28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.12)' }}>
-            <Search size={20} style={{ color: '#818CF8' }} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Consultar & Editar Demanda</h1>
-            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>Visualize, edite, comente e mude o status das demandas</p>
-          </div>
-        </div>
+      <div className="cd-page-header">
+        <h1>Consultar & Editar Demanda</h1>
+        <p>Visualize, edite, comente e mude o status das demandas</p>
       </div>
 
       {/* Search Bar */}
-      <div style={{ position: 'relative', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', padding: '0 16px', borderRadius: '14px', height: '48px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)' }}>
+      <div className="cd-search-wrap">
+        <div className="cd-search-row">
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', padding: '0 16px', borderRadius: '8px', height: '48px', background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)' }}>
             <Search size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
             <input type="text" value={searchKey}
               onChange={e => setSearchKey(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               onFocus={() => searchHistory.length > 0 && setShowHistory(true)}
               onBlur={() => setTimeout(() => setShowHistory(false), 200)}
+              aria-label="Chave ou resumo da demanda"
               placeholder="Ex: DSMM-123 ou Erro de Login..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }} />
-            {searchKey && <button onClick={() => { setSearchKey(''); setDemanda(null); setSearchResults(null); setError(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: '4px' }}><X size={14} /></button>}
+            {searchKey && <button aria-label="Limpar busca" onClick={() => { setSearchKey(''); setDemanda(null); setSearchResults(null); setError(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: '4px' }}><X size={14} /></button>}
           </div>
-          <button onClick={() => handleSearch()} disabled={loading || !searchKey.trim()} style={{ padding: '0 24px', borderRadius: '14px', height: '48px', background: loading ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 700, cursor: loading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 16px rgba(59,130,246,0.2)' }}>
+          <button onClick={() => handleSearch()} disabled={loading || !searchKey.trim()} style={{ padding: '0 24px', borderRadius: '8px', height: '48px', background: loading ? 'var(--bg-card-hover)' : 'var(--accent-blue)', color: loading ? 'var(--text-tertiary)' : 'var(--text-inverse)', border: `1px solid ${loading ? 'var(--border-primary)' : 'var(--accent-blue)'}`, fontSize: '13px', fontWeight: 700, cursor: loading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Buscar
           </button>
         </div>
 
         {/* Search history dropdown */}
         {showHistory && searchHistory.length > 0 && (
-          <div style={{ position: 'absolute', top: '56px', left: 0, right: 0, zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', padding: '6px', maxHeight: '240px', overflow: 'auto' }}>
+          <div style={{ position: 'absolute', top: '56px', left: 0, right: 0, zIndex: 50, background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '16px', padding: '8px', maxHeight: '240px', overflow: 'auto' }}>
             <div style={{ padding: '6px 10px', fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Buscas recentes</div>
             {searchHistory.map((k) => (
-              <button key={k} onMouseDown={() => { setSearchKey(k.replace('DSMM-', '')); handleSearch(k); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, textAlign: 'left', transition: 'background 0.1s' }} onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')} onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+              <button key={k} onMouseDown={() => { setSearchKey(k.replace('DSMM-', '')); handleSearch(k); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, textAlign: 'left' }}>
                 <Clock size={12} style={{ color: 'var(--text-tertiary)' }} /> {k}
               </button>
             ))}
@@ -392,56 +389,55 @@ export default function ConsultarDemandaPage() {
 
       {/* Error / Update Result */}
       {error && (
-        <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 20px', borderRadius: '14px', background: 'rgba(244,63,94,0.06)', border: '1px solid rgba(244,63,94,0.12)', marginBottom: '20px' }}>
-          <AlertTriangle size={18} style={{ color: '#FB7185' }} />
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#FB7185' }}>{error}</span>
+        <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 20px', borderRadius: '16px', background: 'var(--accent-rose-light)', border: '1px solid var(--accent-rose-light)' }}>
+          <AlertTriangle size={18} style={{ color: 'var(--accent-rose-soft)' }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-rose-soft)' }}>{error}</span>
         </div>
       )}
       {updateResult && (
-        <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 20px', borderRadius: '14px', marginBottom: '20px', background: updateResult.success ? 'rgba(34,197,94,0.06)' : 'rgba(244,63,94,0.06)', border: `1px solid ${updateResult.success ? 'rgba(34,197,94,0.12)' : 'rgba(244,63,94,0.12)'}` }}>
-          {updateResult.success ? <CheckCircle2 size={16} style={{ color: '#4ADE80' }} /> : <AlertTriangle size={16} style={{ color: '#FB7185' }} />}
-          <span style={{ fontSize: '13px', fontWeight: 600, color: updateResult.success ? '#4ADE80' : '#FB7185' }}>{updateResult.message}</span>
+        <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 20px', borderRadius: '16px', background: updateResult.success ? 'var(--accent-emerald-light)' : 'var(--accent-rose-light)', border: `1px solid ${updateResult.success ? 'var(--accent-emerald-light)' : 'var(--accent-rose-light)'}` }}>
+          {updateResult.success ? <CheckCircle2 size={16} style={{ color: 'var(--accent-green-soft)' }} /> : <AlertTriangle size={16} style={{ color: 'var(--accent-rose-soft)' }} />}
+          <span style={{ fontSize: '13px', fontWeight: 600, color: updateResult.success ? 'var(--accent-green-soft)' : 'var(--accent-rose-soft)' }}>{updateResult.message}</span>
         </div>
       )}
 
       {/* Search Results List */}
       {!demanda && searchResults && searchResults.length > 0 && (
-        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <h2 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '4px' }}>Resultados da busca ({searchResults.length})</h2>
           {searchResults.map(res => (
-            <div key={res.key} onClick={() => { setSearchKey(res.key); handleSearch(res.key); }} className="group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-indigo)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-secondary)')}>
+            <button type="button" key={res.key} onClick={() => { setSearchKey(res.key); handleSearch(res.key); }} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '24px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={S.badge(issueTypeColor('Story').bg, issueTypeColor('Story').color, issueTypeColor('Story').border)}>{res.key}</span>
                   <span style={S.badge(statusColor(res.statusCategory).bg, statusColor(res.statusCategory).color, statusColor(res.statusCategory).border)}>{res.status}</span>
                 </div>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }} className="group-hover:text-indigo-400 transition-colors">{res.summary}</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{res.summary}</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><User size={12} /> {res.assignee}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={12} /> {formatDate(res.created)}</span>
                 </div>
               </div>
-              <div style={{ padding: '8px', background: 'var(--bg-card)', borderRadius: '8px', color: 'var(--text-tertiary)' }} className="group-hover:bg-indigo-500/10 group-hover:text-indigo-400 transition-colors">
+              <div style={{ padding: '8px', background: 'var(--bg-secondary)', borderRadius: '8px', color: 'var(--text-tertiary)' }}>
                 <ArrowRight size={18} />
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
 
       {/* ── DEMANDA CARD ── */}
       {demanda && (
-        <div className="animate-fade-in" style={{ borderRadius: '20px', overflow: 'hidden', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', boxShadow: '0 8px 32px rgba(0,0,0,0.08)' }}>
-          <div style={{ height: '3px', background: 'linear-gradient(90deg, #3B82F6, #8B5CF6, #A78BFA)' }} />
+        <div className="animate-fade-in" style={{ borderRadius: '24px', overflow: 'hidden', background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)' }}>
 
           {/* Card Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--border-secondary)', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '22px', fontWeight: 900, letterSpacing: '-0.03em', background: 'linear-gradient(135deg, #60A5FA, #A78BFA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{demanda.issue_key}</span>
+              <span style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--accent-blue-soft)' }}>{demanda.issue_key}</span>
               {demanda.issuetype && (() => { const c = issueTypeColor(demanda.issuetype); return <span style={S.badge(c.bg, c.color, c.border)}>{demanda.issuetype}</span>; })()}
               {demanda.status && (() => { const c = statusColor(demanda.statusCategory); return <span style={S.badge(c.bg, c.color, c.border)}>{demanda.status}</span>; })()}
-              {demanda.priority && <span style={S.badge('rgba(245,158,11,0.08)', '#FBBF24', 'rgba(245,158,11,0.1)')}>{demanda.priority}</span>}
-              {demanda.sprint && <span style={{ ...S.badge('rgba(139,92,246,0.08)', '#A78BFA', 'rgba(139,92,246,0.1)'), display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={10} /> {demanda.sprint.name}</span>}
+              {demanda.priority && <span style={S.badge('var(--accent-amber-light)', 'var(--accent-amber-soft)', 'var(--accent-amber-light)')}>{demanda.priority}</span>}
+              {demanda.sprint && <span style={{ ...S.badge('var(--accent-violet-light)', 'var(--accent-violet-soft)', 'var(--accent-violet-light)'), display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={10} /> {demanda.sprint.name}</span>}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {/* Status transition dropdown */}
@@ -450,10 +446,10 @@ export default function ConsultarDemandaPage() {
                   <button onClick={() => {
                     const el = document.getElementById('transition-dropdown');
                     if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
-                  }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'rgba(34,197,94,0.08)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.15)', cursor: 'pointer' }}>
+                  }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: 'var(--accent-emerald-light)', color: 'var(--accent-green-soft)', border: '1px solid var(--accent-emerald-light)', cursor: 'pointer' }}>
                     {transitioning ? <Loader2 size={14} className="animate-spin" /> : 'Mover para...'} <ChevronDown size={14} />
                   </button>
-                  <div id="transition-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', width: '280px', zIndex: 100, overflow: 'hidden' }}>
+                  <div id="transition-dropdown" style={{ display: 'none', position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '16px', width: '280px', zIndex: 100, overflow: 'hidden' }}>
                     <div style={{ padding: '8px 12px', fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-secondary)' }}>
                       Fluxo de Trabalho
                     </div>
@@ -465,23 +461,23 @@ export default function ConsultarDemandaPage() {
                         <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{t.name}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <ArrowRight size={14} style={{ color: 'var(--text-tertiary)' }} />
-                          <span style={S.badge('rgba(255,255,255,0.05)', 'var(--text-secondary)', 'var(--border-secondary)')}>{t.to}</span>
+                          <span style={S.badge('var(--bg-secondary)', 'var(--text-secondary)', 'var(--border-secondary)')}>{t.to}</span>
                         </div>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              <button onClick={copyLink} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'rgba(99,102,241,0.08)', color: '#818CF8', border: 'none', cursor: 'pointer' }}>
+              <button onClick={copyLink} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: 'var(--accent-violet-light)', color: 'var(--accent-indigo-soft)', border: '1px solid var(--accent-violet-light)', cursor: 'pointer' }}>
                 {copied ? <><CheckCircle2 size={14} /> Copiado!</> : <><Copy size={14} /> Link</>}
               </button>
-              <button onClick={() => { setEditing(!editing); setUpdateResult(null); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: editing ? 'rgba(244,63,94,0.08)' : 'rgba(99,102,241,0.08)', color: editing ? '#FB7185' : '#818CF8', border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => { setEditing(!editing); setUpdateResult(null); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: editing ? 'var(--accent-rose-light)' : 'var(--accent-violet-light)', color: editing ? 'var(--accent-rose-soft)' : 'var(--accent-indigo-soft)', border: '1px solid var(--border-secondary)', cursor: 'pointer' }}>
                 {editing ? <><X size={14} /> Cancelar</> : <><Edit3 size={14} /> Editar</>}
               </button>
-              <button onClick={handleDelete} disabled={deleting} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'rgba(244,63,94,0.08)', color: '#FB7185', border: 'none', cursor: deleting ? 'wait' : 'pointer' }}>
+              <button onClick={handleDelete} disabled={deleting} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: 'var(--accent-rose-light)', color: 'var(--accent-rose-soft)', border: '1px solid var(--accent-rose-light)', cursor: deleting ? 'wait' : 'pointer' }}>
                 {deleting ? <Loader2 size={14} className="animate-spin" /> : <><Trash2 size={14} /> Excluir</>}
               </button>
-              <a href={demanda.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', textDecoration: 'none', boxShadow: '0 2px 8px rgba(59,130,246,0.2)' }}>
+              <a href={demanda.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: 'var(--accent-blue)', color: 'var(--text-inverse)', textDecoration: 'none', border: '1px solid var(--accent-blue)' }}>
                 Jira <ArrowUpRight size={13} />
               </a>
             </div>
@@ -511,7 +507,7 @@ export default function ConsultarDemandaPage() {
                 <div style={{ marginBottom: '20px' }}>
                   <label style={S.label}><FileText size={12} /> Título</label>
                   {editing ? (
-                    <input value={editSummary} onChange={e => setEditSummary(e.target.value)} style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+                    <input value={editSummary} onChange={e => setEditSummary(e.target.value)} style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
                   ) : (
                     <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.5 }}>{demanda.summary || '—'}</p>
                   )}
@@ -521,7 +517,7 @@ export default function ConsultarDemandaPage() {
                 <div style={{ marginBottom: '20px' }}>
                   <label style={S.label}><Sparkles size={12} /> Descrição</label>
                   {editing ? (
-                    <textarea value={editTexto} onChange={e => setEditTexto(e.target.value)} rows={6} style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '13px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', lineHeight: 1.6, fontFamily: 'inherit' }} />
+                    <textarea value={editTexto} onChange={e => setEditTexto(e.target.value)} rows={6} style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', fontSize: '13px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', lineHeight: 1.6, fontFamily: 'inherit' }} />
                   ) : demanda.textoHtml ? (
                     <div className="jira-description" style={{ padding: '18px 22px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', maxHeight: '600px', overflow: 'auto' }}
                       dangerouslySetInnerHTML={{ __html: sanitizeHtml(demanda.textoHtml) }} />
@@ -577,9 +573,9 @@ export default function ConsultarDemandaPage() {
                     {editing ? (
                       <select value={editSaude} onChange={e => setEditSaude(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }}>
                         <option value="">Selecione...</option>
-                        <option value="10119">🟢</option>
-                        <option value="10120">🟡</option>
-                        <option value="10121">🔴</option>
+                        <option value="10119">Saudável</option>
+                        <option value="10120">Atenção</option>
+                        <option value="10121">Crítico</option>
                       </select>
                     ) : (
                       <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.saude?.value || '—'}</p>
@@ -642,7 +638,7 @@ export default function ConsultarDemandaPage() {
                           style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }}
                         />
                         {showUserDropdown && jiraUsers.length > 0 && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', maxHeight: '200px', overflow: 'auto', marginTop: '4px' }}>
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '16px', maxHeight: '200px', overflow: 'auto', marginTop: '4px' }}>
                             {jiraUsers
                               .filter(u => !userSearch || u.displayName.toLowerCase().includes(userSearch.toLowerCase()))
                               .map(u => (
@@ -685,9 +681,9 @@ export default function ConsultarDemandaPage() {
                   <div style={{ marginBottom: '20px' }}>
                     <label style={S.label}><Timer size={12} /> Time Tracking</label>
                     <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                      {demanda.timeTracking.originalEstimate && <div style={{ ...S.card, flex: 1 }}><div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Estimado</div><div style={{ fontSize: '14px', fontWeight: 800, color: '#60A5FA' }}>{demanda.timeTracking.originalEstimate}</div></div>}
-                      {demanda.timeTracking.timeSpent && <div style={{ ...S.card, flex: 1 }}><div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Gasto</div><div style={{ fontSize: '14px', fontWeight: 800, color: '#4ADE80' }}>{demanda.timeTracking.timeSpent}</div></div>}
-                      {demanda.timeTracking.remainingEstimate && <div style={{ ...S.card, flex: 1 }}><div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Restante</div><div style={{ fontSize: '14px', fontWeight: 800, color: '#FBBF24' }}>{demanda.timeTracking.remainingEstimate}</div></div>}
+                      {demanda.timeTracking.originalEstimate && <div style={{ ...S.card, flex: 1 }}><div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Estimado</div><div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--accent-blue-soft)' }}>{demanda.timeTracking.originalEstimate}</div></div>}
+                      {demanda.timeTracking.timeSpent && <div style={{ ...S.card, flex: 1 }}><div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Gasto</div><div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--accent-green-soft)' }}>{demanda.timeTracking.timeSpent}</div></div>}
+                      {demanda.timeTracking.remainingEstimate && <div style={{ ...S.card, flex: 1 }}><div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Restante</div><div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--accent-amber-soft)' }}>{demanda.timeTracking.remainingEstimate}</div></div>}
                     </div>
                   </div>
                 )}
@@ -697,7 +693,7 @@ export default function ConsultarDemandaPage() {
                   <div style={{ marginBottom: '20px' }}>
                     <label style={S.label}><Tag size={12} /> Labels</label>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {demanda.labels.map(l => <span key={l} style={S.badge('rgba(99,102,241,0.06)', '#818CF8', 'rgba(99,102,241,0.1)')}>{l}</span>)}
+                      {demanda.labels.map(l => <span key={l} style={S.badge('var(--accent-violet-light)', 'var(--accent-indigo-soft)', 'var(--accent-violet-light)')}>{l}</span>)}
                     </div>
                   </div>
                 )}
@@ -708,7 +704,7 @@ export default function ConsultarDemandaPage() {
                     <label style={S.label}><Paperclip size={12} /> Anexos ({demanda.attachments.length})</label>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {demanda.attachments.map(a => (
-                        <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none', transition: 'all 0.15s', maxWidth: '250px' }}>
+                        <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none', maxWidth: '250px' }}>
                           {a.thumbnail ? <img src={a.thumbnail} alt="" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover' }} /> : <Paperclip size={14} style={{ color: 'var(--text-tertiary)' }} />}
                           <div style={{ overflow: 'hidden' }}>
                             <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.filename}</div>
@@ -726,12 +722,12 @@ export default function ConsultarDemandaPage() {
                     <label style={S.label}><Link2 size={12} /> Issues Vinculadas ({demanda.linkedIssues.length})</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {demanda.linkedIssues.map((link, i) => (
-                        <a key={i} href={`https://movingpay.atlassian.net/browse/${link.key}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none', transition: 'all 0.15s' }}>
+                        <a key={i} href={`https://movingpay.atlassian.net/browse/${link.key}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none' }}>
                           <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', fontWeight: 600, minWidth: '80px' }}>{link.type}</span>
                           <ArrowRight size={12} style={{ color: 'var(--text-tertiary)' }} />
-                          <span style={{ fontSize: '12px', fontWeight: 800, color: '#818CF8' }}>{link.key}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--accent-indigo-soft)' }}>{link.key}</span>
                           <span style={{ fontSize: '12px', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link.summary}</span>
-                          <span style={S.badge('rgba(245,158,11,0.08)', '#FBBF24', 'rgba(245,158,11,0.1)')}>{link.status}</span>
+                          <span style={S.badge('var(--accent-amber-light)', 'var(--accent-amber-soft)', 'var(--accent-amber-light)')}>{link.status}</span>
                         </a>
                       ))}
                     </div>
@@ -741,7 +737,7 @@ export default function ConsultarDemandaPage() {
                 {/* Save button */}
                 {editing && (
                   <div style={{ display: 'flex', gap: '10px', paddingTop: '8px' }}>
-                    <button onClick={handleUpdate} disabled={updating} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '14px', fontSize: '13px', fontWeight: 700, background: updating ? 'rgba(34,197,94,0.3)' : 'linear-gradient(135deg, #22C55E, #16A34A)', color: '#fff', border: 'none', cursor: updating ? 'wait' : 'pointer', boxShadow: '0 4px 16px rgba(34,197,94,0.2)' }}>
+                    <button onClick={handleUpdate} disabled={updating} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, background: updating ? 'var(--bg-card-hover)' : 'var(--accent-green)', color: updating ? 'var(--text-tertiary)' : 'var(--text-inverse)', border: `1px solid ${updating ? 'var(--border-primary)' : 'var(--accent-green)'}`, cursor: updating ? 'wait' : 'pointer' }}>
                       {updating ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                       {updating ? 'Atualizando...' : 'Salvar alterações'}
                     </button>
@@ -759,12 +755,12 @@ export default function ConsultarDemandaPage() {
                     onDragOver={e => { e.preventDefault(); setCommentDragOver(true); }}
                     onDragLeave={() => setCommentDragOver(false)}
                     onDrop={handleCommentDrop}
-                    style={{ borderRadius: '12px', outline: commentDragOver ? '2px dashed var(--accent-blue)' : 'none', transition: 'outline 0.15s' }}
+                    style={{ borderRadius: '8px', outline: commentDragOver ? '2px dashed var(--accent-blue)' : 'none' }}
                   >
                     <textarea value={newComment} onChange={e => setNewComment(e.target.value)} onPaste={handleCommentPaste}
                       placeholder="Escreva um comentário... (cole uma imagem com Ctrl+V ou arraste aqui)" rows={3}
                       onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleAddComment(); }}
-                      style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '13px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6, boxSizing: 'border-box' }} />
+                      style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', fontSize: '13px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6, boxSizing: 'border-box' }} />
                   </div>
 
                   {(commentImages.length > 0 || uploadingCommentImage) && (
@@ -772,7 +768,7 @@ export default function ConsultarDemandaPage() {
                       {commentImages.map((img, i) => (
                         <div key={img.id} style={{ position: 'relative', width: '56px', height: '56px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-secondary)' }}>
                           <img src={img.preview} alt={img.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          <button onClick={() => removeCommentImage(i)} title="Remover" style={{ position: 'absolute', top: '2px', right: '2px', width: '18px', height: '18px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          <button onClick={() => removeCommentImage(i)} title="Remover" aria-label={`Remover imagem ${i + 1}`} style={{ position: 'absolute', top: '2px', right: '2px', width: '18px', height: '18px', borderRadius: '50%', border: 'none', background: 'var(--bg-overlay)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                             <X size={11} />
                           </button>
                         </div>
@@ -795,7 +791,7 @@ export default function ConsultarDemandaPage() {
                       </button>
                       <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Ctrl+Enter para enviar</span>
                     </div>
-                    <button onClick={handleAddComment} disabled={sendingComment || (!newComment.trim() && commentImages.length === 0)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: (!newComment.trim() && commentImages.length === 0) ? 'rgba(99,102,241,0.2)' : 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', border: 'none', cursor: sendingComment ? 'wait' : 'pointer', boxShadow: (newComment.trim() || commentImages.length > 0) ? '0 2px 8px rgba(59,130,246,0.2)' : 'none' }}>
+                    <button onClick={handleAddComment} disabled={sendingComment || (!newComment.trim() && commentImages.length === 0)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: (!newComment.trim() && commentImages.length === 0) ? 'var(--bg-card-hover)' : 'var(--accent-blue)', color: (!newComment.trim() && commentImages.length === 0) ? 'var(--text-tertiary)' : 'var(--text-inverse)', border: `1px solid ${(!newComment.trim() && commentImages.length === 0) ? 'var(--border-primary)' : 'var(--accent-blue)'}`, cursor: sendingComment ? 'wait' : 'pointer' }}>
                       {sendingComment ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enviar
                     </button>
                   </div>
@@ -813,7 +809,7 @@ export default function ConsultarDemandaPage() {
                       <div key={i} style={S.card}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                           {c.authorAvatar ? <img src={c.authorAvatar} alt="" style={{ width: '28px', height: '28px', borderRadius: '8px' }} /> : (
-                            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#fff' }}>
+                            <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--accent-indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: 'var(--text-inverse)' }}>
                               {c.author.charAt(0).toUpperCase()}
                             </div>
                           )}
@@ -845,7 +841,7 @@ export default function ConsultarDemandaPage() {
                     {demanda.changelog.map((entry, i) => (
                       <div key={i} style={{ display: 'flex', gap: '12px', padding: '12px 0', borderBottom: '1px solid var(--border-secondary)' }}>
                         {entry.authorAvatar ? <img src={entry.authorAvatar} alt="" style={{ width: '24px', height: '24px', borderRadius: '8px', flexShrink: 0 }} /> : (
-                          <div style={{ width: '24px', height: '24px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                          <div style={{ width: '24px', height: '24px', borderRadius: '8px', background: 'var(--accent-indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, color: 'var(--text-inverse)', flexShrink: 0 }}>
                             {entry.author.charAt(0).toUpperCase()}
                           </div>
                         )}
@@ -858,7 +854,7 @@ export default function ConsultarDemandaPage() {
                             <div key={j} style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                               <span style={{ fontWeight: 600, color: 'var(--text-tertiary)' }}>{item.field}</span>
                               {item.from && <> de <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{item.from}</span></>}
-                              {item.to && <> para <span style={{ fontWeight: 700, color: '#818CF8' }}>{item.to}</span></>}
+                              {item.to && <> para <span style={{ fontWeight: 700, color: 'var(--accent-indigo-soft)' }}>{item.to}</span></>}
                             </div>
                           ))}
                         </div>
@@ -905,7 +901,7 @@ export default function ConsultarDemandaPage() {
                     <label style={S.label}><GitBranch size={12} /> Ramificações ({demanda.branches.length})</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {demanda.branches.map((b, i) => (
-                        <a key={i} href={b.url || undefined} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none', cursor: b.url ? 'pointer' : 'default' }}>
+                        <a key={i} href={b.url || undefined} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none', cursor: b.url ? 'pointer' : 'default' }}>
                           <GitBranch size={12} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
                           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace', flexShrink: 0 }}>{b.name}</span>
                           {b.repository && <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>— {b.repository}</span>}
@@ -922,9 +918,9 @@ export default function ConsultarDemandaPage() {
                     <label style={S.label}><GitPullRequest size={12} /> Pull Requests ({demanda.pullRequests.length})</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {demanda.pullRequests.map((pr, i) => {
-                        const sc = pr.status === 'MERGED' ? { bg: 'rgba(34,197,94,0.08)', color: '#4ADE80', border: 'rgba(34,197,94,0.15)', icon: GitMerge }
-                          : pr.status === 'DECLINED' ? { bg: 'rgba(244,63,94,0.08)', color: '#FB7185', border: 'rgba(244,63,94,0.15)', icon: X }
-                          : { bg: 'rgba(59,130,246,0.08)', color: '#60A5FA', border: 'rgba(59,130,246,0.15)', icon: GitPullRequest };
+                        const sc = pr.status === 'MERGED' ? { bg: 'var(--accent-emerald-light)', color: 'var(--accent-green-soft)', border: 'var(--accent-emerald-light)', icon: GitMerge }
+                          : pr.status === 'DECLINED' ? { bg: 'var(--accent-rose-light)', color: 'var(--accent-rose-soft)', border: 'var(--accent-rose-light)', icon: X }
+                          : { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue-soft)', border: 'var(--accent-blue-light)', icon: GitPullRequest };
                         const Icon = sc.icon;
                         return (
                           <div key={i} style={{ padding: '14px 18px', borderRadius: '12px', background: sc.bg, border: `1px solid ${sc.border}` }}>
@@ -956,7 +952,7 @@ export default function ConsultarDemandaPage() {
                             style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', textDecoration: 'none', background: i % 2 === 0 ? 'var(--bg-card)' : 'var(--bg-secondary)', borderBottom: i < demanda.builds.length - 1 ? '1px solid var(--border-secondary)' : 'none', cursor: b.url ? 'pointer' : 'default' }}>
                             {failed ? <AlertTriangle size={14} style={{ color: 'var(--accent-rose)', flexShrink: 0 }} /> : <CheckCircle2 size={14} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />}
                             <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>{b.pipeline}</span>
-                            {b.buildNumber != null && <span style={{ fontSize: '11px', color: '#818CF8', fontFamily: 'monospace', flexShrink: 0 }}>#{b.buildNumber}</span>}
+                            {b.buildNumber != null && <span style={{ fontSize: '11px', color: 'var(--accent-indigo-soft)', fontFamily: 'monospace', flexShrink: 0 }}>#{b.buildNumber}</span>}
                             {b.testResults && (b.testResults.passed + b.testResults.failed + b.testResults.skipped) > 0 && (
                               <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
                                 {b.testResults.passed} ok{b.testResults.failed > 0 && `, ${b.testResults.failed} falhas`}{b.testResults.skipped > 0 && `, ${b.testResults.skipped} pulados`}
@@ -976,10 +972,10 @@ export default function ConsultarDemandaPage() {
                     <label style={S.label}><ListTree size={12} /> Subtasks ({demanda.subtasks.length})</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {demanda.subtasks.map((st, i) => (
-                        <a key={i} href={`https://movingpay.atlassian.net/browse/${st.key}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none' }}>
-                          <span style={{ fontSize: '12px', fontWeight: 800, color: '#818CF8' }}>{st.key}</span>
+                        <a key={i} href={`https://movingpay.atlassian.net/browse/${st.key}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--accent-indigo-soft)' }}>{st.key}</span>
                           <span style={{ fontSize: '12px', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.summary}</span>
-                          <span style={S.badge('rgba(245,158,11,0.08)', '#FBBF24', 'rgba(245,158,11,0.1)')}>{st.status}</span>
+                          <span style={S.badge('var(--accent-amber-light)', 'var(--accent-amber-soft)', 'var(--accent-amber-light)')}>{st.status}</span>
                         </a>
                       ))}
                     </div>
@@ -1001,8 +997,8 @@ export default function ConsultarDemandaPage() {
       {/* Empty state */}
       {!loading && !demanda && !error && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 20px', textAlign: 'center' }}>
-          <div style={{ width: '64px', height: '64px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.05))', border: '1px solid rgba(99,102,241,0.08)', marginBottom: '16px' }}>
-            <Search size={28} style={{ color: 'rgba(129,140,248,0.4)' }} />
+          <div style={{ width: '64px', height: '64px', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-blue-light)', border: '1px solid var(--border-primary)', marginBottom: '16px' }}>
+            <Search size={28} style={{ color: 'var(--accent-indigo-soft)', opacity: 0.4 }} />
           </div>
           <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', margin: '0 0 4px' }}>Digite o número da demanda acima</p>
           <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Ex: 86, 84, 47</p>
@@ -1010,7 +1006,7 @@ export default function ConsultarDemandaPage() {
             <div style={{ marginTop: '20px', display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'center' }}>
               {searchHistory.slice(0, 5).map(k => (
                 <button key={k} onClick={() => { setSearchKey(k.replace('DSMM-', '')); handleSearch(k); }}
-                  style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: 'rgba(99,102,241,0.06)', color: '#818CF8', border: '1px solid rgba(99,102,241,0.08)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                  style={{ padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: 'var(--accent-violet-light)', color: 'var(--accent-indigo-soft)', border: '1px solid var(--accent-violet-light)', cursor: 'pointer' }}>
                   {k}
                 </button>
               ))}
@@ -1020,10 +1016,14 @@ export default function ConsultarDemandaPage() {
       )}
 
       <style jsx global>{`
-        .cd-root { width: 100%; max-width: 1100px; margin: 0 auto; padding: 8px 0; }
-        .cd-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+        .cd-root { display: flex; width: 100%; flex-direction: column; gap: 24px; }
+        .cd-page-header h1 { margin: 0; color: var(--text-primary); font-size: 32px; font-weight: 500; line-height: 36px; letter-spacing: -0.02em; }
+        .cd-page-header p { margin: 4px 0 0; color: var(--text-secondary); font-size: 15px; line-height: 24px; }
+        .cd-search-wrap { position: relative; }
+        .cd-search-row { display: flex; gap: 12px; }
+        .cd-info-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-bottom: 24px; }
         @media (max-width: 900px) { .cd-info-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 640px) { .cd-root { padding: 4px 0; } .cd-info-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 640px) { .cd-search-row { flex-direction: column; } .cd-info-grid { grid-template-columns: 1fr; gap: 16px; } }
 
         /* Jira description rich formatting */
         .jira-description { font-size: 13px; line-height: 1.8; color: var(--text-secondary); word-break: break-word; }
@@ -1036,7 +1036,7 @@ export default function ConsultarDemandaPage() {
         .jira-description li { margin: 4px 0; }
         .jira-description ul li { list-style: disc; }
         .jira-description ol li { list-style: decimal; }
-        .jira-description a { color: #818CF8; text-decoration: none; font-weight: 600; }
+        .jira-description a { color: var(--accent-indigo-soft); text-decoration: none; font-weight: 600; }
         .jira-description a:hover { text-decoration: underline; }
         .jira-description strong, .jira-description b { font-weight: 700; color: var(--text-primary); }
         .jira-description em, .jira-description i { font-style: italic; }
@@ -1051,12 +1051,12 @@ export default function ConsultarDemandaPage() {
         .jira-description [style*="background-color"] li,
         .jira-description [style*="background-color"] strong,
         .jira-description [style*="background-color"] b,
-        .jira-description .confluence-information-macro { color: #172B4D !important; }
+        .jira-description .confluence-information-macro { color: var(--bg-sidebar) !important; }
 
-        .jira-description code { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 2px 6px; border-radius: 4px; background-color: rgba(99,102,241,0.08) !important; color: #A78BFA; }
-        .jira-description pre { background-color: rgba(0,0,0,0.2) !important; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 14px 18px; overflow-x: auto; margin: 12px 0; }
+        .jira-description code { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 2px 6px; border-radius: 4px; background-color: var(--accent-violet-light) !important; color: var(--accent-violet-soft); }
+        .jira-description pre { background-color: var(--bg-primary) !important; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 14px 18px; overflow-x: auto; margin: 12px 0; }
         .jira-description pre code { background-color: transparent !important; padding: 0; color: var(--text-secondary); }
-        .jira-description blockquote { margin: 12px 0; padding: 10px 16px; border-left: 3px solid #818CF8; background-color: rgba(99,102,241,0.04) !important; border-radius: 0 8px 8px 0; }
+        .jira-description blockquote { margin: 12px 0; padding: 10px 16px; border-left: 3px solid var(--accent-indigo-soft); background-color: var(--accent-violet-light) !important; border-radius: 0 8px 8px 0; }
         
         .jira-description table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; border: 1px solid var(--border-secondary) !important; }
         .jira-description th { padding: 10px 14px; text-align: left; font-weight: 700; color: var(--text-primary); border: 1px solid var(--border-secondary) !important; border-bottom: 2px solid var(--border-secondary) !important; }
@@ -1064,7 +1064,7 @@ export default function ConsultarDemandaPage() {
         .jira-description img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
         .jira-description hr { border: none; border-top: 1px solid var(--border-secondary); margin: 16px 0; }
         
-        .jira-description .user-hover { color: #818CF8; font-weight: 600; }
+        .jira-description .user-hover { color: var(--accent-indigo-soft); font-weight: 600; }
       `}</style>
     </div>
   );

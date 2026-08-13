@@ -8,10 +8,19 @@ import DraggableItem from '@/components/ui/DraggableItem';
 import EditToolbar from '@/components/ui/EditToolbar';
 import { useDragOrder } from '@/hooks/useDragOrder';
 import { useFilters } from '@/contexts/FilterContext';
+import type { DevMetrics, Sprint, SupportMetrics } from '@/types';
 import {
   Headphones, Code2, Ticket, CheckCircle2, Clock, AlertTriangle,
   ArrowRight, Target, Bug, Loader2, WifiOff, RefreshCw
 } from 'lucide-react';
+import { Sun1, CloudSunny, Moon } from 'iconsax-react';
+
+// Saudação por horário — o ícone substitui o emoji que existia no título.
+const GREETINGS = [
+  { until: 12, label: 'Bom dia', Icon: Sun1, color: '#FBBF24' },
+  { until: 18, label: 'Boa tarde', Icon: CloudSunny, color: '#FBBF24' },
+  { until: 24, label: 'Boa noite', Icon: Moon, color: '#A5B4FC' },
+];
 
 // Extract first name from email or session
 function useUserName(): string {
@@ -30,7 +39,7 @@ function useUserName(): string {
         const payload = JSON.parse(atob(cookies['session']));
         if (payload.email) {
           const firstName = payload.email.split('@')[0].split('.')[0];
-          setName(firstName.charAt(0).toUpperCase() + firstName.slice(1));
+          queueMicrotask(() => setName(firstName.charAt(0).toUpperCase() + firstName.slice(1)));
           return;
         }
       }
@@ -94,8 +103,8 @@ function formatMinutes(mins: number): string {
 }
 
 interface OverviewData {
-  support: any;
-  dev: any;
+  support: { metrics: SupportMetrics };
+  dev: { metrics: DevMetrics; currentSprint: Sprint };
   lastUpdated: string;
 }
 
@@ -176,18 +185,16 @@ export default function DashboardOverview() {
   }
 
   useEffect(() => {
-    fetchData();
+    const frame = window.requestAnimationFrame(() => void fetchData());
+    return () => window.cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.dateRange, filters.customStartDate, filters.customEndDate]);
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-5">
-        <div className="relative">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: 'var(--accent-blue-light)' }}>
-            <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
-          </div>
-          <div className="absolute inset-0 rounded-2xl animate-ping" style={{ background: 'var(--accent-blue-light)', opacity: 0.3 }} />
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-5" role="status">
+        <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-blue-light)' }}>
+          <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
         </div>
         <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando dados da Visão Geral...</p>
       </div>
@@ -197,15 +204,15 @@ export default function DashboardOverview() {
   if (error || !data) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center space-y-5 max-w-sm">
-          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'var(--accent-rose-light)' }}>
+        <div className="ui-surface text-center space-y-5 max-w-sm p-8" role="alert">
+          <div className="w-14 h-14 rounded-xl mx-auto flex items-center justify-center" style={{ background: 'var(--accent-rose-light)' }}>
             <WifiOff size={28} style={{ color: 'var(--accent-rose)' }} />
           </div>
           <div>
             <p className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Erro de conexão</p>
             <p className="text-sm mt-1.5" style={{ color: 'var(--text-tertiary)' }}>{error || 'Não foi possível carregar os dados'}</p>
           </div>
-          <button onClick={() => fetchData()} className="px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg" style={{ background: 'var(--gradient-primary)', color: '#fff', boxShadow: 'var(--shadow-glow-blue)' }}>
+          <button onClick={() => fetchData()} className="px-6 py-2.5 rounded-lg text-sm font-medium" style={{ background: 'var(--accent-blue)', color: '#fff' }}>
             Tentar novamente
           </button>
         </div>
@@ -220,6 +227,10 @@ export default function DashboardOverview() {
   const totalOpen = sM.openCount + dM.todoCount + dM.inProgressCount;
   const totalResolved = sM.resolvedCount + dM.doneCount;
   const totalCritical = sM.criticalCount + dM.blockedCount;
+
+  const currentHour = new Date().getHours();
+  const greeting = GREETINGS.find((entry) => currentHour < entry.until) ?? GREETINGS[2];
+  const GreetingIcon = greeting.Icon;
 
   const renderCardContent = (cardId: string, i: number) => {
     switch (cardId) {
@@ -247,22 +258,22 @@ export default function DashboardOverview() {
 
       case 'suporte_module':
         return (
-          <Link href="/dashboard/suporte" className="block group h-full">
-            <div className="overflow-hidden h-full flex flex-col justify-between transition-all duration-300 hover:shadow-xl"
-              style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(var(--glass-blur))', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)' }}>
+          <Link href="/dashboard/suporte" className="block h-full">
+            <div className="overflow-hidden h-full flex flex-col justify-between"
+              style={{ background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-surface)' }}>
               {/* Header */}
               <div className="flex items-center justify-between p-7 pb-5">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'rgba(59,130,246,0.15)', color: 'var(--accent-blue)' }}>
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'var(--accent-blue-light)', color: 'var(--accent-blue)' }}>
                     <Headphones size={26} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Suporte</h3>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>Dashboard operacional de atendimento</p>
+                    <h3 className="text-2xl leading-8 font-medium" style={{ color: 'var(--text-primary)' }}>Suporte</h3>
+                    <p className="text-[15px] leading-6 mt-0.5" style={{ color: 'var(--text-tertiary)' }}>Dashboard operacional de atendimento</p>
                   </div>
                 </div>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:translate-x-1"
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center"
                   style={{ background: 'var(--bg-secondary)' }}>
                   <ArrowRight size={18} style={{ color: 'var(--text-tertiary)' }} />
                 </div>
@@ -291,22 +302,22 @@ export default function DashboardOverview() {
         );
       case 'dev_module':
         return (
-          <Link href="/dashboard/dev" className="block group h-full">
-            <div className="overflow-hidden h-full flex flex-col justify-between transition-all duration-300 hover:shadow-xl"
-              style={{ background: 'var(--glass-bg)', backdropFilter: 'blur(var(--glass-blur))', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)' }}>
+          <Link href="/dashboard/dev" className="block h-full">
+            <div className="overflow-hidden h-full flex flex-col justify-between"
+              style={{ background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-surface)' }}>
               {/* Header */}
               <div className="flex items-center justify-between p-7 pb-5">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--accent-violet)' }}>
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'var(--accent-violet-light)', color: 'var(--accent-violet)' }}>
                     <Code2 size={26} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Desenvolvimento</h3>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{currentSprint.name}</p>
+                    <h3 className="text-2xl leading-8 font-medium" style={{ color: 'var(--text-primary)' }}>Desenvolvimento</h3>
+                    <p className="text-[15px] leading-6 mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{currentSprint.name}</p>
                   </div>
                 </div>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:translate-x-1"
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center"
                   style={{ background: 'var(--bg-secondary)' }}>
                   <ArrowRight size={18} style={{ color: 'var(--text-tertiary)' }} />
                 </div>
@@ -344,12 +355,12 @@ export default function DashboardOverview() {
             type="area"
             height={350}
             series={[
-              { name: 'Abertas', data: sM.volumeByDate.map((d: any) => d.value) },
-              { name: 'Resolvidas', data: sM.resolutionByDate.map((d: any) => d.value) },
+              { name: 'Abertas', data: sM.volumeByDate.map((d) => d.value) },
+              { name: 'Resolvidas', data: sM.resolutionByDate.map((d) => d.value) },
             ]}
             options={{
               xaxis: {
-                categories: sM.volumeByDate.map((d: any) =>
+                categories: sM.volumeByDate.map((d) =>
                   new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                 ),
                 labels: { show: true, rotate: 0, style: { fontSize: '10px' } },
@@ -367,12 +378,12 @@ export default function DashboardOverview() {
             type="line"
             height={350}
             series={[
-              { name: 'Ideal', data: dM.burndownData.map((d: any) => d.ideal) },
-              { name: 'Atual', data: dM.burndownData.map((d: any) => d.actual) },
+              { name: 'Ideal', data: dM.burndownData.map((d) => d.ideal) },
+              { name: 'Atual', data: dM.burndownData.map((d) => d.actual) },
             ]}
             options={{
               xaxis: {
-                categories: dM.burndownData.map((d: any) =>
+                categories: dM.burndownData.map((d) =>
                   new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                 ),
               },
@@ -389,40 +400,39 @@ export default function DashboardOverview() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
 
       {/* ═══ GREETING ═══ */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 18 ? 'Boa tarde' : 'Boa noite'}{userName ? `, ${userName}` : ''} 👋
-          </h2>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>
+          <h1 className="flex items-center gap-2.5 text-[32px] leading-9 font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            <span>{greeting.label}{userName ? `, ${userName}` : ''}</span>
+            <GreetingIcon size={26} variant="Bold" color={greeting.color} aria-hidden="true" />
+          </h1>
+          <p className="text-[15px] leading-6 mt-1" style={{ color: 'var(--text-tertiary)' }}>
             Aqui está o resumo do seu workspace hoje.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="px-4 py-2 rounded-xl text-xs font-bold" style={{ background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' }}>
+          <div className="px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' }}>
             {totalOpen} abertos
           </div>
-          <div className="px-4 py-2 rounded-xl text-xs font-bold" style={{ background: 'var(--accent-blue-light)', color: 'var(--accent-blue)' }}>
+          <div className="px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--accent-blue-light)', color: 'var(--accent-blue)' }}>
             {totalResolved} resolvidos
           </div>
         </div>
       </div>
 
-      {/* ═══ HEADER BAR — Premium Glass ═══ */}
+      {/* ═══ HEADER BAR ═══ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         style={{
           padding: '18px 24px',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--glass-bg)',
-          backdropFilter: 'blur(var(--glass-blur))',
-          border: '1px solid var(--glass-border)',
-          boxShadow: 'var(--shadow-sm)',
+          borderRadius: 'var(--radius-surface)',
+          background: 'var(--bg-card-solid)',
+          border: '1px solid var(--border-primary)',
         }}>
         <div className="flex items-center gap-3">
-          <h2 className="text-base font-bold tracking-tight" style={{ color: 'var(--text-primary)', margin: 0 }}>
+          <h2 className="text-[24px] leading-8 font-medium tracking-tight" style={{ color: 'var(--text-primary)', margin: 0 }}>
             Visão Geral
           </h2>
           {totalCritical > 0 && (
@@ -439,11 +449,11 @@ export default function DashboardOverview() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={() => fetchData(true)} disabled={refreshing}
-            className="flex items-center gap-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 hover:border-blue-500/30 cursor-pointer"
+            className="flex items-center gap-1.5 text-[15px] font-medium cursor-pointer"
             style={{
               padding: '8px 14px',
               borderRadius: 'var(--radius-md)',
-              background: 'rgba(15, 23, 42, 0.5)',
+              background: 'var(--bg-card-solid)',
               color: 'var(--text-secondary)',
               border: '1px solid var(--border-primary)',
             }}>
@@ -464,7 +474,7 @@ export default function DashboardOverview() {
       )}
 
       {/* ═══════ FLAT CARD GRID (6 columns) ═══════ */}
-      <div className="flex flex-wrap" style={{ gap: '1.75rem' }}>
+      <div className="flex flex-wrap" style={{ gap: '24px' }}>
         {drag.order.map((cardId, i) => {
           const content = renderCardContent(cardId, i);
           if (!content) return null;
@@ -482,7 +492,7 @@ export default function DashboardOverview() {
               onDragStart={drag.onDragStart}
               onDragEnter={drag.onDragEnter}
               onDragEnd={drag.onDragEnd}
-              style={{ width: `calc(${widthPercent}% - 1.75rem)`, minWidth: '200px' }}
+              style={{ width: `calc(${widthPercent}% - 24px)`, minWidth: '240px' }}
               currentSize={widthPercent}
               minSize={15}
               maxSize={100}

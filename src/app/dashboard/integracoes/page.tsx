@@ -1,74 +1,345 @@
 'use client';
-import React from 'react';
-import { Plug, CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
 
+import React from 'react';
+import { CheckCircle2, Plug, XCircle } from 'lucide-react';
+import { Messages2, Code, Book, Danger, Chart2, ColorSwatch, Calendar, ShieldCross } from 'iconsax-react';
+
+// `color` tinge o ícone e o fundo do card, então usa tons legíveis no tema escuro
+// em vez do hex exato da marca (o #24292F do GitHub, por exemplo, desaparecia).
 const integrations = [
-  { name: 'Slack', desc: 'Notificações e alertas em canais', status: 'connected', icon: '💬', color: '#E01E5A' },
-  { name: 'GitHub', desc: 'Sincronizar PRs e commits', status: 'connected', icon: '🐙', color: '#24292F' },
-  { name: 'Confluence', desc: 'Documentação e wikis', status: 'connected', icon: '📘', color: '#1868DB' },
-  { name: 'PagerDuty', desc: 'Gestão de incidentes', status: 'disconnected', icon: '🚨', color: '#06AC38' },
-  { name: 'Datadog', desc: 'Monitoramento e métricas', status: 'connected', icon: '📊', color: '#632CA6' },
-  { name: 'Figma', desc: 'Designs e protótipos', status: 'disconnected', icon: '🎨', color: '#F24E1E' },
-  { name: 'Google Calendar', desc: 'Sincronizar eventos', status: 'connected', icon: '📅', color: '#4285F4' },
-  { name: 'Sentry', desc: 'Rastreamento de erros', status: 'connected', icon: '🐛', color: '#362D59' },
+  { name: 'Slack', desc: 'Notificações e alertas em canais', status: 'connected', Icon: Messages2, color: '#E85D82' },
+  { name: 'GitHub', desc: 'Sincronizar PRs e commits', status: 'connected', Icon: Code, color: '#A9B1BA' },
+  { name: 'Confluence', desc: 'Documentação e wikis', status: 'connected', Icon: Book, color: '#4C93F5' },
+  { name: 'PagerDuty', desc: 'Gestão de incidentes', status: 'disconnected', Icon: Danger, color: '#22C55E' },
+  { name: 'Datadog', desc: 'Monitoramento e métricas', status: 'connected', Icon: Chart2, color: '#A78BFA' },
+  { name: 'Figma', desc: 'Designs e protótipos', status: 'disconnected', Icon: ColorSwatch, color: '#F97B54' },
+  { name: 'Google Calendar', desc: 'Sincronizar eventos', status: 'connected', Icon: Calendar, color: '#5C9CFF' },
+  { name: 'Sentry', desc: 'Rastreamento de erros', status: 'connected', Icon: ShieldCross, color: '#9C8FE0' },
 ];
 
 export default function IntegracoesPage() {
+  const connectedCount = integrations.filter((integration) => integration.status === 'connected').length;
+  const disconnectedCount = integrations.filter((integration) => integration.status === 'disconnected').length;
+
   return (
     <div className="ig-root">
-      <div className="ig-hero"><div className="ig-hero-grid"/><div className="ig-hero-orb ig-hero-orb-1"/><div className="ig-hero-orb ig-hero-orb-2"/>
-        <div className="ig-hero-content"><div className="ig-hero-left"><div className="ig-hero-icon"><Plug size={24} color="#fff"/></div><div><h1 className="ig-hero-title">Integrações</h1><p className="ig-hero-sub">Conexões e APIs externas</p></div></div>
-          <div className="ig-pills"><div className="ig-pill-ok"><CheckCircle2 size={12}/> {integrations.filter(i=>i.status==='connected').length} conectadas</div><div className="ig-pill">{integrations.length} total</div></div></div>
-      </div>
-      <div className="ig-body"><div className="ig-main"><div className="ig-grid">
-        {integrations.map(i=>(
-          <div key={i.name} className="ig-card">
-            <div className="ig-card-top"><span className="ig-card-emoji">{i.icon}</span>
-              <div><p className="ig-card-name">{i.name}</p><p className="ig-card-desc">{i.desc}</p></div>
+      <header className="ig-header">
+        <div className="ig-heading">
+          <div className="ig-kicker"><Plug size={15} /> Ecossistema</div>
+          <h1>Integrações</h1>
+          <p>Conexões e APIs externas</p>
+        </div>
+        <div className="ig-header-actions" aria-label="Resumo das integrações">
+          <span className="ig-chip ig-chip-connected"><CheckCircle2 size={13} /> {connectedCount} conectadas</span>
+          <span className="ig-chip">{integrations.length} total</span>
+        </div>
+      </header>
+
+      <div className="ig-layout">
+        <main className="ig-catalog">
+          <div className="ig-catalog-header">
+            <div>
+              <h2>Catálogo de integrações</h2>
+              <p>Gerencie as ferramentas conectadas ao seu workspace.</p>
             </div>
-            <div className="ig-card-bottom">
-              <span className={`ig-status ${i.status}`}>{i.status==='connected'?<><CheckCircle2 size={11}/>Conectado</>:<><XCircle size={11}/>Desconectado</>}</span>
-              <button className="ig-btn">{i.status==='connected'?'Configurar':'Conectar'}</button>
-            </div>
+            <span>{integrations.length} serviços</span>
           </div>
-        ))}
-      </div></div>
-      <div className="ig-sidebar"><div className="ig-sb-section"><h3 className="ig-sb-title">Status</h3>
-        <div className="ig-stats">{[{l:'Conectadas',v:integrations.filter(i=>i.status==='connected').length,c:'var(--accent-emerald)'},{l:'Desconectadas',v:integrations.filter(i=>i.status==='disconnected').length,c:'var(--accent-rose)'}].map(s=>(
-          <div key={s.l} className="ig-stat"><span className="ig-stat-l">{s.l}</span><span className="ig-stat-v" style={{color:s.c}}>{s.v}</span></div>
-        ))}</div>
-      </div></div></div>
+
+          <div className="ig-grid">
+            {integrations.map((integration) => (
+              <article key={integration.name} className="ig-card">
+                <div className="ig-card-header">
+                  <span
+                    className="ig-card-icon"
+                    style={{ background: `${integration.color}14`, borderColor: `${integration.color}2E` }}
+                    aria-hidden="true"
+                  >
+                    <integration.Icon size={22} color={integration.color} variant="Bold" />
+                  </span>
+                  <span className={`ig-status ${integration.status}`}>
+                    {integration.status === 'connected'
+                      ? <><CheckCircle2 size={12} />Conectado</>
+                      : <><XCircle size={12} />Desconectado</>}
+                  </span>
+                </div>
+                <div className="ig-card-copy">
+                  <h3>{integration.name}</h3>
+                  <p>{integration.desc}</p>
+                </div>
+                <div className="ig-card-footer">
+                  <span>{integration.status === 'connected' ? 'Integração ativa' : 'Integração disponível'}</span>
+                  <button className="ig-button">{integration.status === 'connected' ? 'Configurar' : 'Conectar'}</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </main>
+
+        <aside className="ig-summary" aria-labelledby="ig-summary-title">
+          <div className="ig-summary-header">
+            <h2 id="ig-summary-title">Status</h2>
+            <p>Visão geral das conexões.</p>
+          </div>
+          <dl>
+            <div>
+              <dt><span className="ig-dot connected" />Conectadas</dt>
+              <dd style={{ color: 'var(--accent-emerald)' }}>{connectedCount}</dd>
+            </div>
+            <div>
+              <dt><span className="ig-dot disconnected" />Desconectadas</dt>
+              <dd style={{ color: 'var(--accent-rose)' }}>{disconnectedCount}</dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+
       <style jsx>{`
-        .ig-root{display:flex;flex-direction:column;height:100%;border-radius:16px;overflow:hidden;border:1px solid var(--border-primary);background:var(--bg-card)}
-        .ig-hero{position:relative;flex-shrink:0;overflow:hidden;background:linear-gradient(140deg,#080C18,#0F1629 40%,#0D0B22);border-bottom:1px solid rgba(255,255,255,.05);padding:28px 32px}
-        .ig-hero-grid{position:absolute;inset:0;opacity:.03;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:40px 40px}
-        .ig-hero-orb{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none}
-        .ig-hero-orb-1{width:250px;height:250px;background:rgba(6,182,212,.18);top:-80px;right:15%;animation:igO 8s ease-in-out infinite}
-        .ig-hero-orb-2{width:180px;height:180px;background:rgba(59,130,246,.14);bottom:-60px;left:25%;animation:igO 11s ease-in-out infinite reverse}
-        @keyframes igO{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
-        .ig-hero-content{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between}
-        .ig-hero-left{display:flex;align-items:center;gap:16px}
-        .ig-hero-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#06B6D4,#3B82F6);box-shadow:0 8px 28px rgba(6,182,212,.35),inset 0 1px 0 rgba(255,255,255,.2)}
-        .ig-hero-title{font-size:20px;font-weight:800;color:#F1F5F9}.ig-hero-sub{font-size:13px;color:rgba(148,163,184,.65);margin-top:2px}
-        .ig-pills{display:flex;gap:8px}
-        .ig-pill-ok{display:flex;align-items:center;gap:5px;padding:7px 14px;border-radius:999px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.15);color:#4ADE80;font-size:11px;font-weight:700}
-        .ig-pill{padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:rgba(148,163,184,.6);font-size:11px;font-weight:600}
-        .ig-body{flex:1;display:flex;overflow:hidden}.ig-main{flex:1;overflow-y:auto;padding:24px 28px}
-        .ig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-        .ig-card{padding:20px;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);transition:all .2s;display:flex;flex-direction:column;gap:16px}
-        .ig-card:hover{border-color:var(--border-primary);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.06)}
-        .ig-card-top{display:flex;align-items:center;gap:12px}
-        .ig-card-emoji{font-size:28px}
-        .ig-card-name{font-size:14px;font-weight:700;color:var(--text-primary)}.ig-card-desc{font-size:11px;color:var(--text-tertiary);margin-top:1px}
-        .ig-card-bottom{display:flex;align-items:center;justify-content:space-between}
-        .ig-status{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700}
-        .ig-status.connected{color:var(--accent-emerald)}.ig-status.disconnected{color:var(--accent-rose)}
-        .ig-btn{padding:6px 14px;border-radius:8px;font-size:10px;font-weight:700;border:1px solid var(--border-primary);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:all .15s}
-        .ig-btn:hover{border-color:var(--accent-blue);color:var(--accent-blue)}
-        .ig-sidebar{width:260px;flex-shrink:0;border-left:1px solid var(--border-primary);background:var(--bg-card);overflow-y:auto}
-        .ig-sb-section{padding:20px}.ig-sb-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-tertiary);margin-bottom:14px}
-        .ig-stats{display:flex;flex-direction:column;gap:12px}
-        .ig-stat{display:flex;justify-content:space-between}.ig-stat-l{font-size:11px;color:var(--text-secondary)}.ig-stat-v{font-size:15px;font-weight:800}
+        .ig-root {
+          display: flex;
+          min-height: 100%;
+          flex-direction: column;
+          gap: 24px;
+          color: var(--text-primary);
+        }
+        .ig-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 20px;
+          padding: 8px 4px 0;
+        }
+        .ig-heading { min-width: 0; }
+        .ig-kicker {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 8px;
+          color: #06B6D4;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .ig-heading h1 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 32px;
+          font-weight: 500;
+          line-height: 36px;
+          letter-spacing: -0.03em;
+        }
+        .ig-heading p,
+        .ig-catalog-header p,
+        .ig-summary-header p {
+          margin: 6px 0 0;
+          color: var(--text-tertiary);
+          font-size: 13px;
+          line-height: 20px;
+        }
+        .ig-header-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .ig-chip {
+          display: inline-flex;
+          min-height: 36px;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-card);
+          color: var(--text-secondary);
+          font-size: 12px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .ig-chip-connected {
+          border-color: rgba(34, 197, 94, 0.15);
+          background: var(--accent-emerald-light);
+          color: var(--accent-emerald);
+        }
+        .ig-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 280px;
+          align-items: start;
+          gap: 24px;
+        }
+        .ig-catalog { min-width: 0; }
+        .ig-catalog-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 16px;
+          padding: 0 4px;
+        }
+        .ig-catalog-header h2,
+        .ig-summary-header h2 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 18px;
+          font-weight: 600;
+          line-height: 24px;
+        }
+        .ig-catalog-header > span {
+          color: var(--text-tertiary);
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .ig-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+        }
+        .ig-card,
+        .ig-summary {
+          border: 1px solid var(--border-primary);
+          border-radius: 24px;
+          background: var(--bg-card);
+        }
+        .ig-card {
+          display: flex;
+          min-width: 0;
+          min-height: 210px;
+          flex-direction: column;
+          padding: 20px;
+        }
+        .ig-card:hover { border-color: var(--border-secondary); }
+        .ig-card-header,
+        .ig-card-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .ig-card-icon {
+          display: flex;
+          width: 44px;
+          height: 44px;
+          flex: 0 0 auto;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid transparent;
+          border-radius: 8px;
+        }
+        .ig-status {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 5px 8px;
+          border-radius: 8px;
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .ig-status.connected {
+          background: var(--accent-emerald-light);
+          color: var(--accent-emerald);
+        }
+        .ig-status.disconnected {
+          background: var(--accent-rose-light);
+          color: var(--accent-rose);
+        }
+        .ig-card-copy { flex: 1; padding: 18px 0; }
+        .ig-card-copy h3 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 16px;
+          font-weight: 650;
+          line-height: 22px;
+        }
+        .ig-card-copy p {
+          margin: 5px 0 0;
+          color: var(--text-tertiary);
+          font-size: 12px;
+          line-height: 18px;
+        }
+        .ig-card-footer {
+          padding-top: 14px;
+          border-top: 1px solid var(--border-secondary);
+        }
+        .ig-card-footer > span {
+          overflow: hidden;
+          color: var(--text-tertiary);
+          font-size: 10px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .ig-button {
+          min-height: 34px;
+          padding: 7px 12px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-secondary);
+          color: var(--text-secondary);
+          cursor: pointer;
+          font: inherit;
+          font-size: 11px;
+          font-weight: 650;
+        }
+        .ig-button:hover {
+          border-color: #06B6D4;
+          color: #06B6D4;
+        }
+        .ig-summary { overflow: hidden; }
+        .ig-summary-header {
+          padding: 22px 24px;
+          border-bottom: 1px solid var(--border-secondary);
+        }
+        .ig-summary dl { margin: 0; padding: 0 24px 14px; }
+        .ig-summary dl div {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 16px 0;
+          border-bottom: 1px solid var(--border-secondary);
+        }
+        .ig-summary dl div:last-child { border-bottom: 0; }
+        .ig-summary dt {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: var(--text-secondary);
+          font-size: 12px;
+        }
+        .ig-summary dd {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 600;
+          line-height: 24px;
+        }
+        .ig-dot {
+          width: 7px;
+          height: 7px;
+          flex: 0 0 auto;
+          border-radius: 50%;
+        }
+        .ig-dot.connected { background: var(--accent-emerald); }
+        .ig-dot.disconnected { background: var(--accent-rose); }
+        @media (max-width: 1120px) {
+          .ig-layout { grid-template-columns: minmax(0, 1fr); }
+          .ig-summary dl {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+          }
+          .ig-summary dl div { border-bottom: 0; }
+        }
+        @media (max-width: 760px) {
+          .ig-header { align-items: flex-start; flex-direction: column; }
+          .ig-header-actions { justify-content: flex-start; }
+          .ig-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 520px) {
+          .ig-heading h1 { font-size: 28px; line-height: 34px; }
+          .ig-catalog-header { align-items: flex-start; flex-direction: column; }
+          .ig-card { min-height: 198px; }
+          .ig-summary dl { grid-template-columns: 1fr; gap: 0; }
+          .ig-summary dl div { border-bottom: 1px solid var(--border-secondary); }
+        }
       `}</style>
     </div>
   );

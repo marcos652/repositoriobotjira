@@ -1,6 +1,7 @@
 'use client';
+
 import React from 'react';
-import { BookOpen, Search, FileText, Clock, Tag } from 'lucide-react';
+import { BookOpen, Clock, Eye, FileText } from 'lucide-react';
 
 const articles = [
   { title: 'Como configurar webhooks no Jira', category: 'Integração', date: '25/05', views: 142, color: '#6366F1' },
@@ -11,60 +12,348 @@ const articles = [
   { title: 'Deploy contínuo com GitHub Actions', category: 'DevOps', date: '12/05', views: 312, color: '#8B5CF6' },
 ];
 
+const categories = ['Integração', 'Processo', 'Debug', 'Engenharia', 'Suporte', 'DevOps'];
+
 export default function KnowledgePage() {
+  const popularArticles = [...articles].sort((a, b) => b.views - a.views).slice(0, 3);
+
   return (
     <div className="kb-root">
-      <div className="kb-hero"><div className="kb-hero-grid"/><div className="kb-hero-orb kb-hero-orb-1"/><div className="kb-hero-orb kb-hero-orb-2"/>
-        <div className="kb-hero-content"><div className="kb-hero-left"><div className="kb-hero-icon"><BookOpen size={24} color="#fff"/></div><div><h1 className="kb-hero-title">Base de Conhecimento</h1><p className="kb-hero-sub">Documentação e artigos internos</p></div></div>
-          <div className="kb-pill">{articles.length} artigos</div></div>
-      </div>
-      <div className="kb-body"><div className="kb-main"><div className="kb-list">
-        {articles.map(a=>(
-          <div key={a.title} className="kb-card">
-            <div className="kb-card-icon" style={{background:`${a.color}12`,color:a.color}}><FileText size={16}/></div>
-            <div className="kb-card-info"><p className="kb-card-title">{a.title}</p>
-              <div className="kb-card-meta"><span className="kb-tag" style={{background:`${a.color}12`,color:a.color}}>{a.category}</span><span><Clock size={10}/> {a.date}</span><span>👁 {a.views}</span></div>
+      <header className="kb-header">
+        <div className="kb-heading">
+          <div className="kb-kicker"><BookOpen size={15} /> Documentação</div>
+          <h1>Base de Conhecimento</h1>
+          <p>Documentação e artigos internos</p>
+        </div>
+        <span className="kb-chip">{articles.length} artigos</span>
+      </header>
+
+      <div className="kb-layout">
+        <section className="kb-surface kb-library" aria-labelledby="kb-library-title">
+          <div className="kb-surface-header">
+            <div>
+              <h2 id="kb-library-title">Biblioteca de artigos</h2>
+              <p>Conteúdos recentes para consulta rápida do time.</p>
             </div>
+            <span className="kb-count">Atualizada em 25/05</span>
           </div>
-        ))}
-      </div></div>
-      <div className="kb-sidebar"><div className="kb-sb-section"><h3 className="kb-sb-title">Categorias</h3>
-        <div className="kb-cats">{['Integração','Processo','Debug','Engenharia','Suporte','DevOps'].map(c=><div key={c} className="kb-cat">{c}</div>)}</div>
-      </div><div className="kb-sb-divider"/><div className="kb-sb-section"><h3 className="kb-sb-title">Mais Lidos</h3>
-        {articles.sort((a,b)=>b.views-a.views).slice(0,3).map((a,i)=><div key={i} className="kb-popular"><span className="kb-pop-rank">#{i+1}</span><span className="kb-pop-title">{a.title.slice(0,35)}...</span><span className="kb-pop-views">{a.views}</span></div>)}
-      </div></div></div>
+
+          <div className="kb-table-head" aria-hidden="true">
+            <span>Artigo</span>
+            <span>Categoria</span>
+            <span>Atualizado</span>
+            <span>Leituras</span>
+          </div>
+
+          <div className="kb-list">
+            {articles.map((article) => (
+              <article key={article.title} className="kb-row">
+                <div className="kb-article">
+                  <div className="kb-article-icon" style={{ background: `${article.color}12`, color: article.color }}>
+                    <FileText size={16} />
+                  </div>
+                  <h3>{article.title}</h3>
+                </div>
+                <div className="kb-cell" data-label="Categoria">
+                  <span className="kb-tag" style={{ background: `${article.color}12`, color: article.color }}>{article.category}</span>
+                </div>
+                <div className="kb-cell kb-date" data-label="Atualizado"><Clock size={13} /> {article.date}</div>
+                <div className="kb-cell kb-views" data-label="Leituras"><Eye size={13} /> {article.views}</div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <aside className="kb-surface kb-sidebar" aria-label="Navegação da base de conhecimento">
+          <section className="kb-side-section" aria-labelledby="kb-categories-title">
+            <div className="kb-side-heading">
+              <h2 id="kb-categories-title">Categorias</h2>
+              <p>Explore por assunto.</p>
+            </div>
+            <div className="kb-categories">
+              {categories.map((category) => <div key={category} className="kb-category">{category}</div>)}
+            </div>
+          </section>
+
+          <section className="kb-side-section kb-popular-section" aria-labelledby="kb-popular-title">
+            <div className="kb-side-heading">
+              <h2 id="kb-popular-title">Mais lidos</h2>
+              <p>Artigos mais consultados.</p>
+            </div>
+            <ol className="kb-popular-list">
+              {popularArticles.map((article, index) => (
+                <li key={article.title} className="kb-popular">
+                  <span className="kb-rank">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="kb-popular-title">{article.title}</span>
+                  <span className="kb-popular-views">{article.views}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </aside>
+      </div>
+
       <style jsx>{`
-        .kb-root{display:flex;flex-direction:column;height:100%;border-radius:16px;overflow:hidden;border:1px solid var(--border-primary);background:var(--bg-card)}
-        .kb-hero{position:relative;flex-shrink:0;overflow:hidden;background:linear-gradient(140deg,#080C18,#1A1630 40%,#0D0B22);border-bottom:1px solid rgba(255,255,255,.05);padding:28px 32px}
-        .kb-hero-grid{position:absolute;inset:0;opacity:.03;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:40px 40px}
-        .kb-hero-orb{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none}
-        .kb-hero-orb-1{width:250px;height:250px;background:rgba(236,72,153,.16);top:-80px;right:15%;animation:kbO 8s ease-in-out infinite}
-        .kb-hero-orb-2{width:180px;height:180px;background:rgba(139,92,246,.14);bottom:-60px;left:25%;animation:kbO 11s ease-in-out infinite reverse}
-        @keyframes kbO{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
-        .kb-hero-content{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between}
-        .kb-hero-left{display:flex;align-items:center;gap:16px}
-        .kb-hero-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#EC4899,#8B5CF6);box-shadow:0 8px 28px rgba(236,72,153,.35),inset 0 1px 0 rgba(255,255,255,.2)}
-        .kb-hero-title{font-size:20px;font-weight:800;color:#F1F5F9}.kb-hero-sub{font-size:13px;color:rgba(148,163,184,.65);margin-top:2px}
-        .kb-pill{padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:rgba(148,163,184,.6);font-size:11px;font-weight:600}
-        .kb-body{flex:1;display:flex;overflow:hidden}.kb-main{flex:1;overflow-y:auto;padding:24px 28px}
-        .kb-list{display:flex;flex-direction:column;gap:10px}
-        .kb-card{display:flex;align-items:center;gap:14px;padding:16px 20px;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);transition:all .2s;cursor:pointer}
-        .kb-card:hover{border-color:var(--border-primary);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.06)}
-        .kb-card-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-        .kb-card-info{flex:1}.kb-card-title{font-size:14px;font-weight:700;color:var(--text-primary)}
-        .kb-card-meta{display:flex;align-items:center;gap:10px;margin-top:4px;font-size:10px;color:var(--text-tertiary)}
-        .kb-card-meta span{display:flex;align-items:center;gap:3px}
-        .kb-tag{font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px}
-        .kb-sidebar{width:260px;flex-shrink:0;border-left:1px solid var(--border-primary);background:var(--bg-card);overflow-y:auto}
-        .kb-sb-section{padding:20px}.kb-sb-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-tertiary);margin-bottom:14px}
-        .kb-sb-divider{height:1px;margin:0 20px;background:var(--border-secondary)}
-        .kb-cats{display:flex;flex-wrap:wrap;gap:6px}
-        .kb-cat{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-secondary);cursor:pointer;transition:all .15s}
-        .kb-cat:hover{border-color:var(--accent-blue);color:var(--accent-blue)}
-        .kb-popular{display:flex;align-items:center;gap:8px;padding:6px 0}
-        .kb-pop-rank{font-size:10px;font-weight:800;color:var(--text-tertiary);width:20px}
-        .kb-pop-title{flex:1;font-size:11px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .kb-pop-views{font-size:10px;font-weight:700;color:var(--text-tertiary)}
+        .kb-root {
+          display: flex;
+          min-height: 100%;
+          flex-direction: column;
+          gap: 24px;
+          color: var(--text-primary);
+        }
+        .kb-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 20px;
+          padding: 8px 4px 0;
+        }
+        .kb-heading { min-width: 0; }
+        .kb-kicker {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 8px;
+          color: #EC4899;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .kb-heading h1 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 32px;
+          font-weight: 500;
+          line-height: 36px;
+          letter-spacing: -0.03em;
+        }
+        .kb-heading p,
+        .kb-surface-header p,
+        .kb-side-heading p {
+          margin: 6px 0 0;
+          color: var(--text-tertiary);
+          font-size: 13px;
+          line-height: 20px;
+        }
+        .kb-chip,
+        .kb-count {
+          display: inline-flex;
+          min-height: 36px;
+          align-items: center;
+          padding: 8px 12px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-card);
+          color: var(--text-secondary);
+          font-size: 12px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .kb-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 300px;
+          align-items: start;
+          gap: 24px;
+        }
+        .kb-surface {
+          overflow: hidden;
+          border: 1px solid var(--border-primary);
+          border-radius: 24px;
+          background: var(--bg-card);
+        }
+        .kb-surface-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 22px 24px;
+          border-bottom: 1px solid var(--border-secondary);
+        }
+        .kb-surface-header h2,
+        .kb-side-heading h2 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 18px;
+          font-weight: 600;
+          line-height: 24px;
+        }
+        .kb-count {
+          min-height: 32px;
+          padding: 6px 10px;
+          background: var(--bg-secondary);
+          color: var(--text-tertiary);
+          font-size: 11px;
+        }
+        .kb-table-head,
+        .kb-row {
+          display: grid;
+          grid-template-columns: minmax(260px, 1fr) 110px 92px 70px;
+          column-gap: 18px;
+          align-items: center;
+        }
+        .kb-table-head {
+          min-height: 42px;
+          padding: 0 24px;
+          border-bottom: 1px solid var(--border-secondary);
+          background: var(--bg-secondary);
+          color: var(--text-tertiary);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+        .kb-row {
+          min-height: 72px;
+          padding: 14px 24px;
+          border-bottom: 1px solid var(--border-secondary);
+          cursor: pointer;
+        }
+        .kb-row:last-child { border-bottom: 0; }
+        .kb-row:hover { background: var(--bg-card-hover); }
+        .kb-article {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+        .kb-article-icon {
+          display: flex;
+          width: 36px;
+          height: 36px;
+          flex: 0 0 auto;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+        }
+        .kb-article h3 {
+          margin: 0;
+          overflow: hidden;
+          color: var(--text-primary);
+          font-size: 13px;
+          font-weight: 650;
+          line-height: 19px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .kb-cell {
+          color: var(--text-secondary);
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .kb-tag {
+          display: inline-flex;
+          padding: 5px 8px;
+          border-radius: 8px;
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .kb-date,
+        .kb-views {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          color: var(--text-tertiary);
+          font-weight: 500;
+        }
+        .kb-side-section { padding: 22px 24px 24px; }
+        .kb-popular-section { border-top: 1px solid var(--border-secondary); }
+        .kb-categories {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 18px;
+        }
+        .kb-category {
+          padding: 7px 10px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-secondary);
+          color: var(--text-secondary);
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .kb-category:hover {
+          border-color: #EC4899;
+          color: #EC4899;
+        }
+        .kb-popular-list {
+          margin: 16px 0 0;
+          padding: 0;
+          list-style: none;
+        }
+        .kb-popular {
+          display: grid;
+          grid-template-columns: 28px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 8px;
+          padding: 11px 0;
+          border-top: 1px solid var(--border-secondary);
+        }
+        .kb-rank {
+          color: #EC4899;
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .kb-popular-title {
+          overflow: hidden;
+          color: var(--text-secondary);
+          font-size: 11px;
+          line-height: 16px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .kb-popular-views {
+          color: var(--text-tertiary);
+          font-size: 10px;
+          font-weight: 700;
+        }
+        @media (max-width: 1080px) {
+          .kb-layout { grid-template-columns: minmax(0, 1fr); }
+          .kb-sidebar {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .kb-popular-section {
+            border-top: 0;
+            border-left: 1px solid var(--border-secondary);
+          }
+        }
+        @media (max-width: 720px) {
+          .kb-header { align-items: flex-start; flex-direction: column; }
+          .kb-table-head { display: none; }
+          .kb-row {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            padding: 18px 20px;
+          }
+          .kb-article { grid-column: 1 / -1; }
+          .kb-cell::before {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-tertiary);
+            content: attr(data-label);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+          }
+          .kb-date,
+          .kb-views { display: block; }
+          .kb-date :global(svg),
+          .kb-views :global(svg) { display: none; }
+          .kb-sidebar { grid-template-columns: 1fr; }
+          .kb-popular-section {
+            border-top: 1px solid var(--border-secondary);
+            border-left: 0;
+          }
+        }
+        @media (max-width: 520px) {
+          .kb-heading h1 { font-size: 28px; line-height: 34px; }
+          .kb-surface-header { align-items: flex-start; padding: 20px; }
+          .kb-count { display: none; }
+          .kb-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .kb-views { grid-column: 1 / -1; }
+        }
       `}</style>
     </div>
   );

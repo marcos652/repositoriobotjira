@@ -3,22 +3,31 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Send, Plus, X, Loader2, CheckCircle2, AlertTriangle,
-  ImagePlus, User, FileText, Hash, Sparkles, Clock,
+  ImagePlus, User, Hash, Sparkles, Clock,
   Zap, Bot, MessageSquare, ChevronDown, Wand2, ArrowUpRight,
-  Layers, Target, PenTool, Upload, Image, Trash2,
-  Mic, MicOff, Eye, EyeOff, Copy, Shield, RotateCcw, AlertCircle,
+  Layers, Target, PenTool, Upload, Image as ImageIcon, Trash2,
+  Mic, MicOff, Eye, EyeOff, Copy, Shield, AlertCircle,
   Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code
 } from 'lucide-react';
+import { Danger, MagicStar, Setting2, ClipboardText, Gps, Cpu, Warning2, TickCircle, DocumentText, NoteText, type Icon as IconsaxIcon } from 'iconsax-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import ImageExtension from '@tiptap/extension-image';
 import { CLIENTS } from '@/lib/clients';
-import { buildDescription, getSectionConfig } from '@/lib/issuePanels';
+import { buildDescription, getSectionConfig, type IssueLike, type PanelType } from '@/lib/issuePanels';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
+
+interface CreatedDemandData {
+  issue_key?: string;
+  issuetype?: string;
+  summary?: string;
+  url?: string;
+  message?: string;
+}
 
 interface DemandaResult {
   success: boolean;
-  data?: any;
+  data?: CreatedDemandData;
   error?: string;
 }
 
@@ -30,32 +39,66 @@ interface HistoryItem {
   urgencia?: string;
   time: string;
   status: 'success' | 'error';
-  response?: any;
+  response?: unknown;
 }
 
-// Os esqueletos abaixo usam os mesmos rótulos/emojis das seções que a IA extrai
+interface PreviewData extends IssueLike {
+  summary: string;
+  sections: Record<string, string>;
+  description?: string;
+}
+
+interface SpeechRecognitionResultLike {
+  readonly isFinal: boolean;
+  readonly [index: number]: { transcript: string };
+}
+
+interface SpeechRecognitionEventLike {
+  readonly resultIndex: number;
+  readonly results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+};
+
+// Os esqueletos abaixo usam os mesmos rótulos das seções que a IA extrai
 // (ver src/lib/issuePanels.ts) — o que a pessoa preenche aqui é o que ela vê
-// de volta no preview antes de criar a demanda.
+// de volta no preview antes de criar a demanda. O `prompt` é HTML injetado no
+// editor, então os rótulos são só texto: o ícone fica no card do template.
 const TEMPLATES = [
   {
-    icon: '🐛', label: 'Bug Report', shortcut: '1',
+    Icon: Danger, iconColor: '#FB7185', label: 'Bug Report', shortcut: '1',
     hint: 'Contexto, problema, passos e evidências',
-    prompt: `<p><strong>📋 Contexto:</strong> </p><p><strong>⚠️ Problema:</strong> </p><p><strong>🔁 Como replicar:</strong></p><ol><li></li><li></li></ol><p><strong>📸 Evidências:</strong> <em>(cole prints com Ctrl+V ou arraste os arquivos)</em></p>`,
+    prompt: `<p><strong>Contexto:</strong> </p><p><strong>Problema:</strong> </p><p><strong>Como replicar:</strong></p><ol><li></li><li></li></ol><p><strong>Evidências:</strong> <em>(cole prints com Ctrl+V ou arraste os arquivos)</em></p>`,
   },
   {
-    icon: '✨', label: 'Nova Feature', shortcut: '2',
+    Icon: MagicStar, iconColor: '#A78BFA', label: 'Nova Feature', shortcut: '2',
     hint: 'Contexto, descrição e critérios de aceite',
-    prompt: `<p><strong>📋 Contexto:</strong> </p><p><strong>📄 Descrição:</strong> </p><p><strong>✅ Critérios de aceite:</strong></p><ul><li></li><li></li></ul>`,
+    prompt: `<p><strong>Contexto:</strong> </p><p><strong>Descrição:</strong> </p><p><strong>Critérios de aceite:</strong></p><ul><li></li><li></li></ul>`,
   },
   {
-    icon: '🔧', label: 'Melhoria', shortcut: '3',
+    Icon: Setting2, iconColor: '#22D3EE', label: 'Melhoria', shortcut: '3',
     hint: 'Comportamento atual vs. esperado',
-    prompt: `<p><strong>📋 Contexto:</strong> </p><p><strong>⚠️ Comportamento atual:</strong> </p><p><strong>✅ Comportamento esperado:</strong> </p>`,
+    prompt: `<p><strong>Contexto:</strong> </p><p><strong>Comportamento atual:</strong> </p><p><strong>Comportamento esperado:</strong> </p>`,
   },
   {
-    icon: '📋', label: 'Task', shortcut: '4',
+    Icon: ClipboardText, iconColor: '#60A5FA', label: 'Task', shortcut: '4',
     hint: 'Contexto e descrição da tarefa',
-    prompt: `<p><strong>📋 Contexto:</strong> </p><p><strong>📄 Descrição:</strong> </p>`,
+    prompt: `<p><strong>Contexto:</strong> </p><p><strong>Descrição:</strong> </p>`,
   },
 ];
 
@@ -63,12 +106,12 @@ const TEMPLATES = [
 // configurado no projeto DSMM no Jira (Altíssima/Alta/Médio/Baixa/Baixíssima) —
 // não são os nomes padrão do Jira (Highest/High/...), por isso não é livre escolha.
 const PRIORITIES = [
-  { value: '', label: 'Auto (IA decide)', color: '#94A3B8' },
-  { value: 'Altíssima', label: '🔴 Crítica', color: '#EF4444' },
-  { value: 'Alta', label: '🟠 Alta', color: '#F97316' },
-  { value: 'Médio', label: '🟡 Média', color: '#EAB308' },
-  { value: 'Baixa', label: '🟢 Baixa', color: '#22C55E' },
-  { value: 'Baixíssima', label: '⚪ Mínima', color: '#6B7280' },
+  { value: '', label: 'Auto (IA decide)', color: 'var(--text-secondary)' },
+  { value: 'Altíssima', label: 'Crítica', color: 'var(--accent-red)' },
+  { value: 'Alta', label: 'Alta', color: 'var(--accent-orange)' },
+  { value: 'Médio', label: 'Média', color: 'var(--accent-amber)' },
+  { value: 'Baixa', label: 'Baixa', color: 'var(--accent-green)' },
+  { value: 'Baixíssima', label: 'Mínima', color: 'var(--text-tertiary)' },
 ];
 
 // Rascunhos/histórico salvos no navegador podem ter um valor antigo (de antes de
@@ -76,10 +119,19 @@ const PRIORITIES = [
 // esteja mais na lista atual, senão o Jira rejeita a criação com "prioridade inválida".
 const isValidPriority = (v: string) => PRIORITIES.some(p => p.value === v);
 
+// Ícone de cada seção do preview, derivado do tipo de painel devolvido por
+// getSectionConfig (que é compartilhado com o servidor e não importa React).
+const PANEL_ICONS: Record<PanelType, IconsaxIcon> = {
+  info: DocumentText,
+  tip: TickCircle,
+  warning: Warning2,
+  note: NoteText,
+};
+
 const URGENCIES = [
   { value: '', label: 'Normal' },
-  { value: 'urgente', label: '🚨 Urgente' },
-  { value: 'critico', label: '🔥 Crítico — parou produção' },
+  { value: 'urgente', label: 'Urgente' },
+  { value: 'critico', label: 'Crítico — parou produção' },
 ];
 
 const PROGRESS_STEPS = [
@@ -133,12 +185,12 @@ export default function NovaDemandaPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
-  const [previewData, setPreviewData] = useState<any>(null);
-  const [currentBodyParams, setCurrentBodyParams] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const [currentBodyParams, setCurrentBodyParams] = useState<Record<string, unknown> | null>(null);
   const [validationWarn, setValidationWarn] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
@@ -200,6 +252,7 @@ export default function NovaDemandaPage() {
   }, [texto, nomeCliente, referencia, prioridade, urgencia]);
 
   // Restore draft on mount
+  /* eslint-disable react-hooks/set-state-in-effect -- restores the browser-backed draft on first client render */
   useEffect(() => {
     try {
       const draft = localStorage.getItem('jiraops-demanda-draft');
@@ -209,6 +262,7 @@ export default function NovaDemandaPage() {
       }
     } catch {}
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const clearDraft = () => { try { localStorage.removeItem('jiraops-demanda-draft'); } catch {} };
 
@@ -242,7 +296,7 @@ export default function NovaDemandaPage() {
       } else {
         setResult({ success: false, error: data.error || 'Erro ao aprimorar texto' });
       }
-    } catch (err) {
+      } catch {
       setResult({ success: false, error: 'Falha na conexão com a API de aprimoramento' });
     } finally {
       setEnhancing(false);
@@ -279,7 +333,7 @@ export default function NovaDemandaPage() {
         // em vez de entrar no meio da frase onde o cursor estava.
         const insertion = isImage
           ? `<p><img src="${data.url}" alt="${finalFilename}" style="max-width: 100%; max-height: 300px; border-radius: 8px;" /></p>`
-          : `<p>📎 <a href="${data.url}" target="_blank" rel="noopener noreferrer">${finalFilename}</a></p>`;
+          : `<p><a href="${data.url}" target="_blank" rel="noopener noreferrer">${finalFilename}</a></p>`;
         if (editor) {
           editor.chain().focus('end').insertContent(insertion).run();
         } else {
@@ -374,7 +428,7 @@ export default function NovaDemandaPage() {
 
     const textoLimpo = doc.body.innerHTML;
 
-    const body: any = { texto: textoLimpo };
+    const body: Record<string, unknown> = { texto: textoLimpo };
     if (nomeCliente.trim()) body.nome_cliente = nomeCliente.trim();
     if (referencia.trim()) body.referencia = referencia.trim();
     if (urlsImagens.length > 0) body.urls_imagens = urlsImagens; // legacy fallback
@@ -474,13 +528,14 @@ export default function NovaDemandaPage() {
       setIsListening(false);
       return;
     }
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as SpeechRecognitionWindow;
+    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) { setResult({ success: false, error: 'Seu navegador não suporta reconhecimento de voz (use Chrome ou Edge)' }); return; }
     const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       let transcript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         transcript += event.results[i][0].transcript;
@@ -524,16 +579,6 @@ export default function NovaDemandaPage() {
     return () => window.removeEventListener('keydown', handler);
   }, [loading]);
 
-  // Simple markdown to HTML
-  const renderMarkdown = (text: string) => {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`(.*?)`/g, '<code style="background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;font-size:12px">$1</code>')
-      .replace(/^- (.*)/gm, '• $1')
-      .replace(/\n/g, '<br/>');
-  };
-
   const charCount = texto.trim().length;
 
   return (
@@ -543,7 +588,7 @@ export default function NovaDemandaPage() {
         <div className="nd-hero-content">
           <div className="nd-hero-left">
             <div className="nd-hero-icon">
-              <Wand2 size={24} color="#fff" />
+              <Wand2 size={24} color="var(--text-inverse)" />
             </div>
             <div>
               <h1 className="nd-hero-title">Criar Nova Demanda</h1>
@@ -593,27 +638,27 @@ export default function NovaDemandaPage() {
 
           {activeView === 'editor' ? (
             previewData ? (
-              <div className="nd-preview-modal animate-fade-in" style={{ background: '#0F172A', border: '1px solid #1E293B', borderRadius: '12px', padding: '24px' }}>
+              <div className="nd-preview-modal animate-fade-in" style={{ background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '24px', padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <Sparkles size={18} color="#8B5CF6" />
+                  <Sparkles size={18} color="var(--accent-violet)" />
                   <h2 style={{ fontSize: '18px', fontWeight: 500, margin: 0 }}>Revisão da IA ({previewData.issuetype || 'Task'})</h2>
-                  <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <PenTool size={11} /> Clique nos campos para editar
                   </span>
                 </div>
 
                 {/* Título */}
-                <div style={{ background: '#1E293B', padding: '16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid #334155' }}>
-                  <div style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>Título</div>
+                <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '16px', marginBottom: '16px', border: '1px solid var(--border-primary)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>Título</div>
                   <input
                     type="text"
                     value={previewData.summary}
                     onChange={(e) => setPreviewData({ ...previewData, summary: e.target.value })}
                     style={{
                       width: '100%',
-                      background: '#0F172A',
-                      border: '1px solid #334155',
-                      color: '#F1F5F9',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-primary)',
+                      color: 'var(--text-primary)',
                       fontSize: '15px',
                       fontWeight: 600,
                       padding: '10px 12px',
@@ -628,8 +673,12 @@ export default function NovaDemandaPage() {
                 {/* Seções editáveis */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px', maxHeight: '450px', overflowY: 'auto', paddingRight: '4px' }}>
                   {getSectionConfig(previewData).map((sec) => (
-                    <div key={sec.key} style={{ background: '#1E293B', padding: '14px', borderRadius: '8px', border: '1px solid #334155' }}>
-                      <div style={{ fontSize: '12px', color: sec.color, marginBottom: '6px', fontWeight: 600 }}>
+                    <div key={sec.key} style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '16px', border: '1px solid var(--border-primary)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: sec.color, marginBottom: '8px', fontWeight: 600 }}>
+                        {(() => {
+                          const SectionIcon = PANEL_ICONS[sec.panelType];
+                          return <SectionIcon size={14} variant="Bold" color={sec.color} aria-hidden="true" />;
+                        })()}
                         {sec.label}
                       </div>
                       <textarea
@@ -641,9 +690,9 @@ export default function NovaDemandaPage() {
                         style={{
                           width: '100%',
                           minHeight: '80px',
-                          background: '#0F172A',
-                          border: '1px solid #334155',
-                          color: '#CBD5E1',
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-primary)',
+                          color: 'var(--text-secondary)',
                           fontSize: '13px',
                           fontFamily: 'monospace',
                           padding: '10px 12px',
@@ -660,8 +709,8 @@ export default function NovaDemandaPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  {loading && <Loader2 size={16} className="animate-spin" color="#8B5CF6" />}
-                  <button type="button" onClick={() => setPreviewData(null)} disabled={loading} style={{ background: 'transparent', border: '1px solid #334155', color: '#CBD5E1', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                  {loading && <Loader2 size={16} className="animate-spin" color="var(--accent-violet)" />}
+                  <button type="button" onClick={() => setPreviewData(null)} disabled={loading} style={{ background: 'transparent', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer' }}>
                     Voltar e Editar
                   </button>
                   <button type="button" onClick={confirmCreate} disabled={loading} className="nd-submit-btn" style={{ width: 'auto' }}>
@@ -680,7 +729,7 @@ export default function NovaDemandaPage() {
                   <div className="nd-templates-grid">
                     {TEMPLATES.map((t) => (
                       <button key={t.label} type="button" onClick={() => applyTemplate(t.prompt)} className="nd-template-card" title={t.hint}>
-                        <span className="nd-template-icon">{t.icon}</span>
+                        <span className="nd-template-icon"><t.Icon size={20} variant="Bold" color={t.iconColor} aria-hidden="true" /></span>
                         <span className="nd-template-label">{t.label}</span>
                         <span className="nd-template-hint">{t.hint}</span>
                         <kbd className="nd-template-kbd">⌃{t.shortcut}</kbd>
@@ -717,7 +766,7 @@ export default function NovaDemandaPage() {
                         <CheckCircle2 size={9} /> rascunho salvo
                       </span>
                     )}
-                    <button type="button" onClick={enhanceText} disabled={enhancing || !texto.trim() || texto === '<p></p>'} className="nd-editor-btn" title="Aprimorar texto com IA" style={{ color: '#8B5CF6' }}>
+                    <button type="button" onClick={enhanceText} disabled={enhancing || !texto.trim() || texto === '<p></p>'} className="nd-editor-btn" title="Aprimorar texto com IA" style={{ color: 'var(--accent-violet)' }}>
                       {enhancing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                     </button>
                     <button type="button" onClick={() => setShowPreview(!showPreview)} className="nd-editor-btn" title="Preview Markdown">
@@ -799,12 +848,12 @@ export default function NovaDemandaPage() {
                           {img.preview && img.isImage ? (
                             <img src={img.preview} alt={img.filename} className="nd-gallery-thumb" />
                           ) : (
-                            <div className="nd-gallery-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(99,102,241,0.08)', fontSize: '10px', fontWeight: 700, color: 'var(--accent-violet)', textTransform: 'uppercase' }}>
+                            <div className="nd-gallery-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-violet-light)', fontSize: '10px', fontWeight: 700, color: 'var(--accent-violet)', textTransform: 'uppercase' }}>
                               {(img.type || '').split('/').pop()?.replace('vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx').replace('vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx').slice(0, 4) || 'FILE'}
                             </div>
                           )}
                           <span className="nd-gallery-name">{img.filename}</span>
-                          <button type="button" onClick={() => removeUploadedImage(i)} className="nd-gallery-remove" title="Remover">
+                          <button type="button" onClick={() => removeUploadedImage(i)} className="nd-gallery-remove" title="Remover" aria-label={`Remover ${img.filename}`}>
                             <Trash2 size={12} />
                           </button>
                         </div>
@@ -816,7 +865,7 @@ export default function NovaDemandaPage() {
                       </button>
                     </div>
                     <p className="nd-gallery-paste-hint">
-                      <Image size={11} /> Cole com Ctrl+V ou arraste mais arquivos
+                      <ImageIcon size={11} /> Cole com Ctrl+V ou arraste mais arquivos
                     </p>
                   </div>
                 )}
@@ -842,7 +891,9 @@ export default function NovaDemandaPage() {
                         list="clientes-list" 
                       />
                       <datalist id="clientes-list">
-                        {CLIENTS.map(c => <option key={c.id} value={c.name} />)}
+                        {/* Chave pelo nome: "GERAL MOVINGPAY" e "HOLDING" compartilham
+                            id "N/A" no Jira, e os nomes é que são únicos aqui. */}
+                        {CLIENTS.map(c => <option key={c.name} value={c.name} />)}
                       </datalist>
                     </div>
                     <div className="nd-input-group">
@@ -906,8 +957,14 @@ export default function NovaDemandaPage() {
                   </div>
                 ) : (
                   <div className="nd-tips">
-                    {['🎯 Seja específico', '📋 Critérios de aceite', '🤖 IA define tipo'].map((t) => (
-                      <span key={t} className="nd-tip">{t}</span>
+                    {[
+                      { Icon: Gps, label: 'Seja específico' },
+                      { Icon: ClipboardText, label: 'Critérios de aceite' },
+                      { Icon: Cpu, label: 'IA define tipo' },
+                    ].map((tip) => (
+                      <span key={tip.label} className="nd-tip">
+                        <tip.Icon size={12} variant="Bold" aria-hidden="true" /> {tip.label}
+                      </span>
                     ))}
                   </div>
                 )}
@@ -948,11 +1005,11 @@ export default function NovaDemandaPage() {
                             <span className={`nd-history-badge ${h.status}`}>
                               {h.status === 'success' ? 'Criada' : 'Erro'}
                             </span>
-                            {h.prioridade && <span className="nd-history-badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#818CF8' }}>{h.prioridade}</span>}
-                            {h.urgencia && <span className="nd-history-badge" style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171' }}>{h.urgencia}</span>}
+                            {h.prioridade && <span className="nd-history-badge" style={{ background: 'var(--accent-violet-light)', color: 'var(--accent-indigo-soft)' }}>{h.prioridade}</span>}
+                            {h.urgencia && <span className="nd-history-badge" style={{ background: 'var(--accent-rose-light)', color: 'var(--accent-rose-soft)' }}>{h.urgencia}</span>}
                           </div>
                           <p className="nd-history-text">{h.texto}</p>
-                          {h.response && (
+                          {h.response != null && (
                             <pre className="nd-history-json">{JSON.stringify(h.response, null, 2)}</pre>
                           )}
                           <div className="nd-history-actions">
@@ -977,12 +1034,12 @@ export default function NovaDemandaPage() {
             <h3 className="nd-sidebar-title">Como funciona</h3>
             <div className="nd-steps">
               {[
-                { n: '1', icon: <PenTool size={14} />, title: 'Descreva', desc: 'Escreva em linguagem natural', color: '#6366F1' },
-                { n: '2', icon: <Wand2 size={14} />, title: 'IA Processa', desc: 'Gemini analisa e classifica', color: '#8B5CF6' },
-                { n: '3', icon: <Zap size={14} />, title: 'Jira', desc: 'Issue criada automaticamente', color: '#A78BFA' },
+                { n: '1', icon: <PenTool size={14} />, title: 'Descreva', desc: 'Escreva em linguagem natural', color: 'var(--accent-indigo)' },
+                { n: '2', icon: <Wand2 size={14} />, title: 'IA Processa', desc: 'Gemini analisa e classifica', color: 'var(--accent-violet)' },
+                { n: '3', icon: <Zap size={14} />, title: 'Jira', desc: 'Issue criada automaticamente', color: 'var(--accent-violet-soft)' },
               ].map((s, i) => (
                 <div key={i} className="nd-step">
-                  <div className="nd-step-icon" style={{ background: `${s.color}15`, color: s.color }}>{s.icon}</div>
+                  <div className="nd-step-icon" style={{ background: 'var(--accent-violet-light)', color: s.color }}>{s.icon}</div>
                   <div>
                     <p className="nd-step-title">{s.title}</p>
                     <p className="nd-step-desc">{s.desc}</p>
@@ -1000,7 +1057,7 @@ export default function NovaDemandaPage() {
             <div className="nd-connection">
               <div className="nd-connection-row">
                 <div className="nd-connection-icon">
-                  <Bot size={15} color="#fff" />
+                  <Bot size={15} color="var(--text-inverse)" />
                 </div>
                 <div>
                   <p className="nd-connection-name">Jira + IA (Gemini)</p>
@@ -1040,43 +1097,33 @@ export default function NovaDemandaPage() {
         <div className="animate-fade-in" style={{
           position: 'fixed', bottom: '24px', right: '24px', zIndex: 100,
           width: '400px', maxWidth: 'calc(100vw - 48px)',
-          borderRadius: '20px', overflow: 'hidden',
-          background: 'linear-gradient(145deg, #0F172A 0%, #1E1B4B 50%, #0F172A 100%)',
-          border: '1px solid rgba(99,102,241,0.2)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(99,102,241,0.1)',
+          borderRadius: '24px', overflow: 'hidden',
+          background: 'var(--bg-card-solid)',
+          border: '1px solid var(--border-primary)',
         }}>
-          {/* Top gradient bar */}
-          <div style={{ height: '3px', background: 'linear-gradient(90deg, #22C55E, #3B82F6, #8B5CF6)' }} />
-
           {/* Header */}
           <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
-                width: '32px', height: '32px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.05))',
-                border: '1px solid rgba(34,197,94,0.15)',
+                width: '32px', height: '32px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'var(--accent-emerald-light)',
+                border: '1px solid var(--accent-emerald-light)',
               }}>
-                <CheckCircle2 size={16} style={{ color: '#4ADE80' }} />
+                <CheckCircle2 size={16} style={{ color: 'var(--accent-green-soft)' }} />
               </div>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#4ADE80' }}>Demanda criada!</span>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--accent-green-soft)' }}>Demanda criada!</span>
             </div>
-            <button onClick={() => setResult(null)} style={{
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '8px', padding: '6px', cursor: 'pointer', color: 'rgba(148,163,184,0.5)',
-              transition: 'all 0.15s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(148,163,184,0.5)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
-            ><X size={14} /></button>
+            <button onClick={() => setResult(null)} aria-label="Fechar resultado" style={{
+              background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)',
+              borderRadius: '8px', padding: '6px', cursor: 'pointer', color: 'var(--text-tertiary)',
+            }}><X size={14} /></button>
           </div>
 
           {/* Issue Key — Big Badge */}
           <div style={{ padding: '16px 24px 12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{
-              fontSize: '24px', fontWeight: 900, letterSpacing: '-0.03em',
-              background: 'linear-gradient(135deg, #60A5FA, #A78BFA)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
+              fontSize: '24px', fontWeight: 600, letterSpacing: '-0.02em',
+              color: 'var(--accent-blue-soft)',
             }}>
               {result.data.issue_key}
             </span>
@@ -1084,9 +1131,9 @@ export default function NovaDemandaPage() {
               <span style={{
                 padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: '0.05em',
-                background: result.data.issuetype === 'Bug' ? 'rgba(244,63,94,0.12)' : result.data.issuetype === 'Story' ? 'rgba(34,197,94,0.12)' : 'rgba(59,130,246,0.12)',
-                color: result.data.issuetype === 'Bug' ? '#FB7185' : result.data.issuetype === 'Story' ? '#4ADE80' : '#60A5FA',
-                border: `1px solid ${result.data.issuetype === 'Bug' ? 'rgba(244,63,94,0.15)' : result.data.issuetype === 'Story' ? 'rgba(34,197,94,0.15)' : 'rgba(59,130,246,0.15)'}`,
+                background: result.data.issuetype === 'Bug' ? 'var(--accent-rose-light)' : result.data.issuetype === 'Story' ? 'var(--accent-emerald-light)' : 'var(--accent-blue-light)',
+                color: result.data.issuetype === 'Bug' ? 'var(--accent-rose-soft)' : result.data.issuetype === 'Story' ? 'var(--accent-green-soft)' : 'var(--accent-blue-soft)',
+                border: `1px solid ${result.data.issuetype === 'Bug' ? 'var(--accent-rose-light)' : result.data.issuetype === 'Story' ? 'var(--accent-emerald-light)' : 'var(--accent-blue-light)'}`,
               }}>
                 {result.data.issuetype}
               </span>
@@ -1098,7 +1145,7 @@ export default function NovaDemandaPage() {
             <div style={{ padding: '0 24px 16px' }}>
               <p style={{
                 fontSize: '13px', fontWeight: 500, lineHeight: '1.5',
-                color: 'rgba(226,232,240,0.7)', margin: 0,
+                color: 'var(--text-secondary)', margin: 0,
               }}>
                 {result.data.summary}
               </p>
@@ -1108,7 +1155,7 @@ export default function NovaDemandaPage() {
           {/* Action bar */}
           <div style={{
             padding: '14px 24px',
-            borderTop: '1px solid rgba(255,255,255,0.04)',
+            borderTop: '1px solid var(--border-secondary)',
             display: 'flex', alignItems: 'center', gap: '10px',
           }}>
             <a
@@ -1116,14 +1163,11 @@ export default function NovaDemandaPage() {
               target="_blank" rel="noopener noreferrer"
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                padding: '10px 16px', borderRadius: '12px', fontSize: '12px', fontWeight: 700,
-                background: 'linear-gradient(135deg, #3B82F6, #6366F1)',
-                color: '#fff', textDecoration: 'none',
-                boxShadow: '0 4px 16px rgba(59,130,246,0.25)',
-                transition: 'all 0.2s',
+                padding: '10px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+                background: 'var(--accent-blue)',
+                color: 'var(--text-inverse)', textDecoration: 'none',
+                border: '1px solid var(--accent-blue)',
               }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(59,130,246,0.35)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(59,130,246,0.25)'; }}
             >
               Abrir no Jira
               <ArrowUpRight size={14} />
@@ -1131,12 +1175,10 @@ export default function NovaDemandaPage() {
             <button
               onClick={() => setResult(null)}
               style={{
-                padding: '10px 16px', borderRadius: '12px', fontSize: '12px', fontWeight: 600,
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-                color: 'rgba(226,232,240,0.6)', cursor: 'pointer', transition: 'all 0.2s',
+                padding: '10px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+                background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)',
+                color: 'var(--text-secondary)', cursor: 'pointer',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#fff'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(226,232,240,0.6)'; }}
             >
               Fechar
             </button>
@@ -1149,17 +1191,17 @@ export default function NovaDemandaPage() {
         <div className={`nd-toast ${result.success ? 'success' : 'error'} animate-fade-in`}>
           {result.success ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
           <div className="nd-toast-content">
-            <p className="nd-toast-title">{result.success ? '✨ Demanda criada!' : 'Falha ao criar'}</p>
+            <p className="nd-toast-title">{result.success ? 'Demanda criada!' : 'Falha ao criar'}</p>
             {result.error && <p className="nd-toast-desc">{result.error}</p>}
             {result.success && result.data?.message && <p className="nd-toast-desc">{result.data.message}</p>}
           </div>
-          <button onClick={() => setResult(null)} className="nd-toast-close"><X size={16} /></button>
+          <button onClick={() => setResult(null)} className="nd-toast-close" aria-label="Fechar aviso"><X size={16} /></button>
         </div>
       )}
 
       <style jsx>{`
         /* ========== ROOT ========== */
-        .nd-root { display: flex; flex-direction: column; height: 100%; border-radius: 16px; overflow: hidden; border: 1px solid var(--border-primary); background: var(--bg-card); }
+        .nd-root { display: flex; flex-direction: column; min-height: 100%; gap: 24px; }
 
         /* ========== HERO ========== */
         .nd-hero {
@@ -1168,73 +1210,69 @@ export default function NovaDemandaPage() {
           border-bottom: 1px solid var(--border-primary);
         }
 
-        .nd-hero-content { display: flex; align-items: center; justify-content: space-between; padding: 24px 32px; }
+        .nd-hero-content { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
         .nd-hero-left { display: flex; align-items: center; gap: 16px; }
         .nd-hero-icon {
           width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
           background: var(--accent-violet);
         }
-        .nd-hero-title { font-size: 19px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
-        .nd-hero-subtitle { font-size: 13px; color: var(--text-tertiary); margin-top: 2px; }
+        .nd-hero-title { font-size: 32px; line-height: 36px; font-weight: 500; color: var(--text-primary); letter-spacing: -0.02em; }
+        .nd-hero-subtitle { font-size: 15px; line-height: 24px; color: var(--text-secondary); margin-top: 4px; }
         .nd-hero-right { display: flex; align-items: center; gap: 10px; }
-        .nd-stat { display: flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 999px; background: var(--bg-card); border: 1px solid var(--border-secondary); color: var(--text-tertiary); font-size: 11px; font-weight: 600; }
+        .nd-stat { display: flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 8px; background: var(--bg-card-solid); border: 1px solid var(--border-primary); color: var(--text-tertiary); font-size: 11px; font-weight: 600; }
         .nd-stat-value { color: var(--text-primary); font-weight: 800; font-variant-numeric: tabular-nums; }
-        .nd-bot-status { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; background: var(--accent-emerald-light); border: 1px solid var(--accent-emerald-light); color: var(--accent-emerald); font-size: 11px; font-weight: 700; }
+        .nd-bot-status { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; background: var(--accent-emerald-light); border: 1px solid var(--accent-emerald-light); color: var(--accent-emerald); font-size: 11px; font-weight: 700; }
         .nd-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-emerald); }
 
         /* Usado só pelo indicador de gravação de voz ativa (feedback funcional, não decoração ambiente) */
         @keyframes ndP { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
         /* ========== BODY ========== */
-        .nd-body { flex: 1; display: flex; overflow: hidden; }
-        .nd-main { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+        .nd-body { flex: 1; display: flex; align-items: flex-start; gap: 24px; }
+        .nd-main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-primary); border-radius: 24px; background: var(--bg-card-solid); }
 
         /* ========== TABS ========== */
-        .nd-tabs { display: flex; align-items: center; gap: 4px; padding: 16px 28px 0; }
+        .nd-tabs { display: flex; align-items: center; gap: 4px; padding: 16px 24px; border-bottom: 1px solid var(--border-secondary); }
         .nd-tab {
-          display: flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 10px;
+          display: flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 8px;
           font-size: 12px; font-weight: 600; color: var(--text-tertiary); background: none;
-          border: 1px solid transparent; cursor: pointer; transition: all 0.15s;
+          border: 1px solid transparent; cursor: pointer;
         }
         .nd-tab:hover { background: var(--bg-secondary); color: var(--text-secondary); }
-        .nd-tab.active { background: var(--bg-card); border-color: var(--border-primary); color: var(--text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-        .nd-tab-count { font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 999px; background: var(--accent-blue); color: #fff; }
+        .nd-tab.active { background: var(--accent-blue-light); border-color: var(--accent-blue-light); color: var(--accent-blue); }
+        .nd-tab-count { font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 999px; background: var(--accent-blue); color: var(--text-inverse); }
         .nd-tabs-spacer { flex: 1; }
         .nd-char-count { font-size: 11px; font-family: monospace; color: var(--text-tertiary); }
         .nd-char-count .active { color: var(--accent-blue); font-weight: 700; }
 
         /* ========== FORM ========== */
         .nd-form { flex: 1; display: flex; flex-direction: column; }
+        .nd-preview-modal { margin: 24px; }
 
         /* Templates */
-        .nd-templates { padding: 16px 28px 0; }
+        .nd-templates { padding: 24px 24px 0; }
         .nd-templates-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
         .nd-templates-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .nd-template-card {
-          display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px; border-radius: 12px;
-          background: var(--bg-secondary); border: 1px solid var(--border-secondary); cursor: pointer; transition: all 0.2s;
+          display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 8px; border-radius: 16px;
+          background: var(--bg-secondary); border: 1px solid var(--border-primary); cursor: pointer;
         }
-        .nd-template-card:hover { border-color: var(--accent-blue); background: var(--accent-blue-light); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
-        .nd-template-icon { font-size: 20px; }
+        .nd-template-card:hover { border-color: var(--accent-blue); background: var(--accent-blue-light); }
+        .nd-template-icon { display: flex; align-items: center; justify-content: center; }
         .nd-template-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
         .nd-template-hint { font-size: 9px; line-height: 1.3; color: var(--text-tertiary); text-align: center; }
 
         /* Editor */
         .nd-editor {
-          margin: 16px 28px 0; border-radius: 14px; overflow: hidden;
-          background: var(--bg-secondary); border: 2px solid var(--border-primary);
-          transition: border-color 0.2s, box-shadow 0.2s;
+          margin: 24px 24px 0; border-radius: 16px; overflow: hidden;
+          background: var(--bg-secondary); border: 1px solid var(--border-primary);
         }
-        .nd-editor.focused { border-color: #6366F1; box-shadow: 0 0 0 4px rgba(99,102,241,0.08); }
+        .nd-editor.focused { border-color: var(--accent-indigo); }
         .nd-editor-header {
           display: flex; align-items: center; gap: 10px; padding: 10px 16px;
           background: var(--bg-card); border-bottom: 1px solid var(--border-secondary);
         }
-        .nd-editor-dots { display: flex; gap: 5px; }
-        .nd-editor-dots span { width: 8px; height: 8px; border-radius: 50%; }
-        .nd-editor-dots span:nth-child(1) { background: #FF5F57; }
-        .nd-editor-dots span:nth-child(2) { background: #FFBD2E; }
-        .nd-editor-dots span:nth-child(3) { background: #28CA41; }
+        .nd-editor-dots { display: none; }
         .nd-editor-title { font-size: 11px; font-weight: 500; color: var(--text-tertiary); font-family: monospace; }
         .nd-editor-textarea {
           width: 100%; min-height: 220px; padding: 20px; background: transparent;
@@ -1248,19 +1286,25 @@ export default function NovaDemandaPage() {
            border-radius: 4px; border: none; background: transparent; color: var(--text-tertiary); cursor: pointer; transition: 0.2s;
         }
         .nd-toolbar-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
-        .nd-toolbar-btn.active { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+        .nd-toolbar-btn.active { background: var(--accent-blue-light); color: var(--accent-blue); }
 
-        .tiptap-wrapper { flex-grow: 1; display: flex; flex-direction: column; min-height: 220px; border: none !important; outline: none !important; box-shadow: none !important; }
-        .ProseMirror { flex-grow: 1; min-height: 220px !important; border: none !important; outline: none !important; box-shadow: none !important; }
-        .ProseMirror p { margin-bottom: 0.5em; }
-        .ProseMirror ul { list-style-type: disc; margin-left: 20px; margin-bottom: 0.5em; }
-        .ProseMirror ol { list-style-type: decimal; margin-left: 20px; margin-bottom: 0.5em; }
-        .ProseMirror blockquote { border-left: 3px solid var(--border-secondary); padding-left: 10px; color: var(--text-secondary); margin-bottom: 0.5em; }
-        .ProseMirror pre { background: var(--bg-input); padding: 10px; border-radius: 6px; font-family: monospace; margin-bottom: 0.5em; }
+        /* O ProseMirror e o .tiptap-wrapper são renderizados pelo <EditorContent>,
+           não por este componente — sem :global() o styled-jsx prefixa os seletores
+           com a classe de escopo e nenhuma destas regras chega ao editor (era o que
+           deixava a área editável com 1 linha e com o anel de foco branco do browser).
+           Prefixado por .nd-editor-textarea pra não vazar em outros editores. */
+        :global(.nd-editor-textarea .tiptap-wrapper) { flex-grow: 1; display: flex; flex-direction: column; min-height: 220px; border: none; outline: none; box-shadow: none; }
+        :global(.nd-editor-textarea .ProseMirror) { flex-grow: 1; min-height: 220px; border: none; outline: none; box-shadow: none; font-size: 14px; line-height: 1.85; color: var(--text-primary); }
+        :global(.nd-editor-textarea .ProseMirror p) { margin-bottom: 0.5em; }
+        :global(.nd-editor-textarea .ProseMirror ul) { list-style-type: disc; margin-left: 20px; margin-bottom: 0.5em; }
+        :global(.nd-editor-textarea .ProseMirror ol) { list-style-type: decimal; margin-left: 20px; margin-bottom: 0.5em; }
+        :global(.nd-editor-textarea .ProseMirror blockquote) { border-left: 3px solid var(--border-secondary); padding-left: 10px; color: var(--text-secondary); margin-bottom: 0.5em; }
+        :global(.nd-editor-textarea .ProseMirror pre) { background: var(--bg-input); padding: 10px; border-radius: 6px; font-family: monospace; margin-bottom: 0.5em; }
+        :global(.nd-editor-textarea .ProseMirror img) { max-width: 100%; height: auto; border-radius: 8px; }
 
         /* Meta toggle */
         .nd-meta-toggle {
-          display: flex; align-items: center; gap: 6px; margin: 12px 28px 0; padding: 0;
+          display: flex; align-items: center; gap: 6px; margin: 16px 24px 0; padding: 0;
           font-size: 12px; font-weight: 600; color: var(--accent-blue); background: none; border: none; cursor: pointer;
         }
         .nd-meta-toggle-icon { transition: transform 0.2s; }
@@ -1269,8 +1313,8 @@ export default function NovaDemandaPage() {
         .nd-meta-chevron.open { transform: rotate(180deg); }
 
         /* Meta fields */
-        .nd-meta { padding: 12px 28px 0; }
-        .nd-meta-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+        .nd-meta { padding: 16px 24px 0; }
+        .nd-meta-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
         .nd-input-group label {
           display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700;
           text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: 6px;
@@ -1298,29 +1342,27 @@ export default function NovaDemandaPage() {
         /* ========== ACTION BAR ========== */
         .nd-action-bar {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 16px 28px; margin-top: auto; flex-shrink: 0;
-          border-top: 1px solid var(--border-primary); background: var(--bg-card);
+          padding: 20px 24px; margin-top: 24px; flex-shrink: 0;
+          border-top: 1px solid var(--border-primary); background: var(--bg-card-solid);
         }
-        .nd-tips { display: flex; gap: 16px; }
-        .nd-tip { font-size: 11px; color: var(--text-tertiary); }
+        .nd-tips { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+        .nd-tip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-tertiary); }
         .nd-submit-btn {
-          display: flex; align-items: center; gap: 8px; padding: 11px 24px; border-radius: 11px;
+          display: flex; align-items: center; gap: 8px; padding: 11px 24px; border-radius: 8px;
           font-size: 13px; font-weight: 700; border: none; cursor: pointer;
-          background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #fff;
-          box-shadow: 0 4px 16px rgba(99,102,241,0.3); transition: all 0.2s;
+          background: var(--accent-indigo); color: var(--text-inverse);
         }
-        .nd-submit-btn:hover { box-shadow: 0 8px 28px rgba(99,102,241,0.4); transform: translateY(-1px); }
-        .nd-submit-btn:active { transform: scale(0.97); }
-        .nd-submit-btn:disabled { background: var(--bg-card-hover); color: var(--text-tertiary); box-shadow: none; cursor: not-allowed; transform: none; }
-        .nd-kbd { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.15); font-family: monospace; margin-left: 2px; }
+        .nd-submit-btn:hover { background: var(--accent-violet); }
+        .nd-submit-btn:disabled { background: var(--bg-card-hover); color: var(--text-tertiary); cursor: not-allowed; }
+        .nd-kbd { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: var(--bg-primary); font-family: monospace; margin-left: 2px; }
 
         /* ========== DROPZONE ========== */
         .nd-dropzone {
-          margin: 14px 28px 0; border-radius: 12px; cursor: pointer;
+          margin: 16px 24px 0; border-radius: 16px; cursor: pointer;
           border: 2px dashed var(--border-primary); padding: 16px;
-          transition: all 0.2s; background: var(--bg-secondary);
+          background: var(--bg-secondary);
         }
-        .nd-dropzone:hover { border-color: var(--accent-blue); background: rgba(99,102,241,0.03); }
+        .nd-dropzone:hover { border-color: var(--accent-blue); background: var(--accent-blue-light); }
         .nd-dropzone.active { border-color: var(--accent-blue); background: var(--accent-blue-light); border-style: solid; }
         .nd-dropzone.has-images { border-style: solid; cursor: default; padding: 12px; }
         .nd-dropzone-empty { display: flex; align-items: center; gap: 14px; }
@@ -1334,8 +1376,8 @@ export default function NovaDemandaPage() {
         .nd-dropzone-gallery { }
         .nd-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
         .nd-gallery-item {
-          position: relative; border-radius: 10px; overflow: hidden; background: var(--bg-card);
-          border: 1px solid var(--border-secondary); display: flex; flex-direction: column; transition: all 0.15s;
+          position: relative; border-radius: 10px; overflow: hidden; background: var(--bg-card-solid);
+          border: 1px solid var(--border-secondary); display: flex; flex-direction: column;
         }
         .nd-gallery-item:hover { border-color: var(--accent-blue); }
         .nd-gallery-thumb { width: 100%; height: 80px; object-fit: cover; display: block; }
@@ -1343,13 +1385,13 @@ export default function NovaDemandaPage() {
         .nd-gallery-remove {
           position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 6px;
           display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;
-          background: rgba(0,0,0,0.6); color: #fff; opacity: 0; transition: opacity 0.15s;
+          background: var(--bg-overlay); color: var(--text-primary); opacity: 0; transition: opacity 0.15s;
         }
         .nd-gallery-item:hover .nd-gallery-remove { opacity: 1; }
         .nd-gallery-add {
           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
           border-radius: 10px; border: 2px dashed var(--border-primary); background: transparent;
-          color: var(--text-tertiary); cursor: pointer; min-height: 106px; transition: all 0.15s;
+          color: var(--text-tertiary); cursor: pointer; min-height: 106px;
           font-size: 10px; font-weight: 600;
         }
         .nd-gallery-add:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: var(--accent-blue-light); }
@@ -1360,12 +1402,12 @@ export default function NovaDemandaPage() {
         .hidden { display: none; }
 
         /* ========== HISTORY ========== */
-        .nd-history { flex: 1; padding: 20px 28px; }
+        .nd-history { flex: 1; padding: 24px; }
         .nd-history-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; }
         .nd-history-empty-icon { width: 64px; height: 64px; border-radius: 20px; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: var(--text-tertiary); }
         .nd-history-empty p { color: var(--text-tertiary); font-size: 13px; }
         .nd-history-list { display: flex; flex-direction: column; gap: 10px; }
-        .nd-history-item { display: flex; gap: 12px; padding: 16px; border-radius: 12px; background: var(--bg-secondary); border: 1px solid var(--border-secondary); }
+        .nd-history-item { display: flex; gap: 12px; padding: 16px; border-radius: 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary); }
         .nd-history-dot { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .nd-history-dot.success { background: var(--accent-emerald-light); color: var(--accent-emerald); }
         .nd-history-dot.error { background: var(--accent-rose-light); color: var(--accent-rose); }
@@ -1379,10 +1421,10 @@ export default function NovaDemandaPage() {
         .nd-history-json { font-size: 10px; margin-top: 8px; padding: 10px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-secondary); color: var(--text-secondary); overflow-x: auto; font-family: monospace; }
 
         /* ========== SIDEBAR ========== */
-        .nd-sidebar { width: 260px; flex-shrink: 0; border-left: 1px solid var(--border-primary); background: var(--bg-card); overflow-y: auto; }
-        .nd-sidebar-section { padding: 20px 20px; }
+        .nd-sidebar { width: 280px; flex-shrink: 0; border: 1px solid var(--border-primary); border-radius: 24px; background: var(--bg-card-solid); overflow: hidden; }
+        .nd-sidebar-section { padding: 24px; }
         .nd-sidebar-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); margin-bottom: 14px; }
-        .nd-sidebar-divider { height: 1px; margin: 0 20px; background: var(--border-secondary); }
+        .nd-sidebar-divider { height: 1px; margin: 0 24px; background: var(--border-secondary); }
         .nd-sidebar-empty { font-size: 11px; color: var(--text-tertiary); font-style: italic; }
 
         /* Steps */
@@ -1393,13 +1435,13 @@ export default function NovaDemandaPage() {
         .nd-step-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
 
         /* Connection */
-        .nd-connection { padding: 12px; border-radius: 10px; background: var(--bg-secondary); border: 1px solid var(--border-secondary); }
+        .nd-connection { padding: 12px; border-radius: 16px; background: var(--bg-secondary); border: 1px solid var(--border-primary); }
         .nd-connection-row { display: flex; align-items: center; gap: 10px; }
-        .nd-connection-icon { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6366F1, #8B5CF6); flex-shrink: 0; }
+        .nd-connection-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--accent-indigo); flex-shrink: 0; }
         .nd-connection-name { font-size: 11px; font-weight: 700; color: var(--text-primary); }
         .nd-connection-url { font-size: 9px; font-family: monospace; color: var(--text-tertiary); }
         .nd-connection-status { margin-left: auto; }
-        .nd-pulse-sm { width: 8px; height: 8px; border-radius: 50%; background: #22C55E; box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+        .nd-pulse-sm { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); }
 
         /* Activity */
         .nd-activity { display: flex; flex-direction: column; gap: 8px; }
@@ -1410,25 +1452,46 @@ export default function NovaDemandaPage() {
 
         /* ========== TOAST ========== */
         .nd-toast {
-          position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 200;
-          display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px; border-radius: 14px;
+          position: fixed; right: 24px; bottom: 24px; z-index: 200;
+          display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px; border-radius: 24px;
           min-width: 420px; max-width: 640px;
-          box-shadow: 0 16px 48px rgba(0,0,0,0.2); animation: ndUp 0.3s ease-out;
+          animation: ndUp 0.2s ease-out;
         }
-        .nd-toast.success { background: #065F46; color: #D1FAE5; border: 1px solid #059669; }
-        .nd-toast.error { background: #7F1D1D; color: #FECACA; border: 1px solid #DC2626; }
+        .nd-toast.success { background: var(--bg-card-solid); color: var(--accent-green-soft); border: 1px solid var(--accent-emerald); }
+        .nd-toast.error { background: var(--bg-card-solid); color: var(--accent-rose-soft); border: 1px solid var(--accent-rose); }
         .nd-toast-content { flex: 1; min-width: 0; }
         .nd-toast-title { font-size: 13px; font-weight: 700; }
         .nd-toast-desc { font-size: 11px; opacity: 0.8; margin-top: 2px; }
-        .nd-toast-json { font-size: 10px; margin-top: 8px; padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2); overflow-x: auto; font-family: monospace; max-height: 120px; }
+        .nd-toast-json { font-size: 10px; margin-top: 8px; padding: 8px; border-radius: 6px; background: var(--bg-primary); overflow-x: auto; font-family: monospace; max-height: 120px; }
         .nd-toast-close { background: none; border: none; color: inherit; opacity: 0.5; cursor: pointer; }
         .nd-toast-close:hover { opacity: 1; }
-        @keyframes ndUp { from { transform: translateX(-50%) translateY(16px); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
+        @keyframes ndUp { from { opacity: 0; } to { opacity: 1; } }
 
         @media (max-width: 900px) {
           .nd-sidebar { display: none; }
+          .nd-body { display: block; }
           .nd-templates-grid { grid-template-columns: repeat(2, 1fr); }
           .nd-meta-row { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 640px) {
+          .nd-hero-content { flex-direction: column; gap: 12px; }
+          .nd-hero-right { width: 100%; flex-wrap: wrap; }
+          .nd-main { border-radius: 20px; }
+          .nd-tabs { padding: 14px 16px; }
+          .nd-templates { padding: 16px 16px 0; }
+          .nd-template-card { align-items: flex-start; }
+          .nd-editor { margin: 16px 16px 0; }
+          .nd-editor-header { flex-wrap: wrap; }
+          .nd-preview-modal { margin: 16px; padding: 16px !important; }
+          .nd-dropzone, .nd-meta-toggle { margin-right: 16px; margin-left: 16px; }
+          .nd-meta { padding-right: 16px; padding-left: 16px; }
+          .nd-validation-warn, .nd-voice-indicator { margin-right: 16px; margin-left: 16px; }
+          .nd-action-bar { align-items: stretch; flex-direction: column; gap: 12px; padding: 16px; }
+          .nd-tips { display: none; }
+          .nd-submit-btn { justify-content: center; width: 100%; }
+          .nd-history { padding: 16px; }
+          .nd-toast { right: 16px; left: 16px; min-width: 0; max-width: none; }
         }
 
         /* ========== NEW FEATURES STYLES ========== */
@@ -1437,22 +1500,22 @@ export default function NovaDemandaPage() {
         .nd-editor-btn {
           width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-secondary);
           background: var(--bg-secondary); color: var(--text-tertiary); cursor: pointer;
-          display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+          display: flex; align-items: center; justify-content: center;
         }
         .nd-editor-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: var(--accent-blue-light); }
-        .nd-editor-btn.recording { border-color: #EF4444; color: #EF4444; background: rgba(239,68,68,0.1); animation: ndP 1s ease-in-out infinite; }
+        .nd-editor-btn.recording { border-color: var(--accent-red); color: var(--accent-red); background: var(--accent-rose-light); animation: ndP 1s ease-in-out infinite; }
 
         /* Draft saved badge */
         .nd-draft-badge {
           display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;
-          font-size: 9px; font-weight: 600; color: var(--accent-emerald); background: rgba(34,197,94,0.06);
-          border: 1px solid rgba(34,197,94,0.1);
+          font-size: 9px; font-weight: 600; color: var(--accent-emerald); background: var(--accent-emerald-light);
+          border: 1px solid var(--accent-emerald-light);
         }
 
         /* Template kbd hint */
         .nd-template-kbd {
           font-size: 9px; font-family: monospace; padding: 1px 5px; border-radius: 3px;
-          background: rgba(255,255,255,0.06); color: var(--text-tertiary); margin-top: 2px;
+          background: var(--bg-primary); color: var(--text-tertiary); margin-top: 2px;
         }
 
         /* Markdown Preview */
@@ -1464,31 +1527,31 @@ export default function NovaDemandaPage() {
         .nd-preview em { color: var(--accent-violet); font-style: italic; }
 
         /* Validation warning */
-        .nd-editor.warn { border-color: #F59E0B; }
+        .nd-editor.warn { border-color: var(--accent-amber); }
         .nd-validation-warn {
-          display: flex; align-items: center; gap: 8px; margin: 8px 28px 0;
-          padding: 10px 14px; border-radius: 10px; font-size: 12px; font-weight: 600;
-          background: rgba(245,158,11,0.06); color: #F59E0B;
-          border: 1px solid rgba(245,158,11,0.12);
+          display: flex; align-items: center; gap: 8px; margin: 8px 24px 0;
+          padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+          background: var(--accent-amber-light); color: var(--accent-amber);
+          border: 1px solid var(--accent-amber-light);
         }
 
         /* Voice indicator */
         .nd-voice-indicator {
-          display: flex; align-items: center; gap: 10px; margin: 8px 28px 0;
-          padding: 12px 16px; border-radius: 10px; font-size: 12px; font-weight: 600;
-          background: rgba(239,68,68,0.06); color: #F87171;
-          border: 1px solid rgba(239,68,68,0.12);
+          display: flex; align-items: center; gap: 10px; margin: 8px 24px 0;
+          padding: 12px 16px; border-radius: 8px; font-size: 12px; font-weight: 600;
+          background: var(--accent-rose-light); color: var(--accent-rose-soft);
+          border: 1px solid var(--accent-rose-light);
         }
         .nd-voice-dot {
-          width: 10px; height: 10px; border-radius: 50%; background: #EF4444;
-          animation: ndP 1s ease-in-out infinite; box-shadow: 0 0 8px rgba(239,68,68,0.5);
+          width: 10px; height: 10px; border-radius: 50%; background: var(--accent-red);
+          animation: ndP 1s ease-in-out infinite;
         }
         .nd-voice-stop {
           margin-left: auto; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 700;
-          background: rgba(239,68,68,0.15); color: #F87171; border: 1px solid rgba(239,68,68,0.2);
-          cursor: pointer; transition: all 0.15s;
+          background: var(--accent-rose-light); color: var(--accent-rose-soft); border: 1px solid var(--accent-rose-light);
+          cursor: pointer;
         }
-        .nd-voice-stop:hover { background: rgba(239,68,68,0.25); }
+        .nd-voice-stop:hover { border-color: var(--accent-rose); }
 
         /* Select dropdown */
         .nd-select {
@@ -1508,26 +1571,25 @@ export default function NovaDemandaPage() {
           display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;
           font-size: 10px; font-weight: 600; color: var(--text-tertiary);
           background: var(--bg-secondary); border: 1px solid var(--border-secondary);
-          transition: all 0.3s;
         }
-        .nd-progress-step.active { color: var(--accent-emerald); background: rgba(34,197,94,0.06); border-color: rgba(34,197,94,0.15); }
-        .nd-progress-step.current { color: var(--accent-blue); background: var(--accent-blue-light); border-color: rgba(59,130,246,0.15); }
+        .nd-progress-step.active { color: var(--accent-emerald); background: var(--accent-emerald-light); border-color: var(--accent-emerald-light); }
+        .nd-progress-step.current { color: var(--accent-blue); background: var(--accent-blue-light); border-color: var(--accent-blue-light); }
 
         /* History actions */
         .nd-history-actions { display: flex; gap: 6px; margin-top: 8px; }
         .nd-history-action {
           display: flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 6px;
           font-size: 10px; font-weight: 700; color: var(--accent-blue);
-          background: var(--accent-blue-light); border: 1px solid rgba(59,130,246,0.1);
-          cursor: pointer; transition: all 0.15s;
+          background: var(--accent-blue-light); border: 1px solid var(--accent-blue-light);
+          cursor: pointer;
         }
-        .nd-history-action:hover { background: rgba(59,130,246,0.15); transform: translateY(-1px); }
+        .nd-history-action:hover { border-color: var(--accent-blue); }
         .nd-clear-history {
           display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px;
           font-size: 11px; font-weight: 600; color: var(--text-tertiary);
-          background: none; border: 1px solid var(--border-secondary); cursor: pointer; transition: all 0.15s;
+          background: none; border: 1px solid var(--border-secondary); cursor: pointer;
         }
-        .nd-clear-history:hover { color: var(--accent-rose); border-color: var(--accent-rose); background: rgba(244,63,94,0.04); }
+        .nd-clear-history:hover { color: var(--accent-rose); border-color: var(--accent-rose); background: var(--accent-rose-light); }
       `}</style>
     </div>
   );
