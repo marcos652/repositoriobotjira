@@ -63,6 +63,11 @@ function LoginContent() {
         }
       } catch {}
     })();
+    // startTotpChallenge fica fora das deps de propósito: ela é recriada a cada
+    // render, e incluí-la reintroduziria exatamente o disparo repetido que o
+    // mfaEffectRanRef acima existe pra impedir. O ref garante execução única,
+    // então a identidade da função é irrelevante aqui.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mfaPending]);
 
   // Consulta /api/auth/totp: já tem Authenticator configurado (pede código) ou
@@ -85,6 +90,14 @@ function LoginContent() {
 
       setTotpEmail(targetEmail);
       setTotpIdToken(idToken);
+
+      // Dispositivo já verificado nas últimas 5h: a rota já devolveu a sessão
+      // pronta, então não há 2º passo a exibir.
+      if (data.trusted) {
+        setSuccess('Login realizado!');
+        setTimeout(() => router.push('/dashboard'), 500);
+        return;
+      }
 
       if (data.configured) {
         setStep('totp-verify');
@@ -115,7 +128,23 @@ function LoginContent() {
         idToken = await userCredential.user.getIdToken();
       } catch (authError: unknown) {
         console.error('Firebase auth error:', authError);
-        setError('Email ou senha inválidos.');
+        // Antes TODO erro do Firebase virava "Email ou senha inválidos.", o que
+        // mente quando a causa é outra — bloqueio temporário por tentativas,
+        // conta desativada ou rede caída mandavam o usuário conferir uma senha
+        // que estava certa. Só invalid-credential/wrong-password/user-not-found
+        // são de fato credencial errada, e o Firebase agrupa os três em
+        // invalid-credential de propósito (proteção de enumeração de email),
+        // pra não revelar se aquele email existe ou não.
+        const code = (authError as { code?: string })?.code || '';
+        const firebaseErrors: Record<string, string> = {
+          'auth/too-many-requests':
+            'Muitas tentativas. O Firebase bloqueou este acesso temporariamente — aguarde alguns minutos.',
+          'auth/user-disabled': 'Esta conta está desativada no Firebase. Contate o administrador.',
+          'auth/network-request-failed': 'Falha de conexão com o Firebase. Verifique sua rede.',
+          'auth/operation-not-allowed': 'Login por senha está desabilitado no projeto Firebase.',
+          'auth/invalid-email': 'Email em formato inválido.',
+        };
+        setError(firebaseErrors[code] || 'Email ou senha inválidos.');
         setIsLoading(false);
         return;
       }
@@ -240,27 +269,75 @@ function LoginContent() {
             style={{ background: 'linear-gradient(180deg,transparent 38%,rgba(0,5,20,0.45) 72%,rgba(0,3,14,0.88) 100%)' }}
           />
 
-          <div className="relative flex h-full flex-col justify-between p-10 xl:p-14">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-[#001147]">
-                <Zap size={17} className="text-[#C6D8FA]" strokeWidth={2.25} aria-hidden="true" />
+          <div className="relative flex h-full flex-col p-10 xl:p-14">
+            {/* Co-branding: JiraOps (o produto) | Movingpay (a empresa). O divisor
+                separa os dois lockups pra não parecerem um nome só.
+                justify-center alinha o par ao eixo do texto de destaque abaixo,
+                que também é centralizado. */}
+            <div className="flex items-center justify-center gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-[#001147]">
+                  <Zap size={17} className="text-[#C6D8FA]" strokeWidth={2.25} aria-hidden="true" />
+                </div>
+                <span className="text-sm font-semibold tracking-[-0.01em] text-[#0E1D3F]">
+                  JiraOps
+                </span>
               </div>
-              <span className="text-sm font-semibold tracking-[-0.01em] text-[#0E1D3F]">
-                JiraOps
-              </span>
+
+              <span aria-hidden="true" className="h-6 w-px shrink-0 bg-[#0E1D3F]/20" />
+
+              <div className="flex items-center gap-3">
+                {/* aria-hidden: o "M" é decorativo — quem usa leitor de tela ouviria
+                    "M Movingpay" se ele fosse anunciado junto do nome ao lado. */}
+                <div
+                  aria-hidden="true"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-[#001147]"
+                >
+                  {/* Degradê verde -> azul recortado no próprio glifo. Vai por
+                      style inline (como os outros gradientes deste arquivo) em vez
+                      de utilitário do Tailwind porque o v4 renomeou bg-gradient-*
+                      para bg-linear-*, e o inline não depende dessa versão.
+                      Os dois extremos foram escolhidos claros o suficiente para
+                      manter contraste sobre o navy #001147 do badge: 8:1 no verde,
+                      5,8:1 no azul. */}
+                  <span
+                    className="text-[18px] font-bold leading-none tracking-[-0.04em]"
+                    style={{
+                      backgroundImage: 'linear-gradient(135deg,#34D399 0%,#22C55E 28%,#4C93F5 100%)',
+                      WebkitBackgroundClip: 'text',
+                      backgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      color: 'transparent',
+                    }}
+                  >
+                    M
+                  </span>
+                </div>
+                <span className="text-sm font-semibold tracking-[-0.01em] text-[#0E1D3F]">
+                  Movingpay
+                </span>
+              </div>
             </div>
 
-            <div className="text-center">
-              <p className="mx-auto max-w-[24ch] text-[22px] font-medium leading-[1.4] tracking-[-0.015em] text-[#F4F7FD] xl:text-2xl">
+            {/* Posição vertical por razão de flex-grow entre este bloco e o espaçador
+                abaixo (não por padding percentual, que em CSS resolve pela LARGURA
+                e não pela altura). A razão 1 : 0,35 foi calibrada pra primeira linha
+                cair na mesma altura do "Entrar no Dashboard" da coluna do form.
+                É proporcional, não travado: as duas colunas são centralizadas de
+                forma independente, e a do form muda de altura entre a etapa 1 e a 2,
+                então o alinhamento é aproximado por construção. */}
+            <div className="flex grow flex-col justify-center text-center">
+              <p className="mx-auto max-w-[26ch] text-[34px] font-medium leading-[1.18] tracking-[-0.028em] text-[#F4F7FD] xl:text-[46px]">
                 Decisões mais claras, do Jira à operação.
               </p>
-              <p className="mx-auto mt-1 max-w-[28ch] text-[22px] font-medium leading-[1.4] tracking-[-0.015em] text-[#F4F7FD] xl:text-2xl">
+              <p className="mx-auto mt-3 max-w-[26ch] text-[34px] font-medium leading-[1.18] tracking-[-0.028em] text-[#F4F7FD] xl:text-[46px]">
                 Métricas em tempo real para quem decide.
               </p>
-              <p className="mt-6 text-[13px] leading-5 text-[#A9B8D8]">
+              <p className="mt-8 text-[15px] leading-6 text-[#A9B8D8] xl:text-[16px]">
                 JiraOps — sua central de operação, do backlog ao SLA.
               </p>
             </div>
+            <div aria-hidden="true" className="grow-[0.35]" />
           </div>
         </aside>
 
