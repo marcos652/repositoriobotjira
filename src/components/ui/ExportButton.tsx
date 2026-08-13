@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Download, FileText, Table, ChevronDown } from 'lucide-react';
 
 interface ExportButtonProps {
-  data: Record<string, any>[];
+  data: Record<string, unknown>[];
   filename?: string;
   columns?: { key: string; label: string }[];
 }
@@ -17,8 +17,15 @@ export default function ExportButton({ data, filename = 'export', columns }: Exp
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
   }, []);
 
   const exportCSV = () => {
@@ -57,15 +64,17 @@ export default function ExportButton({ data, filename = 'export', columns }: Exp
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button
+        aria-expanded={open}
+        aria-haspopup="menu"
         onClick={() => setOpen(!open)}
-        className="ripple-container"
+        type="button"
         style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '8px 14px', borderRadius: 'var(--radius-md)',
-          background: 'var(--bg-card)', border: '1px solid var(--border-primary)',
-          color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600,
+          display: 'flex', minHeight: 40, alignItems: 'center', gap: 7,
+          padding: '8px 14px', borderRadius: 'var(--radius-control)',
+          background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)',
+          color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500,
           cursor: 'pointer', fontFamily: 'var(--font-sans)',
-          transition: 'all 0.2s',
+          transition: 'border-color 0.15s, color 0.15s',
         }}
       >
         <Download size={14} />
@@ -74,16 +83,16 @@ export default function ExportButton({ data, filename = 'export', columns }: Exp
       </button>
 
       {open && (
-        <div className="animate-modal" style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 4,
-          minWidth: 160, background: 'var(--bg-card-solid)',
+        <div role="menu" aria-label="Formatos de exportação" className="animate-modal" style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 6,
+          minWidth: 176, padding: 6, background: 'var(--bg-card-solid)',
           border: '1px solid var(--border-primary)',
-          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)',
+          borderRadius: 'var(--radius-control)',
           overflow: 'hidden', zIndex: 50,
         }}>
-          <button onClick={exportCSV} style={{
+          <button role="menuitem" type="button" onClick={exportCSV} style={{
             display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-            padding: '10px 14px', border: 'none', cursor: 'pointer',
+            padding: '10px 12px', border: 'none', borderRadius: 6, cursor: 'pointer',
             background: 'transparent', color: 'var(--text-primary)',
             fontSize: 12, fontFamily: 'var(--font-sans)', transition: 'background 0.15s',
           }}
@@ -93,9 +102,9 @@ export default function ExportButton({ data, filename = 'export', columns }: Exp
             <Table size={14} style={{ color: 'var(--accent-emerald)' }} />
             Exportar CSV
           </button>
-          <button onClick={exportJSON} style={{
+          <button role="menuitem" type="button" onClick={exportJSON} style={{
             display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-            padding: '10px 14px', border: 'none', cursor: 'pointer',
+            padding: '10px 12px', border: 'none', borderRadius: 6, cursor: 'pointer',
             background: 'transparent', color: 'var(--text-primary)',
             fontSize: 12, fontFamily: 'var(--font-sans)', transition: 'background 0.15s',
           }}

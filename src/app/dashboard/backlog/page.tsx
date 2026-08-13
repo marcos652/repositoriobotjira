@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  ClipboardList, Search, Loader2, WifiOff, RefreshCw,
-  ExternalLink, ChevronDown, AlertTriangle
+  Search, Loader2, WifiOff, RefreshCw, ExternalLink
 } from 'lucide-react';
 
 interface JiraIssue {
@@ -71,7 +70,10 @@ export default function BacklogPage() {
     }
   }, []);
 
-  useEffect(() => { fetchBacklog(); }, [fetchBacklog]);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => void fetchBacklog());
+    return () => window.cancelAnimationFrame(frame);
+  }, [fetchBacklog]);
 
   const filtered = issues.filter(i => {
     const matchSearch = !search || i.key.toLowerCase().includes(search.toLowerCase()) || i.fields.summary.toLowerCase().includes(search.toLowerCase());
@@ -101,53 +103,48 @@ export default function BacklogPage() {
           </div>
           <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Erro ao carregar</p>
           <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>{error}</p>
-          <button onClick={() => fetchBacklog()} className="px-5 py-2.5 rounded-xl text-sm font-semibold" style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff' }}>Tentar novamente</button>
+          <button onClick={() => fetchBacklog()} className="px-5 py-2.5 text-sm font-semibold" style={{ borderRadius: '8px', background: 'var(--accent-blue)', color: '#fff' }}>Tentar novamente</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.12)' }}>
-            <ClipboardList size={20} style={{ color: '#60A5FA' }} />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Backlog</h1>
-            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>{filtered.length} de {issues.length} itens • Dados do Jira</p>
-          </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '32px', lineHeight: '36px', fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0 }}>Backlog</h1>
+          <p style={{ fontSize: '14px', color: 'var(--text-tertiary)', margin: '6px 0 0' }}>{filtered.length} de {issues.length} itens • Dados do Jira</p>
         </div>
-        <button onClick={() => fetchBacklog(true)} disabled={refreshing} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        <button onClick={() => fetchBacklog(true)} disabled={refreshing} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '0 14px', height: '40px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
           <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Atualizar
         </button>
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 14px', height: '40px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '220px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 14px', height: '40px', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border-primary)' }}>
           <Search size={14} style={{ color: 'var(--text-tertiary)' }} />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por chave ou título..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '13px' }} />
         </div>
-        <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ padding: '0 12px', height: '40px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', cursor: 'pointer' }}>
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ padding: '0 12px', height: '40px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', cursor: 'pointer' }}>
           <option value="all">Todos os Tipos</option>
           {types.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} style={{ padding: '0 12px', height: '40px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', cursor: 'pointer' }}>
+        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} style={{ padding: '0 12px', height: '40px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', cursor: 'pointer' }}>
           <option value="all">Todas Prioridades</option>
           {priorities.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
 
       {/* Table */}
-      <div style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-primary)', background: 'var(--bg-card)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ borderRadius: '24px', overflowX: 'auto', border: '1px solid var(--border-primary)', background: 'var(--bg-card)' }}>
+        <table style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-secondary)' }}>
               {['Chave', 'Título', 'Tipo', 'Prioridade', 'Status', 'Responsável', ''].map(h => (
-                <th key={h} style={{ padding: '12px 16px', fontSize: '10px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', textAlign: 'left' }}>{h}</th>
+                <th key={h} style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.03em', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>

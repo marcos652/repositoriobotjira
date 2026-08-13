@@ -81,23 +81,20 @@ export default function DraggableItem({
       className={`relative ${className}`}
       style={{
         opacity: isDragging ? 0.4 : 1,
-        // No transition during resize for instant feedback; smooth transition otherwise
-        transition: isResizing ? 'opacity 0.2s' : 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-        transform: isDragOver && editMode ? 'scale(0.97)' : isDragging ? 'scale(0.95)' : 'scale(1)',
+        outline: isDragOver && editMode ? '2px solid var(--accent-blue)' : '2px solid transparent',
+        outlineOffset: isDragOver && editMode ? '4px' : '0',
+        transition: isResizing ? 'none' : 'opacity 0.15s, outline-color 0.15s',
         ...style,
       }}
     >
       {/* Edit mode overlay — drag handle + size indicator */}
       {editMode && (
         <div
-          className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold select-none cursor-grab active:cursor-grabbing"
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium select-none cursor-grab active:cursor-grabbing"
           style={{
-            background: 'rgba(15,23,42,0.92)',
+            background: 'var(--bg-card-solid)',
             color: 'var(--text-secondary)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
-            border: '1px solid rgba(148,163,184,0.15)',
-            backdropFilter: 'blur(12px)',
-            transition: 'transform 0.2s, box-shadow 0.2s',
+            border: '1px solid var(--border-primary)',
           }}
           onMouseDown={() => setCanDrag(true)}
           onMouseUp={() => setCanDrag(false)}
@@ -107,8 +104,8 @@ export default function DraggableItem({
           <span>{label}</span>
           {currentSize !== undefined && (
             <>
-              <div className="w-px h-3 mx-1" style={{ background: 'rgba(148,163,184,0.2)' }} />
-              <span className="text-[10px] font-extrabold tabular-nums" style={{ color: 'var(--accent-blue)' }}>{Math.round(currentSize)}%</span>
+              <div className="w-px h-3 mx-1" style={{ background: 'var(--border-primary)' }} />
+              <span className="text-[10px] font-semibold tabular-nums" style={{ color: 'var(--accent-blue)' }}>{Math.round(currentSize)}%</span>
             </>
           )}
         </div>
@@ -126,8 +123,7 @@ export default function DraggableItem({
             style={{
               width: isResizing ? '3px' : '2px',
               height: isResizing ? '80px' : '40px',
-              background: isResizing ? 'var(--accent-blue)' : 'rgba(148,163,184,0.3)',
-              boxShadow: isResizing ? '0 0 12px var(--accent-blue)' : 'none',
+              background: isResizing ? 'var(--accent-blue)' : 'var(--border-primary)',
             }}
           />
         </div>

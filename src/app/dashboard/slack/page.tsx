@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Hash, Lock, MessageSquare, Send, Loader2, WifiOff, RefreshCw, User, ChevronDown, Search, AtSign, Users } from 'lucide-react';
+import { Hash, Lock, MessageSquare, Send, Loader2, WifiOff, RefreshCw, User, Search, Users } from 'lucide-react';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 interface Channel { id: string; name: string; is_channel: boolean; is_group: boolean; is_im: boolean; is_mpim: boolean; is_member: boolean; topic: string; purpose: string; num_members: number; avatar?: string; user?: string; }
@@ -131,12 +131,18 @@ export default function SlackPage() {
     finally { setSending(false); }
   };
 
-  useEffect(() => { fetchChannels(); }, [fetchChannels]);
+  useEffect(() => {
+    // This effect synchronizes the channel list with Slack on mount/account changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchChannels();
+  }, [fetchChannels]);
 
   // Load messages when channel changes + poll active channel
   useEffect(() => {
     if (!activeChannel) return;
-    fetchMessages(activeChannel.id);
+    // This effect synchronizes the selected channel with its remote message stream.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchMessages(activeChannel.id);
     // Mark current latest as seen
     if (messages.length > 0) {
       lastSeenRef.current[activeChannel.id] = messages[messages.length - 1].ts;
@@ -210,19 +216,28 @@ export default function SlackPage() {
 
 
 
-  if (error && channels.length === 0) return <div className="flex items-center justify-center h-[60vh]"><div className="text-center space-y-5"><WifiOff size={28} style={{ color: '#FB7185' }} /><p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>Erro ao conectar</p><p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{error}</p><button onClick={() => fetchChannels()} style={{ padding: '8px 20px', borderRadius: '12px', background: '#E01E5A', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Tentar novamente</button></div></div>;
+  if (loading && channels.length === 0) return <div className="flex h-[60vh] flex-col items-center justify-center gap-4 rounded-[24px] border" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}><Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent-rose)' }} /><p style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600 }}>Conectando ao Slack...</p></div>;
+
+  if (error && channels.length === 0) return <div className="flex items-center justify-center h-[60vh]"><div className="w-full max-w-md space-y-5 rounded-[24px] border p-8 text-center" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}><WifiOff size={28} style={{ color: 'var(--accent-rose-soft)', margin: '0 auto' }} /><p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>Erro ao conectar</p><p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{error}</p><button onClick={() => fetchChannels()} style={{ padding: '8px 20px', borderRadius: '8px', background: 'var(--accent-rose)', color: 'var(--text-inverse)', border: '1px solid var(--accent-rose)', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Tentar novamente</button></div></div>;
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 100px)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-primary)', background: 'var(--bg-card)' }}>
+    <div className="slack-page">
+      <header className="slack-page-header">
+        <div>
+          <h1>Slack</h1>
+          <p>Acompanhe canais e converse com o time sem sair do painel.</p>
+        </div>
+        <span className="slack-connection"><span /> Conectado</span>
+      </header>
+
+      <div className="slack-shell">
       {/* Sidebar - Channels */}
-      <div style={{ width: '260px', flexShrink: 0, borderRight: '1px solid var(--border-primary)', display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)' }}>
+      <aside className="slack-channels" style={{ background: 'var(--bg-secondary)' }}>
         {/* Slack Header */}
         <div style={{ padding: '16px', borderBottom: '1px solid var(--border-secondary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #E01E5A, #ECB22E, #2EB67D, #36C5F0)', padding: '2px' }}>
-              <div style={{ width: '100%', height: '100%', borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <MessageSquare size={16} style={{ color: '#E01E5A' }} />
-              </div>
+            <div style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-rose-light)', border: '1px solid var(--border-primary)' }}>
+              <MessageSquare size={16} style={{ color: 'var(--accent-rose)' }} />
             </div>
             <div>
               <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Slack</p>
@@ -231,7 +246,7 @@ export default function SlackPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 10px', height: '32px', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border-secondary)' }}>
             <Search size={12} style={{ color: 'var(--text-tertiary)' }} />
-            <input type="text" value={searchCh} onChange={e => setSearchCh(e.target.value)} placeholder="Buscar canal..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '11px' }} />
+            <input type="text" value={searchCh} onChange={e => setSearchCh(e.target.value)} aria-label="Buscar canal" placeholder="Buscar canal..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '11px' }} />
           </div>
         </div>
 
@@ -241,7 +256,7 @@ export default function SlackPage() {
             <>
               <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)', padding: '8px 8px 4px', margin: 0 }}>Canais</p>
               {channelGroups.channels.map(ch => (
-                <button key={ch.id} onClick={() => setActiveChannel(ch)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', transition: 'all 0.1s', background: activeChannel?.id === ch.id ? 'rgba(224,30,90,0.08)' : 'transparent', color: activeChannel?.id === ch.id ? '#E01E5A' : 'var(--text-secondary)' }}>
+                <button key={ch.id} onClick={() => setActiveChannel(ch)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: activeChannel?.id === ch.id ? 'var(--accent-rose-light)' : 'transparent', color: activeChannel?.id === ch.id ? 'var(--accent-rose)' : 'var(--text-secondary)' }}>
                   {ch.is_group ? <Lock size={13} /> : <Hash size={13} />}
                   <span style={{ fontSize: 12, fontWeight: activeChannel?.id === ch.id ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
                 </button>
@@ -252,7 +267,7 @@ export default function SlackPage() {
             <>
               <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)', padding: '12px 8px 4px', margin: 0 }}>Mensagens Diretas</p>
               {channelGroups.dms.map(ch => (
-                <button key={ch.id} onClick={() => setActiveChannel(ch)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', transition: 'all 0.1s', background: activeChannel?.id === ch.id ? 'rgba(224,30,90,0.08)' : 'transparent', color: activeChannel?.id === ch.id ? '#E01E5A' : 'var(--text-secondary)' }}>
+                <button key={ch.id} onClick={() => setActiveChannel(ch)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: activeChannel?.id === ch.id ? 'var(--accent-rose-light)' : 'transparent', color: activeChannel?.id === ch.id ? 'var(--accent-rose)' : 'var(--text-secondary)' }}>
                   {ch.avatar ? <img src={ch.avatar} alt="" style={{ width: 18, height: 18, borderRadius: 5 }} /> : <User size={13} />}
                   <span style={{ fontSize: 12, fontWeight: activeChannel?.id === ch.id ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ch.name}</span>
                 </button>
@@ -260,10 +275,10 @@ export default function SlackPage() {
             </>
           )}
         </div>
-      </div>
+      </aside>
 
       {/* Main - Messages */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <main className="slack-conversation">
         {/* Channel header */}
         {activeChannel && (
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -276,7 +291,7 @@ export default function SlackPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {activeChannel.num_members > 0 && <span style={{ fontSize: 10, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4 }}><Users size={12} /> {activeChannel.num_members}</span>}
-              <button onClick={() => fetchMessages(activeChannel.id)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+              <button onClick={() => fetchMessages(activeChannel.id)} aria-label={`Atualizar mensagens de ${activeChannel.name}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
                 <RefreshCw size={12} /> Atualizar
               </button>
             </div>
@@ -287,9 +302,8 @@ export default function SlackPage() {
         <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', position: 'relative' }}>
           {/* Subtle loading bar */}
           {loadingMsgs && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', zIndex: 10, overflow: 'hidden', borderRadius: '1px' }}>
-              <div style={{ width: '40%', height: '100%', background: 'linear-gradient(90deg, transparent, #E01E5A, transparent)', animation: 'slackLoad 1s ease-in-out infinite' }} />
-              <style>{`@keyframes slackLoad { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }`}</style>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', zIndex: 10, overflow: 'hidden', borderRadius: '1px', background: 'var(--accent-rose)', animation: 'slackLoad 1s ease-in-out infinite' }}>
+              <style>{`@keyframes slackLoad { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }`}</style>
             </div>
           )}
           {messages.length === 0 && !loadingMsgs ? (
@@ -314,7 +328,7 @@ export default function SlackPage() {
                     {showHeader && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                         {msg.userAvatar ? <img src={msg.userAvatar} alt="" style={{ width: 32, height: 32, borderRadius: 8 }} /> : (
-                          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #E01E5A, #36C5F0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-rose)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: 'var(--text-inverse)', flexShrink: 0 }}>
                             {(msg.userName || msg.botName || '?').charAt(0).toUpperCase()}
                           </div>
                         )}
@@ -334,7 +348,7 @@ export default function SlackPage() {
                       </div>
                     )}
                     {msg.reply_count > 0 && (
-                      <div style={{ fontSize: 11, color: '#1D9BD1', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>{msg.reply_count} {msg.reply_count === 1 ? 'resposta' : 'respostas'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>{msg.reply_count} {msg.reply_count === 1 ? 'resposta' : 'respostas'}</div>
                     )}
                   </div>
                 );
@@ -348,18 +362,19 @@ export default function SlackPage() {
         {activeChannel && (
           <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border-secondary)', flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', padding: '0 16px', height: '44px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', transition: 'border-color 0.15s' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', padding: '0 16px', height: '44px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)' }}>
                 <input
                   ref={inputRef}
                   type="text"
                   value={newMsg}
                   onChange={e => setNewMsg(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  aria-label={`Mensagem para ${activeChannel.name}`}
                   placeholder={`Mensagem para #${activeChannel.name}...`}
                   style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '13px' }}
                 />
               </div>
-              <button onClick={sendMessage} disabled={sending || !newMsg.trim()} style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: newMsg.trim() ? '#E01E5A' : 'var(--bg-secondary)', border: '1px solid ' + (newMsg.trim() ? '#E01E5A' : 'var(--border-primary)'), color: newMsg.trim() ? '#fff' : 'var(--text-tertiary)', cursor: newMsg.trim() ? 'pointer' : 'default', transition: 'all 0.15s', flexShrink: 0 }}>
+              <button onClick={sendMessage} disabled={sending || !newMsg.trim()} aria-label="Enviar mensagem" style={{ width: 44, height: 44, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: newMsg.trim() ? 'var(--accent-rose)' : 'var(--bg-secondary)', border: '1px solid ' + (newMsg.trim() ? 'var(--accent-rose)' : 'var(--border-primary)'), color: newMsg.trim() ? 'var(--text-inverse)' : 'var(--text-tertiary)', cursor: newMsg.trim() ? 'pointer' : 'default', flexShrink: 0 }}>
                 {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>
             </div>
@@ -368,7 +383,117 @@ export default function SlackPage() {
             </p>
           </div>
         )}
+      </main>
       </div>
+
+      <style jsx>{`
+        .slack-page {
+          display: flex;
+          min-height: 0;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        .slack-page-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 24px;
+        }
+
+        .slack-page-header h1 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 32px;
+          font-weight: 500;
+          line-height: 36px;
+          letter-spacing: -0.02em;
+        }
+
+        .slack-page-header p {
+          margin: 4px 0 0;
+          color: var(--text-secondary);
+          font-size: 15px;
+          line-height: 24px;
+        }
+
+        .slack-connection {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          min-height: 32px;
+          padding: 0 12px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-card-solid);
+          color: var(--text-secondary);
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .slack-connection span {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: var(--accent-emerald);
+        }
+
+        .slack-shell {
+          display: flex;
+          height: calc(100vh - 220px);
+          min-height: 560px;
+          overflow: hidden;
+          border: 1px solid var(--border-primary);
+          border-radius: 24px;
+          background: var(--bg-card-solid);
+        }
+
+        .slack-channels {
+          display: flex;
+          width: 280px;
+          flex-shrink: 0;
+          flex-direction: column;
+          border-right: 1px solid var(--border-primary);
+        }
+
+        .slack-conversation {
+          display: flex;
+          min-width: 0;
+          flex: 1;
+          flex-direction: column;
+        }
+
+        @media (max-width: 900px) {
+          .slack-shell {
+            height: auto;
+            min-height: 760px;
+            flex-direction: column;
+          }
+
+          .slack-channels {
+            width: 100%;
+            max-height: 280px;
+            border-right: 0;
+            border-bottom: 1px solid var(--border-primary);
+          }
+
+          .slack-conversation {
+            min-height: 480px;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .slack-page-header {
+            flex-direction: column;
+            gap: 12px;
+          }
+
+          .slack-shell {
+            min-height: 680px;
+            border-radius: 20px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

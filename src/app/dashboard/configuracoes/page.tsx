@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import {
-  Settings, User, Bell, Palette, Shield, Globe, Key, Moon, Sun, Monitor,
+  User, Bell, Palette, Shield, Key, Moon, Sun, Monitor,
   Mail, Plus, Trash2, Loader2, CheckCircle2, AlertTriangle, Lock, Users
 } from 'lucide-react';
 
@@ -49,7 +49,10 @@ function EmailManagement() {
     }
   };
 
-  useEffect(() => { loadEmails(); }, []);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => void loadEmails());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     if (message) {
@@ -248,32 +251,33 @@ function EmailManagement() {
 
       <style jsx>{`
         .em-root { display: flex; flex-direction: column; gap: 14px; }
-        .em-info { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; }
+        .em-info { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border-radius: 8px; }
         .em-info-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
         .em-info-text { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
         .em-info-text strong { color: var(--text-primary); }
 
         .em-input-wrapper { position: relative; display: flex; align-items: center; }
         .em-input-icon { position: absolute; left: 12px; color: var(--text-tertiary); pointer-events: none; }
-        .em-input { width: 100%; padding: 10px 12px 10px 34px; border-radius: 10px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border-primary); color: var(--text-primary); outline: none; font-family: var(--font-sans); transition: border-color 0.2s; }
+        .em-input { width: 100%; min-height: 40px; padding: 10px 12px 10px 34px; border-radius: 8px; font-size: 12px; background: var(--bg-secondary); border: 1px solid var(--border-primary); color: var(--text-primary); outline: none; font-family: inherit; transition: border-color 0.15s; }
         .em-input:focus { border-color: var(--accent-blue); }
         .em-input::placeholder { color: var(--text-tertiary); }
 
-        .em-add-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 10px; font-size: 12px; font-weight: 700; font-family: var(--font-sans); border: none; cursor: pointer; background: var(--gradient-primary); color: #fff; box-shadow: var(--shadow-glow-blue); transition: all 0.2s; flex-shrink: 0; }
-        .em-add-btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .em-add-btn { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 10px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; font-family: inherit; border: none; cursor: pointer; background: var(--accent-blue); color: #fff; transition: opacity 0.15s; flex-shrink: 0; }
+        .em-add-btn:hover:not(:disabled) { opacity: 0.9; }
         .em-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .em-msg { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; font-size: 12px; font-weight: 500; }
+        .em-msg { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; }
         .em-msg-success { background: rgba(16, 185, 129, 0.08); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.15); }
         .em-msg-error { background: rgba(244, 63, 94, 0.08); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.15); }
 
-        .em-list { display: flex; flex-direction: column; gap: 2px; }
+        .em-list { display: flex; flex-direction: column; border:1px solid var(--border-secondary);border-radius:8px;overflow:hidden; }
         .em-loading, .em-empty { padding: 24px; text-align: center; font-size: 12px; color: var(--text-tertiary); display: flex; align-items: center; justify-content: center; gap: 8px; }
 
-        .em-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; transition: background 0.15s; }
+        .em-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom:1px solid var(--border-secondary); transition: background 0.15s; }
+        .em-item:last-child { border-bottom:0; }
         .em-item:hover { background: var(--bg-card-hover); }
 
-        .em-item-avatar { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet)); color: #fff; flex-shrink: 0; }
+        .em-item-avatar { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; background: var(--accent-blue-light); color: var(--accent-blue); border:1px solid var(--border-primary); flex-shrink: 0; }
 
         .em-item-info { flex: 1; min-width: 0; }
         .em-item-email { font-size: 13px; font-weight: 600; color: var(--text-primary); }
@@ -300,8 +304,8 @@ function EmailManagement() {
 export default function ConfiguracoesPage() {
   return (
     <div className="cf-root">
-      <div className="cf-hero"><div className="cf-hero-grid"/><div className="cf-hero-orb cf-hero-orb-1"/><div className="cf-hero-orb cf-hero-orb-2"/>
-        <div className="cf-hero-content"><div className="cf-hero-left"><div className="cf-hero-icon"><Settings size={24} color="#fff"/></div><div><h1 className="cf-hero-title">Configurações</h1><p className="cf-hero-sub">Preferências e personalização</p></div></div></div>
+      <div className="cf-page-header">
+        <div className="cf-header-content"><div className="cf-header-left"><div><h1 className="cf-title">Configurações</h1><p className="cf-subtitle">Preferências e personalização</p></div></div></div>
       </div>
       <div className="cf-body"><div className="cf-main">
         {/* ── Email Management Section ── */}
@@ -349,43 +353,39 @@ export default function ConfiguracoesPage() {
         <div className="cf-info"><p>Versão: <strong>2.4.1</strong></p><p>Ambiente: <strong>Produção</strong></p><p>Última atualização: <strong>28/05/2026</strong></p></div>
       </div></div></div>
       <style jsx>{`
-        .cf-root{display:flex;flex-direction:column;height:100%;border-radius:16px;overflow:hidden;border:1px solid var(--border-primary);background:var(--bg-card)}
-        .cf-hero{position:relative;flex-shrink:0;overflow:hidden;background:linear-gradient(140deg,#080C18,#0F1629 40%,#0D0B22);border-bottom:1px solid rgba(255,255,255,.05);padding:28px 32px}
-        .cf-hero-grid{position:absolute;inset:0;opacity:.03;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:40px 40px}
-        .cf-hero-orb{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none}
-        .cf-hero-orb-1{width:250px;height:250px;background:rgba(100,116,139,.18);top:-80px;right:15%;animation:cfO 8s ease-in-out infinite}
-        .cf-hero-orb-2{width:180px;height:180px;background:rgba(148,163,184,.12);bottom:-60px;left:25%;animation:cfO 11s ease-in-out infinite reverse}
-        @keyframes cfO{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
-        .cf-hero-content{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between}
-        .cf-hero-left{display:flex;align-items:center;gap:16px}
-        .cf-hero-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#64748B,#94A3B8);box-shadow:0 8px 28px rgba(100,116,139,.35),inset 0 1px 0 rgba(255,255,255,.2)}
-        .cf-hero-title{font-size:20px;font-weight:800;color:#F1F5F9}.cf-hero-sub{font-size:13px;color:rgba(148,163,184,.65);margin-top:2px}
-        .cf-body{flex:1;display:flex;overflow:hidden}.cf-main{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:16px}
-        .cf-section{border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);overflow:hidden}
-        .cf-section-header{display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border-secondary)}
-        .cf-section-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-        .cf-section-title{font-size:14px;font-weight:700;color:var(--text-primary)}.cf-section-desc{font-size:11px;color:var(--text-tertiary);margin-top:1px}
-        .cf-section-body{padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+        .cf-root{display:flex;flex-direction:column;gap:24px;min-width:0}
+        .cf-page-header{flex-shrink:0}
+        .cf-header-content{display:flex;align-items:flex-end;justify-content:space-between}
+        .cf-header-left{display:flex;align-items:center}
+        .cf-title{font-size:32px;line-height:36px;font-weight:500;color:var(--text-primary);letter-spacing:-.02em}.cf-subtitle{font-size:14px;color:var(--text-tertiary);margin-top:6px}
+        .cf-body{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px;align-items:start}.cf-main{min-width:0;display:flex;flex-direction:column;gap:24px}
+        .cf-section{border-radius:24px;background:var(--bg-card);border:1px solid var(--border-primary);overflow:hidden}
+        .cf-section-header{display:flex;align-items:center;gap:12px;padding:20px 24px;border-bottom:1px solid var(--border-secondary)}
+        .cf-section-icon{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .cf-section-title{font-size:15px;font-weight:600;color:var(--text-primary)}.cf-section-desc{font-size:12px;color:var(--text-tertiary);margin-top:2px}
+        .cf-section-body{padding:20px 24px;display:flex;flex-direction:column;gap:14px}
         .cf-field{display:flex;align-items:center;gap:12px}
-        .cf-field label{font-size:11px;font-weight:700;color:var(--text-tertiary);width:140px;flex-shrink:0;text-transform:uppercase;letter-spacing:.05em}
-        .cf-field input{flex:1;padding:8px 12px;border-radius:8px;font-size:12px;background:var(--bg-card);border:1px solid var(--border-primary);color:var(--text-primary);outline:none}
+        .cf-field label{font-size:12px;font-weight:600;color:var(--text-secondary);width:140px;flex-shrink:0}
+        .cf-field input{flex:1;min-height:40px;padding:8px 12px;border-radius:8px;font-size:12px;background:var(--bg-secondary);border:1px solid var(--border-primary);color:var(--text-primary);outline:none}
         .cf-toggle{display:flex;align-items:center;justify-content:space-between}
         .cf-toggle span{font-size:12px;color:var(--text-secondary)}
         .cf-switch{width:40px;height:22px;border-radius:11px;background:var(--border-secondary);position:relative;cursor:pointer;transition:background .2s}
         .cf-switch.on{background:var(--accent-emerald)}.cf-knob{width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s}
         .cf-switch.on .cf-knob{transform:translateX(18px)}
         .cf-themes{display:flex;gap:8px}
-        .cf-theme-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border-secondary);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:all .15s}
+        .cf-theme-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border-primary);background:var(--bg-secondary);color:var(--text-secondary);cursor:pointer;transition:background .15s,color .15s,border-color .15s}
         .cf-theme-btn:hover{border-color:var(--accent-blue);color:var(--accent-blue)}
         .cf-theme-btn.active{background:var(--accent-blue);color:#fff;border-color:var(--accent-blue)}
-        .cf-sidebar{width:260px;flex-shrink:0;border-left:1px solid var(--border-primary);background:var(--bg-card);overflow-y:auto}
-        .cf-sb-section{padding:20px}.cf-sb-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-tertiary);margin-bottom:14px}
-        .cf-sb-divider{height:1px;margin:0 20px;background:var(--border-secondary)}
+        .cf-sidebar{width:100%;border:1px solid var(--border-primary);border-radius:24px;background:var(--bg-card);overflow:hidden;position:sticky;top:0}
+        .cf-sb-section{padding:24px}.cf-sb-title{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:16px}
+        .cf-sb-divider{height:1px;margin:0 24px;background:var(--border-secondary)}
         .cf-nav{display:flex;flex-direction:column;gap:4px}
         .cf-nav-item{padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;color:var(--text-secondary);text-decoration:none;transition:all .15s}
         .cf-nav-item:hover{background:var(--bg-secondary);color:var(--text-primary)}
         .cf-nav-active{background:var(--accent-blue-light);color:var(--accent-blue) !important}
         .cf-info{display:flex;flex-direction:column;gap:6px}.cf-info p{font-size:11px;color:var(--text-tertiary)}.cf-info strong{color:var(--text-primary)}
+        @media (max-width:1000px){.cf-body{grid-template-columns:1fr}.cf-sidebar{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.cf-sb-divider{display:none}.cf-sb-section+.cf-sb-section{border-left:1px solid var(--border-secondary)}}
+        @media (max-width:640px){.cf-sidebar{display:block}.cf-sb-section+.cf-sb-section{border-left:0}.cf-sb-divider{display:block}.cf-field{align-items:stretch;flex-direction:column;gap:6px}.cf-field label{width:auto}.cf-themes{flex-wrap:wrap}.cf-section-header,.cf-section-body{padding-left:18px;padding-right:18px}.cf-title{font-size:28px;line-height:34px}}
       `}</style>
     </div>
   );

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Kanban, Loader2, WifiOff, RefreshCw, Trash2, Users, Calendar, ChevronDown
+  Loader2, WifiOff, RefreshCw, Trash2, Users, Calendar, ChevronDown
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
@@ -28,10 +28,10 @@ interface KanbanColumn {
 }
 
 const typeColor: Record<string, { bg: string; color: string }> = {
-  'Story': { bg: 'rgba(34,197,94,0.1)', color: '#4ADE80' },
-  'Bug': { bg: 'rgba(244,63,94,0.1)', color: '#FB7185' },
-  'Task': { bg: 'rgba(59,130,246,0.1)', color: '#60A5FA' },
-  'Sub-task': { bg: 'rgba(139,92,246,0.1)', color: '#A78BFA' },
+  'Story': { bg: 'var(--accent-emerald-light)', color: 'var(--accent-green-soft)' },
+  'Bug': { bg: 'var(--accent-rose-light)', color: 'var(--accent-rose-soft)' },
+  'Task': { bg: 'var(--accent-blue-light)', color: 'var(--accent-blue-soft)' },
+  'Sub-task': { bg: 'var(--accent-violet-light)', color: 'var(--accent-violet-soft)' },
 };
 
 export default function KanbanPage() {
@@ -94,13 +94,13 @@ export default function KanbanPage() {
       }
 
       const columnConfig: { title: string; color: string; bgColor: string; match: string[] }[] = [
-        { title: 'Backlog', color: '#94A3B8', bgColor: 'rgba(100,116,139,0.06)', match: ['Backlog', 'Open'] },
-        { title: 'To Do', color: '#818CF8', bgColor: 'rgba(99,102,241,0.06)', match: ['Para Fazer', 'To Do', 'A Fazer', 'Selected for Development'] },
-        { title: 'In Progress', color: '#3B82F6', bgColor: 'rgba(59,130,246,0.06)', match: ['Em Andamento', 'In Progress', 'Em andamento'] },
-        { title: 'Refinamento', color: '#A78BFA', bgColor: 'rgba(139,92,246,0.06)', match: ['Refinamento', 'Refinement'] },
-        { title: 'Code Review', color: '#F59E0B', bgColor: 'rgba(245,158,11,0.06)', match: ['Code Review', 'Revisão', 'Review'] },
-        { title: 'QA', color: '#F97316', bgColor: 'rgba(249,115,22,0.06)', match: ['QA', 'Teste', 'Testing'] },
-        { title: 'Done', color: '#4ADE80', bgColor: 'rgba(34,197,94,0.06)', match: ['Concluído', 'Done', 'Closed', 'Resolved', 'Concluido'] },
+        { title: 'Backlog', color: 'var(--text-secondary)', bgColor: 'var(--bg-secondary)', match: ['Backlog', 'Open'] },
+        { title: 'To Do', color: 'var(--accent-indigo-soft)', bgColor: 'var(--accent-violet-light)', match: ['Para Fazer', 'To Do', 'A Fazer', 'Selected for Development'] },
+        { title: 'In Progress', color: 'var(--accent-blue)', bgColor: 'var(--accent-blue-light)', match: ['Em Andamento', 'In Progress', 'Em andamento'] },
+        { title: 'Refinamento', color: 'var(--accent-violet-soft)', bgColor: 'var(--accent-violet-light)', match: ['Refinamento', 'Refinement'] },
+        { title: 'Code Review', color: 'var(--accent-amber)', bgColor: 'var(--accent-amber-light)', match: ['Code Review', 'Revisão', 'Review'] },
+        { title: 'QA', color: 'var(--accent-orange)', bgColor: 'var(--accent-amber-light)', match: ['QA', 'Teste', 'Testing'] },
+        { title: 'Done', color: 'var(--accent-green-soft)', bgColor: 'var(--accent-emerald-light)', match: ['Concluído', 'Done', 'Closed', 'Resolved', 'Concluido'] },
       ];
 
       const result: KanbanColumn[] = [];
@@ -122,7 +122,7 @@ export default function KanbanPage() {
 
       for (const [status, items] of statusGroups) {
         if (!used.has(status)) {
-          result.push({ title: status, id: status, color: '#818CF8', bgColor: 'rgba(99,102,241,0.06)', statusCategory: status, items });
+          result.push({ title: status, id: status, color: 'var(--accent-indigo-soft)', bgColor: 'var(--accent-violet-light)', statusCategory: status, items });
         }
       }
 
@@ -172,7 +172,7 @@ export default function KanbanPage() {
   };
 
   const onDragEnd = async (result: DropResult) => {
-    const { destination, source, draggableId, type } = result;
+    const { destination, source, type } = result;
 
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
@@ -247,22 +247,34 @@ export default function KanbanPage() {
     }
   };
 
-  useEffect(() => { fetchKanban(); }, [fetchKanban]);
+  useEffect(() => {
+    // This effect synchronizes the board with Jira when the screen mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchKanban();
+  }, [fetchKanban]);
 
   // Re-fetch when date range changes (except custom — waits for user to confirm)
   useEffect(() => {
-    if (dateRange !== 'custom') fetchKanban(false, dateRange);
+    if (dateRange !== 'custom') {
+      // This effect synchronizes Jira data with the selected range.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void fetchKanban(false, dateRange);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange]);
 
   // Fix hydration issues with dnd
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    // DnD identifiers must only render after client hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
   if (!mounted) return null;
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4 rounded-[24px] border" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
         <Loader2 size={36} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
         <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando board do Jira...</p>
       </div>
@@ -272,35 +284,32 @@ export default function KanbanPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center space-y-5 max-w-sm">
-          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.08)' }}>
-            <WifiOff size={28} style={{ color: '#FB7185' }} />
+        <div className="w-full max-w-md space-y-5 rounded-[24px] border p-8 text-center" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
+          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'var(--accent-rose-light)' }}>
+            <WifiOff size={28} style={{ color: 'var(--accent-rose-soft)' }} />
           </div>
           <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Erro ao carregar board</p>
           <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>{error}</p>
-          <button onClick={() => fetchKanban()} className="px-5 py-2.5 rounded-xl text-sm font-semibold" style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff' }}>Tentar novamente</button>
+          <button onClick={() => fetchKanban()} className="px-5 py-2.5 text-sm font-semibold" style={{ borderRadius: '8px', background: 'var(--accent-blue)', color: 'var(--text-inverse)', border: '1px solid var(--accent-blue)' }}>Tentar novamente</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.12)' }}>
-            <Kanban size={20} style={{ color: '#A78BFA' }} />
-          </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
           <div>
-            <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 style={{ fontSize: '32px', lineHeight: '36px', fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               Kanban Board
               {syncingJira && <Loader2 size={14} className="animate-spin text-indigo-400" />}
             </h1>
-            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>
+            <p style={{ fontSize: '15px', lineHeight: '24px', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
               {total} issues • {columns.length} colunas • Jira DSMM
               {dateRange !== 'all' && (
-                <span style={{ marginLeft: '6px', color: '#818CF8', fontWeight: 700 }}>
+                <span style={{ marginLeft: '6px', color: 'var(--accent-indigo-soft)', fontWeight: 700 }}>
                   • {dateRange === 'custom' ? `${customStart}${customEnd ? ` → ${customEnd}` : ''}` : dateRange}
                 </span>
               )}
@@ -310,7 +319,7 @@ export default function KanbanPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {/* Date filter */}
           <div style={{ position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: '12px', padding: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1px', background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '8px', padding: '4px', overflowX: 'auto' }}>
               <Calendar size={13} style={{ color: 'var(--text-tertiary)', margin: '0 6px' }} />
               {([
                 { value: 'all',  label: 'Todos' },
@@ -326,7 +335,7 @@ export default function KanbanPage() {
                     if (opt.value === 'custom') setShowCustomPicker(p => !p);
                     else setShowCustomPicker(false);
                   }}
-                  style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '4px', background: dateRange === opt.value ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : 'transparent', color: dateRange === opt.value ? '#fff' : 'var(--text-tertiary)' }}
+                  style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', background: dateRange === opt.value ? 'var(--accent-indigo)' : 'transparent', color: dateRange === opt.value ? 'var(--text-inverse)' : 'var(--text-tertiary)' }}
                 >
                   {opt.label}
                   {opt.value === 'custom' && <ChevronDown size={11} style={{ transform: showCustomPicker ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />}
@@ -336,7 +345,7 @@ export default function KanbanPage() {
 
             {/* Custom date picker dropdown */}
             {showCustomPicker && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '14px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', minWidth: '260px' }}>
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 50, background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '280px' }}>
                 <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', margin: 0 }}>Período personalizado</p>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <div style={{ flex: 1 }}>
@@ -353,7 +362,7 @@ export default function KanbanPage() {
                 <button
                   onClick={() => { if (customStart) { fetchKanban(false, 'custom', customStart, customEnd); setShowCustomPicker(false); } }}
                   disabled={!customStart}
-                  style={{ padding: '8px', borderRadius: '10px', border: 'none', cursor: customStart ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: '12px', background: customStart ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : 'var(--bg-secondary)', color: customStart ? '#fff' : 'var(--text-tertiary)', transition: 'all 0.15s' }}
+                  style={{ padding: '8px', borderRadius: '8px', border: `1px solid ${customStart ? 'var(--accent-indigo)' : 'var(--border-primary)'}`, cursor: customStart ? 'pointer' : 'not-allowed', fontWeight: 700, fontSize: '12px', background: customStart ? 'var(--accent-indigo)' : 'var(--bg-secondary)', color: customStart ? 'var(--text-inverse)' : 'var(--text-tertiary)' }}
                 >
                   Aplicar filtro
                 </button>
@@ -363,12 +372,12 @@ export default function KanbanPage() {
 
           {/* User filter */}
           {users.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: '12px', padding: '6px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '8px', padding: '6px 10px', overflowX: 'auto' }}>
               <Users size={13} style={{ color: 'var(--text-tertiary)' }} />
               <button
                 onClick={() => setSelectedUser(null)}
                 title="Todos"
-                style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', transition: 'all 0.15s', background: selectedUser === null ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : 'transparent', color: selectedUser === null ? '#fff' : 'var(--text-tertiary)' }}
+                style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: selectedUser === null ? 'var(--accent-indigo)' : 'transparent', color: selectedUser === null ? 'var(--text-inverse)' : 'var(--text-tertiary)' }}
               >
                 Todos
               </button>
@@ -380,21 +389,21 @@ export default function KanbanPage() {
                     key={u.displayName}
                     onClick={() => setSelectedUser(isActive ? null : u.displayName)}
                     title={u.displayName}
-                    style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '3px 8px 3px 4px', borderRadius: '8px', border: isActive ? '2px solid #6366F1' : '2px solid transparent', cursor: 'pointer', transition: 'all 0.15s', background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '3px 8px 3px 4px', borderRadius: '8px', border: isActive ? '2px solid var(--accent-indigo)' : '2px solid transparent', cursor: 'pointer', background: isActive ? 'var(--accent-violet-light)' : 'transparent' }}
                   >
                     {u.avatar ? (
                       <img src={u.avatar} alt={u.displayName} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }} />
                     ) : (
-                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 800, color: '#fff' }}>{initials}</div>
+                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'var(--accent-indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 800, color: 'var(--text-inverse)' }}>{initials}</div>
                     )}
-                    <span style={{ fontSize: '11px', fontWeight: isActive ? 700 : 500, color: isActive ? '#818CF8' : 'var(--text-secondary)', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName.split(' ')[0]}</span>
+                    <span style={{ fontSize: '11px', fontWeight: isActive ? 700 : 500, color: isActive ? 'var(--accent-indigo-soft)' : 'var(--text-secondary)', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName.split(' ')[0]}</span>
                   </button>
                 );
               })}
             </div>
           )}
 
-          <button onClick={() => fetchKanban(true)} disabled={refreshing || syncingJira} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <button onClick={() => fetchKanban(true)} disabled={refreshing || syncingJira} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Atualizar
           </button>
         </div>
@@ -404,20 +413,20 @@ export default function KanbanPage() {
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="board" direction="horizontal" type="COLUMN">
           {(provided) => (
-            <div ref={provided.innerRef} {...provided.droppableProps} style={{ display: 'flex', gap: '14px', overflowX: 'auto', flex: 1, paddingBottom: '12px' }}>
+            <div ref={provided.innerRef} {...provided.droppableProps} style={{ display: 'flex', gap: '24px', overflowX: 'auto', flex: 1, paddingBottom: '12px' }}>
               {columns.map((col, index) => (
                 <Draggable key={col.id} draggableId={col.id} index={index}>
                   {(providedCol) => (
                     <div ref={providedCol.innerRef} {...providedCol.draggableProps} {...providedCol.dragHandleProps}
-                      style={{ ...providedCol.draggableProps.style, minWidth: '280px', maxWidth: '320px', flex: '1 0 280px', display: 'flex', flexDirection: 'column', borderRadius: '16px', background: col.bgColor, border: '1px solid var(--border-secondary)', overflow: 'hidden' }}>
+                      style={{ ...providedCol.draggableProps.style, minWidth: '280px', maxWidth: '340px', flex: '1 0 280px', display: 'flex', flexDirection: 'column', borderRadius: '24px', background: col.bgColor, border: '1px solid var(--border-primary)', overflow: 'hidden' }}>
                       
                       {/* Column header */}
-                      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `2px solid ${col.color}20` }}>
+                      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-secondary)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: col.color }} />
                           <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: col.color }}>{col.title}</span>
                         </div>
-                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', background: `${col.color}15`, color: col.color }}>
+                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px', background: 'var(--bg-card-solid)', border: '1px solid var(--border-secondary)', color: col.color }}>
                           {selectedUser ? col.items.filter(i => i.fields.assignee?.displayName === selectedUser).length : col.items.length}
                         </span>
                       </div>
@@ -437,11 +446,11 @@ export default function KanbanPage() {
                                   {(providedCard, snapshot) => (
                                     <div ref={providedCard.innerRef} {...providedCard.draggableProps} {...providedCard.dragHandleProps} style={{ ...providedCard.draggableProps.style, opacity: snapshot.isDragging ? 0.8 : 1 }}>
                                       <Link href={`/dashboard/consultar-demanda?key=${issue.key}`}
-                                        style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', textDecoration: 'none', transition: 'box-shadow 0.15s', cursor: 'grab', display: 'block', boxShadow: snapshot.isDragging ? '0 8px 24px rgba(0,0,0,0.15)' : 'none' }}>
+                                        style={{ padding: '16px', borderRadius: '16px', background: 'var(--bg-card-solid)', border: `1px solid ${snapshot.isDragging ? 'var(--accent-indigo)' : 'var(--border-primary)'}`, textDecoration: 'none', cursor: 'grab', display: 'block' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, color: '#818CF8' }}>{issue.key}</span>
-                                            <button onClick={(e) => handleDelete(e, issue.key)} disabled={deletingKey === issue.key} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FB7185', padding: 0, display: 'flex', opacity: deletingKey === issue.key ? 0.5 : 1 }}>
+                                            <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 800, color: 'var(--accent-indigo-soft)' }}>{issue.key}</span>
+                                            <button onClick={(e) => handleDelete(e, issue.key)} disabled={deletingKey === issue.key} aria-label={`Excluir ${issue.key}`} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-rose-soft)', padding: 0, display: 'flex', opacity: deletingKey === issue.key ? 0.5 : 1 }}>
                                               {deletingKey === issue.key ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                                             </button>
                                           </div>
@@ -451,7 +460,7 @@ export default function KanbanPage() {
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                           {issue.fields.assignee ? (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                              <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 800, color: '#fff' }}>
+                                              <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent-indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 800, color: 'var(--text-inverse)' }}>
                                                 {issue.fields.assignee.displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                                               </div>
                                               <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{issue.fields.assignee.displayName}</span>
@@ -459,7 +468,7 @@ export default function KanbanPage() {
                                           ) : (
                                             <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Sem responsável</span>
                                           )}
-                                          <span style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.08)', color: '#FBBF24' }}>{issue.fields.priority.name}</span>
+                                          <span style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px', borderRadius: '4px', background: 'var(--accent-amber-light)', color: 'var(--accent-amber-soft)' }}>{issue.fields.priority.name}</span>
                                         </div>
                                       </Link>
                                     </div>

@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Shield, CheckCircle2, AlertTriangle, Clock, Target, Loader2, WifiOff, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Clock, Loader2, WifiOff, RefreshCw } from 'lucide-react';
+import { TickCircle } from 'iconsax-react';
+import DataModeTag from '@/components/ui/DataModeTag';
 
 interface SlaItem { name: string; target: string; actual: string; compliance: number; status: string; }
 
@@ -69,7 +71,10 @@ export default function SlaPage() {
     finally { setLoading(false); setRefreshing(false); }
   }
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => void fetchData());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   if (loading) {
     return (
@@ -86,7 +91,7 @@ export default function SlaPage() {
         <div className="text-center space-y-5 max-w-sm">
           <WifiOff size={28} style={{ color: '#FB7185' }} />
           <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Erro ao carregar SLA</p>
-          <button onClick={() => fetchData()} style={{ padding: '8px 20px', borderRadius: '12px', background: 'linear-gradient(135deg, #10B981, #22C55E)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Tentar novamente</button>
+          <button onClick={() => fetchData()} style={{ padding: '9px 18px', borderRadius: '8px', background: 'var(--accent-emerald)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Tentar novamente</button>
         </div>
       </div>
     );
@@ -96,15 +101,13 @@ export default function SlaPage() {
 
   return (
     <div className="sla-root">
-      <div className="sla-hero">
-        <div className="sla-hero-grid" /><div className="sla-hero-orb sla-hero-orb-1" /><div className="sla-hero-orb sla-hero-orb-2" />
-        <div className="sla-hero-content">
-          <div className="sla-hero-left">
-            <div className="sla-hero-icon"><Shield size={24} color="#fff" /></div>
-            <div><h1 className="sla-hero-title">SLA / Contratos</h1><p className="sla-hero-sub">Dados reais do Jira — {mode === 'live' ? '🟢 Live' : mode === 'cached' ? '🔵 Cache' : '🟡 Demo'}</p></div>
+      <div className="sla-page-header">
+        <div className="sla-header-content">
+          <div className="sla-header-left">
+            <div><h1 className="sla-title">SLA / Contratos</h1><p className="sla-subtitle">Dados reais do Jira — <DataModeTag mode={mode} /></p></div>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button onClick={() => fetchData(true)} disabled={refreshing} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '999px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(148,163,184,0.6)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+            <button className="sla-refresh" onClick={() => fetchData(true)} disabled={refreshing}>
               <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Atualizar
             </button>
             <div className="sla-pill">{avgCompliance}% média geral</div>
@@ -138,42 +141,44 @@ export default function SlaPage() {
             {slaData.filter(s => s.compliance < 90).map(s => (
               <div key={s.name} className="sla-alert"><AlertTriangle size={12} style={{ color: 'var(--accent-amber)' }} /><span>{s.name}: {s.compliance}%</span></div>
             ))}
-            {slaData.filter(s => s.compliance < 90).length === 0 && <p className="sla-sb-empty">Todos os SLAs estão dentro da meta ✓</p>}
+            {slaData.filter(s => s.compliance < 90).length === 0 && (
+              <p className="sla-sb-empty" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <TickCircle size={13} variant="Bold" color="#22C55E" aria-hidden="true" />
+                Todos os SLAs estão dentro da meta
+              </p>
+            )}
           </div>
         </div>
       </div>
       <style jsx>{`
-        .sla-root{display:flex;flex-direction:column;height:100%;border-radius:16px;overflow:hidden;border:1px solid var(--border-primary);background:var(--bg-card)}
-        .sla-hero{position:relative;flex-shrink:0;overflow:hidden;background:linear-gradient(140deg,#080C18,#0D1F15 40%,#0D0B22);border-bottom:1px solid rgba(255,255,255,.05);padding:28px 32px}
-        .sla-hero-grid{position:absolute;inset:0;opacity:.03;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:40px 40px}
-        .sla-hero-orb{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none}
-        .sla-hero-orb-1{width:250px;height:250px;background:rgba(16,185,129,.2);top:-80px;right:15%;animation:slaO 8s ease-in-out infinite}
-        .sla-hero-orb-2{width:180px;height:180px;background:rgba(34,197,94,.14);bottom:-60px;left:25%;animation:slaO 11s ease-in-out infinite reverse}
-        @keyframes slaO{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
-        .sla-hero-content{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
-        .sla-hero-left{display:flex;align-items:center;gap:16px}
-        .sla-hero-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#10B981,#22C55E);box-shadow:0 8px 28px rgba(16,185,129,.35),inset 0 1px 0 rgba(255,255,255,.2)}
-        .sla-hero-title{font-size:20px;font-weight:800;color:#F1F5F9}.sla-hero-sub{font-size:13px;color:rgba(148,163,184,.65);margin-top:2px}
-        .sla-pill{padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:rgba(148,163,184,.6);font-size:11px;font-weight:600}
-        .sla-body{flex:1;display:flex;overflow:hidden}.sla-main{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:10px}
-        .sla-card{padding:18px 20px;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);transition:all .2s}
-        .sla-card:hover{border-color:var(--border-primary);box-shadow:0 4px 16px rgba(0,0,0,.06);transform:translateY(-1px)}
+        .sla-root{display:flex;flex-direction:column;gap:24px;min-width:0}
+        .sla-page-header{flex-shrink:0}
+        .sla-header-content{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px}
+        .sla-header-left{display:flex;align-items:center}
+        .sla-title{font-size:32px;line-height:36px;font-weight:500;color:var(--text-primary);letter-spacing:-.02em}.sla-subtitle{font-size:14px;color:var(--text-tertiary);margin-top:6px}
+        .sla-refresh,.sla-pill{min-height:40px;display:flex;align-items:center;gap:7px;padding:0 14px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border-primary);color:var(--text-secondary);font-size:12px;font-weight:600}
+        .sla-refresh{cursor:pointer;font-family:inherit;transition:background .15s,color .15s}.sla-refresh:hover:not(:disabled){background:var(--bg-secondary);color:var(--text-primary)}.sla-refresh:disabled{opacity:.55;cursor:not-allowed}
+        .sla-body{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px;align-items:start}.sla-main{min-width:0;display:flex;flex-direction:column;gap:12px}
+        .sla-card{padding:20px;border-radius:24px;background:var(--bg-card);border:1px solid var(--border-primary);transition:border-color .15s}
+        .sla-card:hover{border-color:var(--border-focus)}
         .sla-card-top{display:flex;align-items:center;gap:12px}
         .sla-card-status{flex-shrink:0}.sla-card-info{flex:1;min-width:0}
-        .sla-card-name{font-size:14px;font-weight:700;color:var(--text-primary)}
-        .sla-card-meta{display:flex;gap:16px;margin-top:4px;font-size:10px;color:var(--text-tertiary)}
+        .sla-card-name{font-size:14px;font-weight:600;color:var(--text-primary)}
+        .sla-card-meta{display:flex;gap:16px;margin-top:6px;font-size:11px;color:var(--text-tertiary);flex-wrap:wrap}
         .sla-card-meta span{display:flex;align-items:center;gap:3px}
-        .sla-badge{font-size:13px;font-weight:800;padding:4px 12px;border-radius:999px;flex-shrink:0}
+        .sla-badge{font-size:13px;font-weight:700;padding:5px 10px;border-radius:8px;flex-shrink:0}
         .sla-bar{height:4px;border-radius:2px;background:var(--border-secondary);margin-top:12px;overflow:hidden}
         .sla-bar-fill{height:100%;border-radius:2px;transition:width .6s ease}
-        .sla-sidebar{width:260px;flex-shrink:0;border-left:1px solid var(--border-primary);background:var(--bg-card);overflow-y:auto}
-        .sla-sb-section{padding:20px}.sla-sb-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-tertiary);margin-bottom:14px}
-        .sla-sb-divider{height:1px;margin:0 20px;background:var(--border-secondary)}
-        .sla-health-ring{text-align:center;padding:20px;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary)}
-        .sla-health-val{display:block;font-size:36px;font-weight:800;font-variant-numeric:tabular-nums}
+        .sla-sidebar{width:100%;border:1px solid var(--border-primary);border-radius:24px;background:var(--bg-card);overflow:hidden}
+        .sla-sb-section{padding:24px}.sla-sb-title{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:16px}
+        .sla-sb-divider{height:1px;margin:0 24px;background:var(--border-secondary)}
+        .sla-health-ring{text-align:center;padding:20px;border-radius:8px;background:var(--bg-secondary);border:1px solid var(--border-secondary)}
+        .sla-health-val{display:block;font-size:36px;font-weight:500;font-variant-numeric:tabular-nums}
         .sla-health-label{display:block;font-size:11px;color:var(--text-tertiary);margin-top:4px}
         .sla-alert{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);margin-bottom:8px}
         .sla-sb-empty{font-size:11px;color:var(--accent-emerald);font-weight:600}
+        @media (max-width:960px){.sla-body{grid-template-columns:1fr}.sla-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.sla-sb-divider{display:none}.sla-sb-section+.sla-sb-section{border-left:1px solid var(--border-secondary)}}
+        @media (max-width:640px){.sla-header-content>div:last-child{width:100%;flex-wrap:wrap}.sla-sidebar{display:block}.sla-sb-section+.sla-sb-section{border-left:0}.sla-sb-divider{display:block}.sla-card-top{align-items:flex-start;flex-wrap:wrap}.sla-card-info{min-width:calc(100% - 32px)}.sla-badge{margin-left:28px}.sla-title{font-size:28px;line-height:34px}}
       `}</style>
     </div>
   );

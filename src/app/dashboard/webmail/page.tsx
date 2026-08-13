@@ -1,9 +1,10 @@
 'use client';
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from 'react';
 import { 
   Mail, Send, Calendar, RefreshCw, AlertTriangle, Inbox, 
-  Clock, Paperclip, ChevronRight, CheckCircle2, User, Reply, X, Loader2
+  Paperclip, CheckCircle2, Reply, X, Loader2
 } from 'lucide-react';
 
 interface EmailData {
@@ -42,23 +43,19 @@ export default function WebmailPage() {
     setAuthChecking(false);
   }, []);
 
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    if (!creds) return;
-    const interval = setInterval(() => {
-      if (activeTab === 'inbox' || activeTab === 'meetings') {
-        fetchEmails(true); // silent fetch
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [activeTab, creds]);
-
   // Compose State
   const [composeTo, setComposeTo] = useState('');
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{success: boolean; message: string} | null>(null);
+
+  const handleLogout = () => {
+    localStorage.removeItem('webmail_creds');
+    setCreds(null);
+    setEmails([]);
+    setSelectedEmail(null);
+  };
 
   const fetchEmails = async (silent = false) => {
     if (!creds) return;
@@ -75,12 +72,23 @@ export default function WebmailPage() {
         if (!silent) setError(data.error || 'Erro ao carregar e-mails.');
         if (res.status === 401 || data.error?.includes('Faça login')) handleLogout();
       }
-    } catch (err: any) {
+    } catch {
       if (!silent) setError('Erro de conexão com o servidor de e-mail.');
     } finally {
       if (!silent) setLoading(false);
     }
   };
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    if (!creds) return;
+    const interval = setInterval(() => {
+      if (activeTab === 'inbox' || activeTab === 'meetings') {
+        fetchEmails(true); // silent fetch
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab, creds]);
 
   // Initial fetch when creds are available
   useEffect(() => {
@@ -159,7 +167,7 @@ export default function WebmailPage() {
       } else {
         setSendResult({ success: false, message: data.error || 'Erro ao enviar.' });
       }
-    } catch (err) {
+    } catch {
       setSendResult({ success: false, message: 'Erro de conexão.' });
     } finally {
       setSending(false);
@@ -174,13 +182,6 @@ export default function WebmailPage() {
     setCreds(c);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('webmail_creds');
-    setCreds(null);
-    setEmails([]);
-    setSelectedEmail(null);
-  };
-
   const meetings = emails.filter(e => e.hasMeeting);
   const displayList = activeTab === 'meetings' ? meetings : emails;
 
@@ -188,57 +189,67 @@ export default function WebmailPage() {
 
   if (!creds) {
     return (
-      <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ maxWidth: '400px', width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '24px', padding: '40px', textAlign: 'center', boxShadow: '0 24px 48px rgba(0,0,0,0.05)' }}>
-          <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-            <Mail size={40} style={{ color: '#818CF8' }} />
+      <div className="webmail-login-root animate-fade-in">
+        <div className="webmail-login-card">
+          <div className="webmail-login-icon">
+            <Mail size={30} style={{ color: '#818CF8' }} />
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Login no Webmail</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '32px' }}>Conecte sua conta corporativa da Amazon WorkMail para acessar seus e-mails nativamente.</p>
+          <h1 className="webmail-login-title">Login no Webmail</h1>
+          <p className="webmail-login-copy">Conecte sua conta corporativa da Amazon WorkMail para acessar seus e-mails nativamente.</p>
           
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <input type="email" placeholder="Seu e-mail corporativo" value={loginUser} onChange={e => setLoginUser(e.target.value)} required style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
-            <input type="password" placeholder="Sua senha do WorkMail" value={loginPass} onChange={e => setLoginPass(e.target.value)} required style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
-            <button type="submit" style={{ width: '100%', padding: '14px', borderRadius: '12px', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', fontSize: '15px', fontWeight: 700, border: 'none', cursor: 'pointer', marginTop: '8px', boxShadow: '0 4px 12px rgba(59,130,246,0.2)' }}>
+          <form className="webmail-login-form" onSubmit={handleLogin}>
+            <input type="email" placeholder="Seu e-mail corporativo" value={loginUser} onChange={e => setLoginUser(e.target.value)} required />
+            <input type="password" placeholder="Sua senha do WorkMail" value={loginPass} onChange={e => setLoginPass(e.target.value)} required />
+            <button type="submit">
               Conectar Conta
             </button>
           </form>
-          <div style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          <div className="webmail-login-note">
              <AlertTriangle size={12} /> As credenciais ficam salvas localmente no seu navegador.
           </div>
         </div>
+        <style jsx>{`
+          .webmail-login-root { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px 0; }
+          .webmail-login-card { width: 100%; max-width: 440px; padding: 40px; box-sizing: border-box; text-align: center; border-radius: 24px; border: 1px solid var(--border-primary); background: var(--bg-card); }
+          .webmail-login-icon { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; border-radius: 8px; border: 1px solid rgba(99,102,241,0.2); background: rgba(99,102,241,0.1); }
+          .webmail-login-title { margin: 0; color: var(--text-primary); font-size: 32px; font-weight: 500; line-height: 36px; letter-spacing: -.02em; }
+          .webmail-login-copy { margin: 10px 0 28px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+          .webmail-login-form { display: flex; flex-direction: column; gap: 12px; }
+          .webmail-login-form input { width: 100%; height: 44px; padding: 0 14px; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-secondary); color: var(--text-primary); outline: none; font: 400 13px var(--font-sans); }
+          .webmail-login-form input:focus { border-color: #6366F1; }
+          .webmail-login-form button { width: 100%; min-height: 44px; margin-top: 4px; border-radius: 8px; border: 1px solid #3B82F6; background: #3B82F6; color: #fff; font: 700 14px var(--font-sans); cursor: pointer; }
+          .webmail-login-note { margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--text-tertiary); font-size: 11px; }
+          @media (max-width: 520px) { .webmail-login-card { padding: 28px 20px; } .webmail-login-title { font-size: 28px; line-height: 34px; } }
+        `}</style>
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="webmail-root animate-fade-in">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Mail size={24} style={{ color: '#818CF8' }} />
-          </div>
+      <div className="webmail-header">
+        <div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Webmail MovingPay</h1>
-            <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>Amazon WorkMail Integration</p>
+            <h1 className="webmail-title">Webmail MovingPay</h1>
+            <p className="webmail-subtitle">Amazon WorkMail Integration</p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={handleLogout} style={{ padding: '0 16px', height: '40px', borderRadius: '10px', background: 'transparent', border: '1px solid var(--border-primary)', color: 'var(--text-tertiary)', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+        <div className="webmail-header-actions">
+          <button className="webmail-btn webmail-btn-muted" onClick={handleLogout}>
             Desconectar
           </button>
-          <button onClick={() => fetchEmails()} disabled={loading} style={{ padding: '0 16px', height: '40px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <button className="webmail-btn webmail-btn-muted" onClick={() => fetchEmails()} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar
           </button>
-          <button onClick={() => setComposing(true)} style={{ padding: '0 20px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59,130,246,0.2)' }}>
+          <button className="webmail-btn webmail-btn-primary" onClick={() => setComposing(true)}>
             <Send size={14} /> Novo E-mail
           </button>
         </div>
       </div>
 
       {error && (
-        <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.2)', color: '#FB7185', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <div className="webmail-error">
           <AlertTriangle size={18} />
           <div style={{ fontSize: '13px' }}>
             <strong>Erro:</strong> {error}
@@ -249,13 +260,13 @@ export default function WebmailPage() {
       )}
 
       {/* Main Container */}
-      <div style={{ display: 'flex', flex: 1, gap: '20px', overflow: 'hidden' }}>
+      <div className="webmail-main">
         
         {/* Email List */}
-        <div style={{ flex: 1, maxWidth: selectedEmail ? '380px' : '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '16px', overflow: 'hidden', transition: 'all 0.3s', boxShadow: '0 4px 24px rgba(0,0,0,0.02)' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => { setActiveTab('inbox'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: activeTab === 'inbox' ? 'rgba(99,102,241,0.1)' : 'transparent', color: activeTab === 'inbox' ? '#818CF8' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all 0.2s' }}>
+        <div className="webmail-list" style={{ maxWidth: selectedEmail ? '380px' : '100%' }}>
+          <div className="webmail-list-toolbar">
+            <div className="webmail-list-tabs">
+              <button onClick={() => { setActiveTab('inbox'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '8px', background: activeTab === 'inbox' ? 'rgba(99,102,241,0.1)' : 'transparent', color: activeTab === 'inbox' ? '#818CF8' : 'var(--text-secondary)', border: '1px solid transparent', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all 0.2s' }}>
                 <Inbox size={16} /> Caixa de Entrada
                 {emails.filter(e => !e.isRead).length > 0 && (
                   <span style={{ background: '#EF4444', color: '#fff', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', marginLeft: '4px' }}>
@@ -263,11 +274,11 @@ export default function WebmailPage() {
                   </span>
                 )}
               </button>
-              <button onClick={() => { setActiveTab('meetings'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: activeTab === 'meetings' ? 'rgba(139,92,246,0.1)' : 'transparent', color: activeTab === 'meetings' ? '#A78BFA' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all 0.2s' }}>
+              <button onClick={() => { setActiveTab('meetings'); setSelectedEmail(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '8px', background: activeTab === 'meetings' ? 'rgba(139,92,246,0.1)' : 'transparent', color: activeTab === 'meetings' ? '#A78BFA' : 'var(--text-secondary)', border: '1px solid transparent', cursor: 'pointer', fontSize: '13px', fontWeight: 700, transition: 'all 0.2s' }}>
                 <Calendar size={16} /> Reuniões
               </button>
             </div>
-            <span style={{ padding: '2px 8px', background: 'rgba(99,102,241,0.1)', color: '#818CF8', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>{displayList.length} msgs</span>
+            <span style={{ padding: '2px 8px', background: 'rgba(99,102,241,0.1)', color: '#818CF8', borderRadius: '8px', fontSize: '11px', fontWeight: 800 }}>{displayList.length} msgs</span>
           </div>
           
           <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -296,11 +307,11 @@ export default function WebmailPage() {
                   
                   {/* Unread Indicator Dot */}
                   {!email.isRead && (
-                    <div style={{ position: 'absolute', top: '24px', left: '10px', width: '8px', height: '8px', borderRadius: '50%', background: '#3B82F6', boxShadow: '0 0 8px rgba(59,130,246,0.6)' }} />
+                    <div style={{ position: 'absolute', top: '24px', left: '10px', width: '8px', height: '8px', borderRadius: '50%', background: '#3B82F6' }} />
                   )}
 
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', paddingLeft: !email.isRead ? '8px' : '0' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366F1, #A78BFA)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, flexShrink: 0, boxShadow: '0 2px 8px rgba(99,102,241,0.3)', opacity: !email.isRead ? 1 : 0.7 }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#6366F1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, flexShrink: 0, opacity: !email.isRead ? 1 : 0.7 }}>
                       {initial}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -338,10 +349,10 @@ export default function WebmailPage() {
 
         {/* Email Reader */}
         {selectedEmail && (
-          <div className="animate-fade-in" style={{ flex: 2, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.04)' }}>
+          <div className="webmail-reader animate-fade-in">
             <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedEmail.subject}</h2>
+                <h2 style={{ fontSize: '24px', fontWeight: 500, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedEmail.subject}</h2>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button onClick={() => {
                     const to = selectedEmail.from.match(/<([^>]+)>/)?.[1] || selectedEmail.from;
@@ -363,7 +374,7 @@ export default function WebmailPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '18px', fontWeight: 800, boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#3B82F6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '18px', fontWeight: 800 }}>
                   {selectedEmail.from.replace(/<.*>/, '').trim().charAt(0).toUpperCase()}
                 </div>
                 <div>
@@ -388,7 +399,7 @@ export default function WebmailPage() {
                   <iframe 
                     srcDoc={`
                       <style>
-                        body { background-color: transparent !important; color: #e2e8f0 !important; font-family: Inter, system-ui, sans-serif !important; margin: 0; padding: 0; }
+                        body { background-color: transparent !important; color: #e2e8f0 !important; font-family: 'DM Sans', system-ui, sans-serif !important; margin: 0; padding: 0; }
                         a { color: #818CF8 !important; }
                         table, td, div, span, p { background-color: transparent !important; color: inherit !important; }
                       </style>
@@ -402,7 +413,7 @@ export default function WebmailPage() {
                 )}
                 
                 {selectedEmail.hasMeeting && (
-                  <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '12px' }}>
+                  <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#A78BFA', fontWeight: 700, marginBottom: '8px' }}>
                       <Calendar size={18} /> Convite de Reunião Encontrado
                     </div>
@@ -433,8 +444,8 @@ export default function WebmailPage() {
 
       {/* Compose Modal */}
       {composing && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="animate-fade-in" style={{ width: '600px', background: 'var(--bg-card)', borderRadius: '20px', border: '1px solid var(--border-primary)', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,0.4)' }}>
+        <div className="webmail-modal-overlay">
+          <div className="webmail-modal animate-fade-in">
             <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Nova Mensagem</h3>
               <button onClick={() => setComposing(false)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={18}/></button>
@@ -449,23 +460,23 @@ export default function WebmailPage() {
               
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: '6px' }}>Para:</label>
-                <input type="email" value={composeTo} onChange={e => setComposeTo(e.target.value)} placeholder="email@exemplo.com" style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+                <input type="email" value={composeTo} onChange={e => setComposeTo(e.target.value)} placeholder="email@exemplo.com" style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: '6px' }}>Assunto:</label>
-                <input type="text" value={composeSubject} onChange={e => setComposeSubject(e.target.value)} placeholder="Título do e-mail" style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
+                <input type="text" value={composeSubject} onChange={e => setComposeSubject(e.target.value)} placeholder="Título do e-mail" style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: '6px' }}>Mensagem:</label>
-                <textarea value={composeBody} onChange={e => setComposeBody(e.target.value)} placeholder="Escreva sua mensagem aqui..." style={{ width: '100%', height: '160px', padding: '12px 14px', borderRadius: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'none', fontFamily: 'inherit' }} />
+                <textarea value={composeBody} onChange={e => setComposeBody(e.target.value)} placeholder="Escreva sua mensagem aqui..." style={{ width: '100%', height: '160px', padding: '12px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'none', fontFamily: 'inherit' }} />
               </div>
             </div>
 
             <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-secondary)', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: 'var(--bg-secondary)' }}>
-              <button onClick={() => setComposing(false)} style={{ padding: '0 20px', height: '40px', borderRadius: '10px', background: 'transparent', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => setComposing(false)} style={{ padding: '0 20px', height: '40px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
                 Cancelar
               </button>
-              <button onClick={handleSend} disabled={sending || !composeTo || !composeSubject} style={{ padding: '0 24px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: (sending || !composeTo) ? 'not-allowed' : 'pointer', opacity: (sending || !composeTo) ? 0.6 : 1 }}>
+              <button onClick={handleSend} disabled={sending || !composeTo || !composeSubject} style={{ padding: '0 24px', height: '40px', borderRadius: '8px', background: '#3B82F6', color: '#fff', border: '1px solid #3B82F6', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', cursor: (sending || !composeTo) ? 'not-allowed' : 'pointer', opacity: (sending || !composeTo) ? 0.6 : 1 }}>
                 {sending ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>} Enviar
               </button>
             </div>
@@ -473,6 +484,42 @@ export default function WebmailPage() {
         </div>
       )}
 
+      <style jsx>{`
+        .webmail-root { display: flex; flex-direction: column; gap: 24px; min-width: 0; min-height: 0; height: 100%; }
+        .webmail-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; flex-shrink: 0; }
+        .webmail-title { margin: 0; color: var(--text-primary); font-size: 32px; font-weight: 500; line-height: 36px; letter-spacing: -.02em; }
+        .webmail-subtitle { margin: 6px 0 0; color: var(--text-tertiary); font-size: 14px; }
+        .webmail-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .webmail-btn { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border-radius: 8px; font: 600 12px var(--font-sans); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+        .webmail-btn:disabled { opacity: .55; cursor: not-allowed; }
+        .webmail-btn-muted { border: 1px solid var(--border-primary); background: var(--bg-card); color: var(--text-secondary); }
+        .webmail-btn-muted:hover:not(:disabled) { background: var(--bg-secondary); color: var(--text-primary); }
+        .webmail-btn-primary { border: 1px solid #3B82F6; background: #3B82F6; color: #fff; font-weight: 700; }
+        .webmail-btn-primary:hover { background: #6366F1; border-color: #6366F1; }
+        .webmail-error { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 8px; border: 1px solid rgba(244,63,94,0.2); background: rgba(244,63,94,0.1); color: #FB7185; }
+        .webmail-main { display: flex; flex: 1; min-height: 0; gap: 24px; overflow: hidden; }
+        .webmail-list { flex: 1; min-width: 300px; display: flex; flex-direction: column; overflow: hidden; border-radius: 24px; border: 1px solid var(--border-primary); background: var(--bg-card); transition: max-width .2s; }
+        .webmail-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border-secondary); background: var(--bg-secondary); }
+        .webmail-list-tabs { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .webmail-reader { flex: 2; min-width: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 24px; border: 1px solid var(--border-primary); background: var(--bg-card); }
+        .webmail-modal-overlay { position: fixed; inset: 0; z-index: 999; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.6); }
+        .webmail-modal { width: min(600px, 100%); overflow: hidden; border-radius: 24px; border: 1px solid var(--border-primary); background: var(--bg-card); }
+        @media (max-width: 1000px) {
+          .webmail-root { height: auto; }
+          .webmail-main { flex-direction: column; overflow: visible; }
+          .webmail-list { width: 100%; max-width: 100% !important; min-height: 480px; }
+          .webmail-reader { width: 100%; min-height: 600px; }
+        }
+        @media (max-width: 640px) {
+          .webmail-title { font-size: 28px; line-height: 34px; }
+          .webmail-header-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+          .webmail-btn-primary { grid-column: 1 / -1; }
+          .webmail-list-toolbar { align-items: stretch; flex-direction: column; }
+          .webmail-list-tabs { display: grid; grid-template-columns: 1fr 1fr; }
+          .webmail-list-tabs button { justify-content: center !important; }
+          .webmail-modal-overlay { padding: 12px; }
+        }
+      `}</style>
     </div>
   );
 }

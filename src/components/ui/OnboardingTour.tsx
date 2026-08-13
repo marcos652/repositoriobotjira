@@ -1,39 +1,35 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, ChevronRight, ChevronLeft, Sparkles, Rocket } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { BarChart3, ChevronLeft, ChevronRight, Rocket, Search, Sparkles, X } from 'lucide-react';
 
 interface TourStep {
   title: string;
   description: string;
-  emoji: string;
+  icon: LucideIcon;
 }
 
 const TOUR_STEPS: TourStep[] = [
   {
-    emoji: '🚀',
-    title: 'Bem-vindo ao JiraOps!',
-    description: 'Sua central de gestão de demandas integrada com Jira, IA e Slack.',
+    icon: Rocket,
+    title: 'Bem-vindo ao JiraOps',
+    description: 'Sua central de gestão de demandas, com Jira, automações e comunicação em um único espaço.',
   },
   {
-    emoji: '✨',
-    title: 'Criar Demandas com IA',
-    description: 'Use "Nova Demanda" para criar issues automaticamente. O Gemini gera o resumo e descrição para você.',
+    icon: Sparkles,
+    title: 'Crie demandas com apoio de IA',
+    description: 'Em Nova Demanda, você estrutura a solicitação e recebe sugestões para o resumo e a descrição.',
   },
   {
-    emoji: '🔍',
-    title: 'Busca Rápida',
-    description: 'Pressione Ctrl+K (ou Cmd+K) para abrir a busca global e navegar rapidamente.',
+    icon: Search,
+    title: 'Encontre qualquer página',
+    description: 'Pressione Ctrl+K — ou Cmd+K no macOS — para abrir a navegação rápida de qualquer tela.',
   },
   {
-    emoji: '📊',
-    title: 'Métricas em Tempo Real',
-    description: 'O Overview mostra KPIs de suporte e desenvolvimento atualizados automaticamente.',
-  },
-  {
-    emoji: '⌨️',
-    title: 'Atalhos de Teclado',
-    description: 'N = Nova Demanda, S = Buscar Demanda, H = Home. Produtividade máxima!',
+    icon: BarChart3,
+    title: 'Acompanhe o trabalho',
+    description: 'O Overview reúne os indicadores de suporte e desenvolvimento em painéis atualizados.',
   },
 ];
 
@@ -42,125 +38,241 @@ const TOUR_KEY = 'jiraops-onboarding-done';
 export default function OnboardingTour() {
   const [active, setActive] = useState(false);
   const [step, setStep] = useState(0);
+  const nextButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const done = localStorage.getItem(TOUR_KEY);
-    if (!done) {
-      setTimeout(() => setActive(true), 1500);
-    }
+    if (localStorage.getItem(TOUR_KEY)) return;
+    const timer = window.setTimeout(() => setActive(true), 1200);
+    return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (!active) return;
+    nextButtonRef.current?.focus();
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        localStorage.setItem(TOUR_KEY, 'true');
+        setActive(false);
+        return;
+      }
+      if (event.key === 'Tab' && dialogRef.current) {
+        const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (!first || !last) return;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [active]);
+
   const finish = () => {
-    setActive(false);
     localStorage.setItem(TOUR_KEY, 'true');
+    setActive(false);
   };
 
   const next = () => {
-    if (step < TOUR_STEPS.length - 1) setStep(s => s + 1);
+    if (step < TOUR_STEPS.length - 1) setStep((current) => current + 1);
     else finish();
-  };
-
-  const prev = () => {
-    if (step > 0) setStep(s => s - 1);
   };
 
   if (!active) return null;
 
   const currentStep = TOUR_STEPS[step];
+  const StepIcon = currentStep.icon;
 
   return (
-    <div className="animate-backdrop" style={{
-      position: 'fixed', inset: 0, zIndex: 10001,
-      background: 'rgba(0,0,0,0.6)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div className="animate-modal" style={{
-        width: '100%', maxWidth: 440,
-        background: 'var(--bg-card-solid)',
-        border: '1px solid var(--border-primary)',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: 'var(--shadow-xl)',
-        padding: 32,
-        textAlign: 'center',
-      }}>
-        {/* Close */}
-        <button onClick={finish} style={{
-          position: 'absolute', top: 16, right: 16,
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'var(--text-tertiary)', padding: 4,
-        }}>
-          <X size={18} />
+    <div
+      className="animate-backdrop"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10001,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        background: 'var(--bg-overlay)',
+      }}
+    >
+      <section
+        ref={dialogRef}
+        aria-describedby="onboarding-description"
+        aria-labelledby="onboarding-title"
+        aria-modal="true"
+        className="animate-modal"
+        role="dialog"
+        style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: 464,
+          padding: 32,
+          border: '1px solid var(--border-primary)',
+          borderRadius: 'var(--radius-surface)',
+          background: 'var(--bg-card-solid)',
+        }}
+      >
+        <button
+          aria-label="Fechar apresentação"
+          onClick={finish}
+          type="button"
+          style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            display: 'grid',
+            width: 36,
+            height: 36,
+            placeItems: 'center',
+            border: '1px solid var(--border-primary)',
+            borderRadius: 'var(--radius-control)',
+            background: 'var(--bg-secondary)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+          }}
+        >
+          <X aria-hidden="true" size={17} />
         </button>
 
-        {/* Emoji */}
-        <div style={{ fontSize: 48, marginBottom: 16 }}>{currentStep.emoji}</div>
+        <div
+          aria-hidden="true"
+          style={{
+            display: 'grid',
+            width: 48,
+            height: 48,
+            marginBottom: 24,
+            placeItems: 'center',
+            border: '1px solid var(--border-primary)',
+            borderRadius: 12,
+            background: 'var(--accent-blue-light)',
+            color: 'var(--accent-blue)',
+          }}
+        >
+          <StepIcon size={23} />
+        </div>
 
-        {/* Title */}
-        <h2 style={{
-          fontSize: 20, fontWeight: 800, color: 'var(--text-primary)',
-          marginBottom: 8,
-        }}>
+        <p style={{ marginBottom: 6, color: 'var(--text-tertiary)', fontSize: 13, lineHeight: '20px' }}>
+          Passo {step + 1} de {TOUR_STEPS.length}
+        </p>
+        <h2
+          id="onboarding-title"
+          style={{
+            paddingRight: 32,
+            color: 'var(--text-primary)',
+            fontSize: 24,
+            fontWeight: 500,
+            lineHeight: '32px',
+          }}
+        >
           {currentStep.title}
         </h2>
-
-        {/* Description */}
-        <p style={{
-          fontSize: 14, color: 'var(--text-secondary)',
-          lineHeight: 1.6, marginBottom: 24,
-        }}>
+        <p
+          id="onboarding-description"
+          style={{
+            marginTop: 10,
+            color: 'var(--text-secondary)',
+            fontSize: 15,
+            lineHeight: '24px',
+          }}
+        >
           {currentStep.description}
         </p>
 
-        {/* Progress dots */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 24 }}>
-          {TOUR_STEPS.map((_, i) => (
-            <div key={i} style={{
-              width: i === step ? 20 : 6, height: 6,
-              borderRadius: 3,
-              background: i === step ? 'var(--accent-blue)' : 'var(--border-primary)',
-              transition: 'all 0.3s',
-            }} />
+        <div aria-label="Progresso da apresentação" style={{ display: 'flex', gap: 6, marginTop: 24 }}>
+          {TOUR_STEPS.map((item, index) => (
+            <span
+              key={item.title}
+              aria-label={`Passo ${index + 1}${index === step ? ', atual' : ''}`}
+              style={{
+                width: index === step ? 24 : 8,
+                height: 6,
+                borderRadius: 999,
+                background: index === step ? 'var(--accent-blue)' : 'var(--border-primary)',
+              }}
+            />
           ))}
         </div>
 
-        {/* Buttons */}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 28 }}>
           {step > 0 && (
-            <button onClick={prev} style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              padding: '10px 18px', borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-input)', border: '1px solid var(--border-primary)',
-              color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'var(--font-sans)',
-            }}>
-              <ChevronLeft size={14} /> Anterior
+            <button
+              onClick={() => setStep((current) => current - 1)}
+              type="button"
+              style={{
+                display: 'flex',
+                minHeight: 40,
+                alignItems: 'center',
+                gap: 5,
+                padding: '8px 14px',
+                border: '1px solid var(--border-primary)',
+                borderRadius: 'var(--radius-control)',
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 14,
+                fontWeight: 500,
+              }}
+            >
+              <ChevronLeft aria-hidden="true" size={16} /> Anterior
             </button>
           )}
-          <button onClick={next} className="ripple-container" style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '10px 24px', borderRadius: 'var(--radius-md)',
-            background: 'var(--gradient-primary)', border: 'none',
-            color: '#fff', fontSize: 13, fontWeight: 700,
-            cursor: 'pointer', fontFamily: 'var(--font-sans)',
-            boxShadow: 'var(--shadow-glow-blue)',
-          }}>
+          <button
+            ref={nextButtonRef}
+            onClick={next}
+            type="button"
+            style={{
+              display: 'flex',
+              minHeight: 40,
+              alignItems: 'center',
+              gap: 6,
+              marginLeft: 'auto',
+              padding: '8px 16px',
+              border: 0,
+              borderRadius: 'var(--radius-control)',
+              background: 'var(--accent-blue)',
+              color: '#fff',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 14,
+              fontWeight: 500,
+            }}
+          >
             {step < TOUR_STEPS.length - 1 ? (
-              <>Próximo <ChevronRight size={14} /></>
+              <>Próximo <ChevronRight aria-hidden="true" size={16} /></>
             ) : (
-              <>Começar <Rocket size={14} /></>
+              <>Começar <Rocket aria-hidden="true" size={16} /></>
             )}
           </button>
         </div>
 
-        {/* Skip */}
-        <button onClick={finish} style={{
-          marginTop: 16, background: 'none', border: 'none',
-          color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer',
-          fontFamily: 'var(--font-sans)',
-        }}>
-          Pular tour
+        <button
+          onClick={finish}
+          type="button"
+          style={{
+            marginTop: 18,
+            padding: 0,
+            border: 0,
+            background: 'transparent',
+            color: 'var(--text-tertiary)',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-sans)',
+            fontSize: 13,
+          }}
+        >
+          Pular apresentação
         </button>
-      </div>
+      </section>
     </div>
   );
 }

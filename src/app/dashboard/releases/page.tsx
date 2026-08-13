@@ -80,7 +80,10 @@ export default function ReleasesPage() {
     }
   }, []);
 
-  useEffect(() => { loadReleases(); }, [loadReleases]);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => void loadReleases());
+    return () => window.cancelAnimationFrame(frame);
+  }, [loadReleases]);
 
   const totalPRs = tasks.reduce((s, t) => s + t.pullRequests.length, 0);
   const openPRs = tasks.reduce((s, t) => s + t.pullRequests.filter(p => p.status !== 'MERGED' && p.status !== 'DECLINED').length, 0);
@@ -93,8 +96,11 @@ export default function ReleasesPage() {
 
   return (
     <div className="rl-root">
-      <div className="rl-hero"><div className="rl-hero-grid"/><div className="rl-hero-orb rl-hero-orb-1"/><div className="rl-hero-orb rl-hero-orb-2"/>
-        <div className="rl-hero-content"><div className="rl-hero-left"><div className="rl-hero-icon"><GitBranch size={24} color="#fff"/></div><div><h1 className="rl-hero-title">Releases</h1><p className="rl-hero-sub">Tarefas do DSMM com PR vinculado — mesmo painel &ldquo;Desenvolvimento&rdquo; do Jira</p></div></div>
+      <div className="rl-page-header">
+        <div className="rl-header-content">
+          <div className="rl-header-left">
+            <div><h1 className="rl-title">Releases</h1><p className="rl-subtitle">Tarefas do DSMM com PR vinculado — mesmo painel &ldquo;Desenvolvimento&rdquo; do Jira</p></div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {cachedAt && !loading && <span className="rl-cache-hint">{cacheAgeLabel(cachedAt)}</span>}
             <button type="button" className="rl-btn-refresh" onClick={() => loadReleases(true)} disabled={loading || refreshing} title="Atualizar agora (ignora o cache)">
@@ -223,25 +229,19 @@ export default function ReleasesPage() {
         ))}</div>
       </div></div></div>
       <style jsx>{`
-        .rl-root{display:flex;flex-direction:column;height:100%;border-radius:16px;overflow:hidden;border:1px solid var(--border-primary);background:var(--bg-card)}
-        .rl-hero{position:relative;flex-shrink:0;overflow:hidden;background:linear-gradient(140deg,#080C18,#171030 40%,#0D0B22);border-bottom:1px solid rgba(255,255,255,.05);padding:28px 32px}
-        .rl-hero-grid{position:absolute;inset:0;opacity:.03;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:40px 40px}
-        .rl-hero-orb{position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none}
-        .rl-hero-orb-1{width:250px;height:250px;background:rgba(168,85,247,.2);top:-80px;right:15%;animation:rlO 8s ease-in-out infinite}
-        .rl-hero-orb-2{width:180px;height:180px;background:rgba(99,102,241,.14);bottom:-60px;left:25%;animation:rlO 11s ease-in-out infinite reverse}
-        @keyframes rlO{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-15px) scale(1.08)}}
-        .rl-hero-content{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between}
-        .rl-hero-left{display:flex;align-items:center;gap:16px}
-        .rl-hero-icon{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#8B5CF6,#A78BFA);box-shadow:0 8px 28px rgba(139,92,246,.35),inset 0 1px 0 rgba(255,255,255,.2)}
-        .rl-hero-title{font-size:20px;font-weight:800;color:#F1F5F9}.rl-hero-sub{font-size:13px;color:rgba(148,163,184,.65);margin-top:2px}
-        .rl-pill{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:rgba(148,163,184,.6);font-size:11px;font-weight:600;flex-shrink:0}
-        .rl-cache-hint{font-size:11px;color:rgba(148,163,184,.5);font-style:italic;white-space:nowrap}
-        .rl-btn-refresh{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
-        .rl-btn-refresh:hover:not(:disabled){background:rgba(255,255,255,.12);color:#fff}
+        .rl-root{display:flex;flex-direction:column;gap:24px;min-width:0}
+        .rl-page-header{flex-shrink:0}
+        .rl-header-content{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+        .rl-header-left{display:flex;align-items:center}
+        .rl-title{font-size:32px;line-height:36px;font-weight:500;color:var(--text-primary);letter-spacing:-.02em}.rl-subtitle{font-size:14px;color:var(--text-tertiary);margin-top:6px}
+        .rl-pill{min-height:40px;display:flex;align-items:center;gap:6px;padding:0 14px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border-primary);color:var(--text-secondary);font-size:12px;font-weight:600;flex-shrink:0}
+        .rl-cache-hint{font-size:11px;color:var(--text-tertiary);white-space:nowrap}
+        .rl-btn-refresh{width:40px;height:40px;border-radius:8px;border:1px solid var(--border-primary);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s;flex-shrink:0}
+        .rl-btn-refresh:hover:not(:disabled){background:var(--bg-secondary);color:var(--text-primary)}
         .rl-btn-refresh:disabled{opacity:.5;cursor:not-allowed}
-        .rl-body{flex:1;display:flex;overflow:hidden}.rl-main{flex:1;overflow-y:auto;padding:24px 28px}
-        .rl-filters{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-        .rl-filter-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;font-size:11px;font-weight:700;font-family:inherit;border:1px solid var(--border-secondary);background:transparent;color:var(--text-tertiary);cursor:pointer;transition:all .15s}
+        .rl-body{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px;align-items:start}.rl-main{min-width:0}
+        .rl-filters{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;padding:4px;width:fit-content;max-width:100%;background:var(--bg-card);border:1px solid var(--border-primary);border-radius:8px}
+        .rl-filter-btn{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:6px;font-size:11px;font-weight:600;font-family:inherit;border:1px solid transparent;background:transparent;color:var(--text-tertiary);cursor:pointer;transition:background .15s,color .15s,border-color .15s}
         .rl-filter-btn:hover:not(:disabled){background:var(--bg-card-hover);color:var(--text-secondary)}
         .rl-filter-btn.active{background:var(--accent-blue-light);color:var(--accent-blue);border-color:var(--accent-blue)}
         .rl-filter-btn.conflict.active{background:var(--accent-rose-light);color:var(--accent-rose);border-color:var(--accent-rose)}
@@ -249,16 +249,16 @@ export default function ReleasesPage() {
         .rl-filter-hint{font-size:10px;color:var(--text-tertiary);font-style:italic}
         .rl-loading{display:flex;align-items:center;gap:10px;padding:40px;justify-content:center;color:var(--text-tertiary);font-size:13px;text-align:center}
         .rl-spin{animation:rlSpin 1s linear infinite}@keyframes rlSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-        .rl-list{display:flex;flex-direction:column;gap:10px}
-        .rl-card-wrap{border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);overflow:hidden}
-        .rl-card{display:flex;align-items:center;gap:16px;padding:16px 20px;width:100%;background:none;border:none;cursor:pointer;text-align:left;font-family:inherit}
+        .rl-list{display:flex;flex-direction:column;gap:12px}
+        .rl-card-wrap{border-radius:24px;background:var(--bg-card);border:1px solid var(--border-primary);overflow:hidden}
+        .rl-card{display:flex;align-items:center;gap:16px;padding:18px 20px;width:100%;background:none;border:none;cursor:pointer;text-align:left;font-family:inherit}
         .rl-card:hover{background:var(--bg-card-hover)}
         .rl-card-ver{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:var(--accent-blue);min-width:90px;flex-shrink:0}
         .rl-card-info{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
         .rl-card-date{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-tertiary)}
         .rl-card-author{font-size:12px;color:var(--text-primary);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .rl-card-stats{display:flex;align-items:center;gap:12px;font-size:10px;color:var(--text-tertiary);font-weight:600;flex-shrink:0}
-        .rl-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:5px 12px;border-radius:999px;flex-shrink:0;text-transform:uppercase;letter-spacing:.03em}
+        .rl-badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;padding:5px 10px;border-radius:8px;flex-shrink:0;text-transform:uppercase;letter-spacing:.03em}
         .rl-badge-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
         .rl-chevron{color:var(--text-tertiary);flex-shrink:0;transition:transform .2s}
         .rl-chevron.open{transform:rotate(180deg)}
@@ -269,11 +269,13 @@ export default function ReleasesPage() {
         .rl-issue-summary{font-size:12px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .rl-issue-branch{font-size:11px;color:var(--text-tertiary);font-family:monospace;flex-shrink:0}
         .rl-issue-status{font-size:10px;font-weight:700;flex-shrink:0}
-        .rl-sidebar{width:260px;flex-shrink:0;border-left:1px solid var(--border-primary);background:var(--bg-card);overflow-y:auto}
-        .rl-sb-section{padding:20px}.rl-sb-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--text-tertiary);margin-bottom:14px}
-        .rl-sb-divider{height:1px;margin:0 20px;background:var(--border-secondary)}
+        .rl-sidebar{width:100%;border:1px solid var(--border-primary);border-radius:24px;background:var(--bg-card);overflow:hidden}
+        .rl-sb-section{padding:24px}.rl-sb-title{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:16px}
+        .rl-sb-divider{height:1px;margin:0 24px;background:var(--border-secondary)}
         .rl-stats{display:flex;flex-direction:column;gap:10px}
         .rl-stat-item{display:flex;justify-content:space-between}.rl-stat-label{font-size:11px;color:var(--text-secondary)}.rl-stat-val{font-size:13px;font-weight:800;color:var(--text-primary)}
+        @media (max-width:1180px){.rl-body{grid-template-columns:1fr}.rl-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.rl-sb-divider{display:none}.rl-sb-section+.rl-sb-section{border-left:1px solid var(--border-secondary)}}
+        @media (max-width:760px){.rl-header-content>div:last-child{width:100%;flex-wrap:wrap}.rl-card{align-items:flex-start;gap:10px;flex-wrap:wrap}.rl-card-info{order:3;flex-basis:calc(100% - 36px)}.rl-card-stats{margin-left:auto}.rl-badge{order:4;margin-left:100px}.rl-chevron{margin-left:auto}.rl-issues{padding:10px 14px}.rl-issue-row{flex-wrap:wrap}.rl-issue-branch{width:100%;padding-left:22px;overflow:hidden;text-overflow:ellipsis}.rl-sidebar{display:block}.rl-sb-section+.rl-sb-section{border-left:0}.rl-sb-divider{display:block}.rl-title{font-size:28px;line-height:34px}}
       `}</style>
     </div>
   );

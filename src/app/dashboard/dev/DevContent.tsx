@@ -8,6 +8,7 @@ import EditToolbar from '@/components/ui/EditToolbar';
 import { useDragOrder } from '@/hooks/useDragOrder';
 import { useFilters } from '@/contexts/FilterContext';
 import { Sprint, DevMetrics, Issue, DeployRecord } from '@/types';
+import { Cup, Medal, Forbidden2, User, Gps, TickCircle, CloseCircle, Refresh2 } from 'iconsax-react';
 import {
   Clock, Gauge, Zap, Bug, ArrowUpRight, Timer, Ban, Eye, Rocket, GripVertical,
   Loader2, WifiOff, RefreshCw
@@ -103,6 +104,7 @@ export default function DevContent() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [renderTimestamp] = useState(() => Date.now());
 
   const drag = useDragOrder('jiraops-dev-flat-order', DEFAULT_CARDS_ORDER);
 
@@ -153,14 +155,15 @@ export default function DevContent() {
   }
 
   useEffect(() => {
-    fetchData();
+    const frame = window.requestAnimationFrame(() => void fetchData());
+    return () => window.cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.dateRange, filters.customStartDate, filters.customEndDate]);
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <Loader2 size={36} className="animate-spin text-gradient" style={{ color: 'var(--accent-blue)' }} />
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4" role="status">
+        <Loader2 size={36} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
         <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando dados do Jira...</p>
       </div>
     );
@@ -169,15 +172,15 @@ export default function DevContent() {
   if (error || !data) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center space-y-5 max-w-sm">
-          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'var(--accent-rose-light)' }}>
+        <div className="ui-surface text-center space-y-5 max-w-sm p-8" role="alert">
+          <div className="w-14 h-14 rounded-xl mx-auto flex items-center justify-center" style={{ background: 'var(--accent-rose-light)' }}>
             <WifiOff size={28} style={{ color: 'var(--accent-rose)' }} />
           </div>
           <div>
             <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Erro de conexão</p>
             <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>{error || 'Não foi possível carregar os dados'}</p>
           </div>
-          <button onClick={() => fetchData()} className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-105" style={{ background: 'var(--gradient-primary)', color: '#fff' }}>
+          <button onClick={() => fetchData()} className="px-5 py-2.5 rounded-lg text-sm font-medium" style={{ background: 'var(--accent-blue)', color: '#fff' }}>
             Tentar novamente
           </button>
         </div>
@@ -195,7 +198,7 @@ export default function DevContent() {
     (new Date(sprint.endDate).getTime() - new Date(sprint.startDate).getTime()) / 86400000
   );
   const sprintDaysElapsed = Math.ceil(
-    (Date.now() - new Date(sprint.startDate).getTime()) / 86400000
+    (renderTimestamp - new Date(sprint.startDate).getTime()) / 86400000
   );
   const sprintDaysRemaining = Math.max(0, sprintDaysTotal - sprintDaysElapsed);
   const sprintProgressPct = Math.round((sprint.completedPoints / sprint.committedPoints) * 100);
@@ -213,25 +216,29 @@ export default function DevContent() {
     switch (cardId) {
       case 'sprint_banner':
         return (
-          <div className="rounded-2xl border p-6 relative overflow-hidden"
-            style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+          <div className="rounded-[24px] border p-6 relative overflow-hidden"
+            style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="badge badge-blue">Sprint Ativa</span>
                   <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{sprintDaysRemaining} dias restantes</span>
                 </div>
-                <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{sprint.name}</h2>
-                {sprint.goal && <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>🎯 {sprint.goal}</p>}
+                <h2 className="text-2xl leading-8 font-medium" style={{ color: 'var(--text-primary)' }}>{sprint.name}</h2>
+                {sprint.goal && (
+                  <p className="flex items-center gap-1.5 text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    <Gps size={14} variant="Bold" color="#A78BFA" aria-hidden="true" /> {sprint.goal}
+                  </p>
+                )}
               </div>
               <div className="text-right">
-                <p className="text-3xl font-bold text-gradient">{isNaN(sprintProgressPct) ? 0 : sprintProgressPct}%</p>
+                <p className="text-3xl font-medium" style={{ color: 'var(--accent-violet)' }}>{isNaN(sprintProgressPct) ? 0 : sprintProgressPct}%</p>
                 <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{sprint.completedPoints}/{sprint.committedPoints} pontos</p>
               </div>
             </div>
             <div className="w-full h-3 rounded-full" style={{ background: 'var(--border-primary)' }}>
               <div className="h-full rounded-full transition-all duration-1000 relative"
-                style={{ width: `${isNaN(sprintProgressPct) ? 0 : sprintProgressPct}%`, background: 'var(--gradient-primary)' }}>
+                style={{ width: `${isNaN(sprintProgressPct) ? 0 : sprintProgressPct}%`, background: 'var(--accent-blue)' }}>
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 border-white"
                   style={{ background: 'var(--accent-blue)' }} />
               </div>
@@ -244,7 +251,7 @@ export default function DevContent() {
                 { label: 'QA', count: m.qaCount, color: 'var(--accent-amber)', bg: 'var(--accent-amber-light)' },
                 { label: 'Done', count: m.doneCount, color: 'var(--accent-emerald)', bg: 'var(--accent-emerald-light)' },
               ].map((item) => (
-                <div key={item.label} className="text-center p-3 rounded-xl transition-transform hover:scale-105"
+                <div key={item.label} className="text-center p-3 rounded-xl"
                   style={{ background: item.bg }}>
                   <p className="text-2xl font-bold tabular-nums" style={{ color: item.color }}>{item.count}</p>
                   <p className="text-[11px] font-medium mt-1" style={{ color: 'var(--text-secondary)' }}>{item.label}</p>
@@ -336,11 +343,11 @@ export default function DevContent() {
 
       case 'panel_devs':
         return (
-          <div className="rounded-2xl border p-6"
-            style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+          <div className="rounded-[24px] border p-6"
+            style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
             <div className="flex items-center gap-2 mb-5">
               <Eye size={18} style={{ color: 'var(--accent-blue)' }} />
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Atividade dos Devs</h3>
+              <h3 className="text-2xl leading-8 font-medium" style={{ color: 'var(--text-primary)' }}>Atividade dos Devs</h3>
               <span className="badge badge-blue">{m.byAssignee.length} devs</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -348,11 +355,11 @@ export default function DevContent() {
                 const task = dev.currentTask;
                 const sColor = task ? (statusColors[task.status] || 'var(--text-secondary)') : 'var(--text-tertiary)';
                 return (
-                  <div key={dev.email} className="p-4 rounded-xl border transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
+                  <div key={dev.email} className="p-4 rounded-xl border"
                     style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-primary)' }}>
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                        style={{ background: 'var(--gradient-primary)', color: '#fff' }}>
+                        style={{ background: 'var(--accent-indigo)', color: '#fff' }}>
                         {dev.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                       </div>
                       <div className="min-w-0">
@@ -383,15 +390,21 @@ export default function DevContent() {
 
       case 'panel_productivity':
         return (
-          <div className="rounded-2xl border p-5 h-full flex flex-col justify-between"
-            style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+          <div className="rounded-[24px] border p-5 h-full flex flex-col justify-between"
+            style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
             <div>
-              <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>🏆 Produtividade</h4>
+              <h4 className="flex items-center gap-2 text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+                <Cup size={16} variant="Bold" color="#FBBF24" aria-hidden="true" /> Produtividade
+              </h4>
               <div className="space-y-4">
                 {[...m.byAssignee].sort((a, b) => b.completedCount - a.completedCount).slice(0, 4).map((dev, i) => (
                   <div key={dev.email} className="flex items-center justify-between py-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs w-5 text-center font-bold" style={{ color: 'var(--text-tertiary)' }}>{['🥇', '🥈', '🥉', '4º'][i]}</span>
+                      <span className="w-5 flex items-center justify-center text-xs font-bold" style={{ color: 'var(--text-tertiary)' }}>
+                        {['#FBBF24', '#CBD5E1', '#D08C5A'][i]
+                          ? <Medal size={18} variant="Bold" color={['#FBBF24', '#CBD5E1', '#D08C5A'][i]} aria-label={`${i + 1}º lugar`} />
+                          : `${i + 1}º`}
+                      </span>
                       <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{dev.name}</span>
                     </div>
                     <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--accent-blue)' }}>{dev.completedCount}</span>
@@ -404,8 +417,8 @@ export default function DevContent() {
 
       case 'panel_bottlenecks':
         return (
-          <div className="rounded-2xl border p-6" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-            <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>🔍 Análise de Gargalos</h3>
+          <div className="rounded-[24px] border p-6" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
+            <h3 className="text-2xl leading-8 font-medium mb-4" style={{ color: 'var(--text-primary)' }}>Análise de Gargalos</h3>
             <div className="space-y-5">
               {[...bottleneckData].sort((a, b) => b.avgTime - a.avgTime).map((item) => {
                 const maxTime = bottleneckData.reduce((mx, d) => Math.max(mx, d.avgTime), 0);
@@ -435,10 +448,10 @@ export default function DevContent() {
 
       case 'panel_blocked_tasks':
         return (
-          <div className="rounded-2xl border p-6" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+          <div className="rounded-[24px] border p-6" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
             <div className="flex items-center gap-2 mb-4">
               <Ban size={18} style={{ color: 'var(--accent-rose)' }} />
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Tasks Bloqueadas</h3>
+              <h3 className="text-2xl leading-8 font-medium" style={{ color: 'var(--text-primary)' }}>Tasks Bloqueadas</h3>
               <span className="badge badge-rose">{blockedTasks.length}</span>
             </div>
             <div className="space-y-5">
@@ -456,8 +469,12 @@ export default function DevContent() {
                       <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{formatMinutes(task.timeInStatus || 0)}</span>
                     </div>
                     <p className="text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>{task.summary}</p>
-                    <p className="text-xs" style={{ color: 'var(--accent-rose)' }}>⛔ {task.blockedReason}</p>
-                    <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>👤 {task.assignee}</p>
+                    <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--accent-rose)' }}>
+                      <Forbidden2 size={13} variant="Bold" color="#FB7185" aria-hidden="true" /> {task.blockedReason}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                      <User size={13} variant="Bold" color="#64748B" aria-hidden="true" /> {task.assignee}
+                    </p>
                   </div>
                 ))
               )}
@@ -467,10 +484,10 @@ export default function DevContent() {
 
       case 'panel_deploy':
         return (
-          <div className="rounded-2xl border p-6" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+          <div className="rounded-[24px] border p-6" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
             <div className="flex items-center gap-2 mb-5">
               <Rocket size={18} style={{ color: 'var(--accent-violet)' }} />
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Histórico de Deploys</h3>
+              <h3 className="text-2xl leading-8 font-medium" style={{ color: 'var(--text-primary)' }}>Histórico de Deploys</h3>
             </div>
             <div className="table-container">
               <table className="data-table">
@@ -487,7 +504,13 @@ export default function DevContent() {
                       <td><span className="badge badge-blue">{deploy.environment}</span></td>
                       <td>
                         <span className={`badge ${deploy.status === 'success' ? 'badge-emerald' : deploy.status === 'rollback' ? 'badge-amber' : 'badge-rose'}`}>
-                          {deploy.status === 'success' ? '✓ Success' : deploy.status === 'rollback' ? '↩ Rollback' : '✗ Failed'}
+                          {deploy.status === 'success' ? (
+                            <><TickCircle size={12} variant="Bold" aria-hidden="true" /> Success</>
+                          ) : deploy.status === 'rollback' ? (
+                            <><Refresh2 size={12} variant="Bold" aria-hidden="true" /> Rollback</>
+                          ) : (
+                            <><CloseCircle size={12} variant="Bold" aria-hidden="true" /> Failed</>
+                          )}
                         </span>
                       </td>
                       <td className="text-sm">{deploy.author}</td>
@@ -507,12 +530,19 @@ export default function DevContent() {
   };
 
   return (
-    <div className="space-y-16 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
+
+      <div className="ui-page-header">
+        <div>
+          <h1 className="ui-page-title">Desenvolvimento</h1>
+          <p className="ui-page-description">Sprint, fluxo de entrega e saúde da engenharia.</p>
+        </div>
+      </div>
 
       {/* ═══════ TOP BAR: Connection + Edit Mode ═══════ */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-full"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg"
+          style={{ background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)' }}>
           <span className="live-dot" style={{
             background: data.mode === 'live' ? 'var(--accent-emerald)' : data.mode === 'cached' ? 'var(--accent-blue)' : 'var(--accent-amber)',
             boxShadow: data.mode === 'live' ? '0 0 0 0 rgba(16, 185, 129, 0.4)' : data.mode === 'cached' ? '0 0 0 0 rgba(59, 130, 246, 0.4)' : '0 0 0 0 rgba(245, 158, 11, 0.4)',
@@ -526,8 +556,8 @@ export default function DevContent() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => fetchData(true)} disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all hover:scale-105 active:scale-95"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', boxShadow: 'var(--shadow-sm)' }}>
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold"
+            style={{ background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
             Atualizar
           </button>
@@ -545,7 +575,7 @@ export default function DevContent() {
       )}
 
       {/* ═══════ FLAT CARD GRID (6 columns) ═══════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-6 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
         {drag.order.map((cardId, i) => {
           const content = renderCardContent(cardId, i);
           if (!content) return null;

@@ -34,10 +34,10 @@ const TOAST_ICONS = {
 };
 
 const TOAST_COLORS = {
-  success: { bg: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.3)', color: 'var(--accent-emerald)' },
-  error: { bg: 'rgba(244, 63, 94, 0.12)', border: 'rgba(244, 63, 94, 0.3)', color: 'var(--accent-rose)' },
-  warning: { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)', color: 'var(--accent-amber)' },
-  info: { bg: 'rgba(59, 130, 246, 0.12)', border: 'rgba(59, 130, 246, 0.3)', color: 'var(--accent-blue)' },
+  success: { border: 'rgba(16, 185, 129, 0.3)', color: 'var(--accent-emerald)' },
+  error: { border: 'rgba(244, 63, 94, 0.3)', color: 'var(--accent-rose)' },
+  warning: { border: 'rgba(245, 158, 11, 0.3)', color: 'var(--accent-amber)' },
+  info: { border: 'rgba(59, 130, 246, 0.3)', color: 'var(--accent-blue)' },
 };
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) {
@@ -56,16 +56,16 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
   return (
     <div
       className={exiting ? 'toast-exit' : 'toast-enter'}
+      aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+      role={toast.type === 'error' ? 'alert' : 'status'}
       style={{
         display: 'flex',
         alignItems: 'flex-start',
         gap: 12,
         padding: '14px 16px',
-        borderRadius: 'var(--radius-md)',
+        borderRadius: 'var(--radius-surface)',
         background: 'var(--bg-card-solid)',
         border: `1px solid ${colors.border}`,
-        boxShadow: 'var(--shadow-lg)',
-        backdropFilter: 'blur(16px)',
         maxWidth: 380,
         width: '100%',
         position: 'relative',
@@ -86,7 +86,9 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
         )}
       </div>
       <button
+        aria-label="Fechar notificação"
         onClick={() => { setExiting(true); setTimeout(onRemove, 250); }}
+        type="button"
         style={{
           background: 'none', border: 'none', color: 'var(--text-tertiary)',
           cursor: 'pointer', padding: 2, flexShrink: 0,

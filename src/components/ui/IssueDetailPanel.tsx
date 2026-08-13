@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X, User, Calendar, Tag, Flag, MessageSquare, Clock,
-  ExternalLink, Loader2, AlertTriangle, CheckCircle2, Circle
+  ExternalLink, Loader2, AlertTriangle, CheckCircle2
 } from 'lucide-react';
 
 interface IssueComment {
@@ -78,24 +78,64 @@ export default function IssueDetailPanel({ issueKey, onClose }: IssueDetailPanel
   const [issue, setIssue] = useState<IssueData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/issue/${issueKey}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Falha ao carregar');
-        return res.json();
-      })
-      .then(data => { setIssue(data); setLoading(false); })
-      .catch(err => { setError(err.message); setLoading(false); });
+    const controller = new AbortController();
+    const frame = window.requestAnimationFrame(() => {
+      setLoading(true);
+      setError(null);
+      fetch(`/api/issue/${issueKey}`, { signal: controller.signal })
+        .then(res => {
+          if (!res.ok) throw new Error('Falha ao carregar');
+          return res.json();
+        })
+        .then(data => { setIssue(data); setLoading(false); })
+        .catch((requestError: unknown) => {
+          if (requestError instanceof DOMException && requestError.name === 'AbortError') return;
+          setError(requestError instanceof Error ? requestError.message : 'Falha ao carregar');
+          setLoading(false);
+        });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      controller.abort();
+    };
   }, [issueKey]);
 
   // Close on Escape
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const previouslyFocused = document.activeElement;
+    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.offsetParent !== null);
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', handler);
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
   }, [onClose]);
 
   const f = issue?.fields;
@@ -110,19 +150,24 @@ export default function IssueDetailPanel({ issueKey, onClose }: IssueDetailPanel
       {/* Overlay */}
       <div
         className="fixed inset-0 z-50 transition-opacity"
+        aria-hidden="true"
         style={{ background: 'var(--bg-overlay)' }}
         onClick={onClose}
       />
 
       {/* Panel */}
       <div
+        ref={panelRef}
         className="fixed right-0 top-0 h-screen z-50 flex flex-col issue-panel-slide-in"
+        aria-busy={loading}
+        aria-label={`Detalhes da demanda ${issueKey}`}
+        aria-modal="true"
+        role="dialog"
         style={{
           width: '560px',
-          maxWidth: '90vw',
-          background: 'var(--bg-card)',
+          maxWidth: 'min(100vw, 560px)',
+          background: 'var(--bg-card-solid)',
           borderLeft: '1px solid var(--border-primary)',
-          boxShadow: '-8px 0 32px rgba(0,0,0,0.12)',
         }}
       >
         {/* Header */}
@@ -151,14 +196,18 @@ export default function IssueDetailPanel({ issueKey, onClose }: IssueDetailPanel
               rel="noopener noreferrer"
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
               style={{ color: 'var(--text-tertiary)', background: 'var(--bg-secondary)' }}
+              aria-label={`Abrir ${issueKey} no Jira`}
               title="Abrir no Jira"
             >
               <ExternalLink size={15} />
             </a>
             <button
+              ref={closeButtonRef}
               onClick={onClose}
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
               style={{ color: 'var(--text-tertiary)', background: 'var(--bg-secondary)' }}
+              aria-label="Fechar detalhes da demanda"
+              type="button"
             >
               <X size={16} />
             </button>
@@ -168,13 +217,13 @@ export default function IssueDetailPanel({ issueKey, onClose }: IssueDetailPanel
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           {loading && (
-            <div className="flex items-center justify-center h-60">
+            <div className="flex items-center justify-center h-60" role="status" aria-label="Carregando demanda">
               <Loader2 size={28} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
             </div>
           )}
 
           {error && (
-            <div className="flex flex-col items-center justify-center h-60 gap-3">
+            <div className="flex flex-col items-center justify-center h-60 gap-3" role="alert">
               <AlertTriangle size={28} style={{ color: 'var(--accent-rose)' }} />
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{error}</p>
             </div>
@@ -183,7 +232,7 @@ export default function IssueDetailPanel({ issueKey, onClose }: IssueDetailPanel
           {!loading && !error && f && (
             <div className="px-6 py-5 space-y-6">
               {/* Title */}
-              <h2 className="text-xl font-bold leading-snug" style={{ color: 'var(--text-primary)' }}>
+              <h2 className="text-2xl font-medium leading-8" style={{ color: 'var(--text-primary)' }}>
                 {f.summary}
               </h2>
 
@@ -225,7 +274,7 @@ export default function IssueDetailPanel({ issueKey, onClose }: IssueDetailPanel
                     value: f.assignee ? (
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold"
-                          style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', color: '#fff' }}>
+                          style={{ background: 'var(--accent-indigo)', color: '#fff' }}>
                           {getInitials(f.assignee.displayName)}
                         </div>
                         <span>{f.assignee.displayName}</span>
@@ -309,7 +358,7 @@ export default function IssueDetailPanel({ issueKey, onClose }: IssueDetailPanel
                         style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)' }}>
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold"
-                            style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', color: '#fff' }}>
+                            style={{ background: 'var(--accent-indigo)', color: '#fff' }}>
                             {getInitials(c.author.displayName)}
                           </div>
                           <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>

@@ -8,9 +8,10 @@ import EditToolbar from '@/components/ui/EditToolbar';
 import { useDragOrder } from '@/hooks/useDragOrder';
 import { useFilters } from '@/contexts/FilterContext';
 import { SupportMetrics, LiveAttendance, Issue } from '@/types';
+import { Cup, Medal } from 'iconsax-react';
 import {
   Ticket, CheckCircle2, Clock, AlertTriangle,
-  Hourglass, AlertCircle,
+  AlertCircle,
   Timer, Shield, Loader2, WifiOff, Wifi, RefreshCw, UserCheck, ExternalLink, GripVertical
 } from 'lucide-react';
 
@@ -56,11 +57,11 @@ function SectionHeader({ icon, title, badge, children }: {
   return (
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center"
           style={{ background: 'var(--bg-secondary)' }}>
           {icon}
         </div>
-        <h3 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
+        <h3 className="text-2xl leading-8 font-medium" style={{ color: 'var(--text-primary)' }}>{title}</h3>
         {badge}
       </div>
       {children}
@@ -169,14 +170,15 @@ export default function SuporteContent() {
   }
 
   useEffect(() => {
-    fetchData();
+    const frame = window.requestAnimationFrame(() => void fetchData());
+    return () => window.cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.dateRange, filters.customStartDate, filters.customEndDate]);
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <Loader2 size={36} className="animate-spin text-gradient" style={{ color: 'var(--accent-blue)' }} />
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4" role="status">
+        <Loader2 size={36} className="animate-spin" style={{ color: 'var(--accent-blue)' }} />
         <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Carregando dados do Jira...</p>
       </div>
     );
@@ -185,15 +187,15 @@ export default function SuporteContent() {
   if (error || !data) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center space-y-5 max-w-sm">
-          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center" style={{ background: 'var(--accent-rose-light)' }}>
+        <div className="ui-surface text-center space-y-5 max-w-sm p-8" role="alert">
+          <div className="w-14 h-14 rounded-xl mx-auto flex items-center justify-center" style={{ background: 'var(--accent-rose-light)' }}>
             <WifiOff size={28} style={{ color: 'var(--accent-rose)' }} />
           </div>
           <div>
             <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Erro de conexão</p>
             <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>{error || 'Não foi possível carregar os dados'}</p>
           </div>
-          <button onClick={() => fetchData()} className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-105" style={{ background: 'var(--gradient-primary)', color: '#fff' }}>
+          <button onClick={() => fetchData()} className="px-5 py-2.5 rounded-lg text-sm font-medium" style={{ background: 'var(--accent-blue)', color: '#fff' }}>
             Tentar novamente
           </button>
         </div>
@@ -274,15 +276,15 @@ export default function SuporteContent() {
               xaxis: { categories: Object.keys(m.byClient).map(n => { const p = n.split(' '); return p.length > 2 ? `${p[0]} ${p[1]}...` : n; }) },
               colors: ['#8B5CF6'],
               plotOptions: { bar: { borderRadius: 6, columnWidth: '50%' } },
-              fill: { type: 'gradient', gradient: { shade: 'dark', type: 'vertical', shadeIntensity: 0.3, opacityFrom: 1, opacityTo: 0.7 } },
+              fill: { type: 'solid' },
             }}
           />
         );
 
       case 'panel_sla':
         return (
-          <div className="rounded-2xl border overflow-hidden" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-            <div className="p-7">
+          <div className="rounded-[24px] border overflow-hidden" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
+            <div className="p-6">
               <SectionHeader icon={<Shield size={18} style={{ color: 'var(--accent-violet)' }} />} title="Monitoramento de SLA">
                 <span className="text-xs px-3 py-1 rounded-full font-medium" style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}>Meta: 8 horas</span>
               </SectionHeader>
@@ -317,8 +319,8 @@ export default function SuporteContent() {
       case 'panel_live':
         if (liveAttendance.length === 0) return null;
         return (
-          <div className="rounded-2xl border overflow-hidden" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-            <div className="p-7">
+          <div className="rounded-[24px] border overflow-hidden" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
+            <div className="p-6">
               <SectionHeader icon={<Wifi size={18} style={{ color: 'var(--accent-blue)' }} />} title="Atendimento em Tempo Real"
                 badge={<span className="badge badge-blue">{liveAttendance.length} ativos</span>} />
             </div>
@@ -335,7 +337,7 @@ export default function SuporteContent() {
                       <tr key={i}>
                         <td style={{ paddingLeft: '1.75rem' }}>
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: 'var(--gradient-primary)', color: '#fff' }}>
+                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: 'var(--accent-indigo)', color: '#fff' }}>
                               {item.assignee.split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
                             <span className="font-medium text-sm whitespace-nowrap">{item.assignee}</span>
@@ -363,25 +365,29 @@ export default function SuporteContent() {
       case 'panel_ranking':
         if (m.byAssignee.length === 0) return null;
         return (
-          <div className="rounded-2xl border overflow-hidden" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-            <div className="p-7">
-              <SectionHeader icon={<span className="text-base">🏆</span>} title="Ranking de Atendentes" badge={<span className="badge badge-blue">{m.byAssignee.length} atendentes</span>} />
+          <div className="rounded-[24px] border overflow-hidden" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
+            <div className="p-6">
+              <SectionHeader icon={<Cup size={18} variant="Bold" color="#FBBF24" aria-hidden="true" />} title="Ranking de Atendentes" badge={<span className="badge badge-blue">{m.byAssignee.length} atendentes</span>} />
               <div className="space-y-6">
                 {m.byAssignee.map((agent, i) => {
                   const max = m.byAssignee[0]?.completedCount || 1;
                   const pct = (agent.completedCount / max) * 100;
-                  const medals = ['🥇', '🥈', '🥉'];
+                  const medalColors = ['#FBBF24', '#CBD5E1', '#D08C5A'];
                   return (
-                    <div key={agent.email || agent.name} className="flex items-center gap-4 p-3 rounded-xl transition-all hover:scale-[1.01]" style={{ background: i === 0 ? 'var(--accent-blue-light)' : 'transparent' }}>
-                      <span className="text-xl w-8 text-center flex-shrink-0">{medals[i] || `${i + 1}º`}</span>
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: 'var(--gradient-primary)', color: '#fff' }}>{agent.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
+                    <div key={agent.email || agent.name} className="flex items-center gap-4 p-3 rounded-xl" style={{ background: i === 0 ? 'var(--accent-blue-light)' : 'transparent' }}>
+                      <span className="w-8 flex items-center justify-center text-sm font-bold flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                        {medalColors[i]
+                          ? <Medal size={22} variant="Bold" color={medalColors[i]} aria-label={`${i + 1}º lugar`} />
+                          : `${i + 1}º`}
+                      </span>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: 'var(--accent-indigo)', color: '#fff' }}>{agent.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{agent.name}</span>
                           <span className="text-base font-bold tabular-nums ml-3" style={{ color: 'var(--accent-blue)' }}>{agent.completedCount}</span>
                         </div>
                         <div className="w-full h-2 rounded-full" style={{ background: 'var(--border-primary)' }}>
-                          <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${pct}%`, background: i === 0 ? 'var(--gradient-primary)' : 'var(--accent-blue)', opacity: 1 - (i * 0.12) }} />
+                          <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${pct}%`, background: 'var(--accent-blue)', opacity: 1 - (i * 0.12) }} />
                         </div>
                       </div>
                     </div>
@@ -393,12 +399,12 @@ export default function SuporteContent() {
         );
       case 'panel_critical':
         return (
-          <div className="rounded-2xl border overflow-hidden transition-all duration-300 hover:shadow-lg" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-            <div className="p-7">
+          <div className="rounded-[24px] border overflow-hidden" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
+            <div className="p-6">
               <SectionHeader 
                 icon={<AlertCircle size={18} className="animate-pulse" style={{ color: 'var(--accent-rose)' }} />} 
                 title="Tickets Críticos" 
-                badge={<span className="badge badge-rose shadow-[0_0_10px_rgba(244,63,94,0.3)]">{criticalTickets.length} Ativos</span>} 
+                badge={<span className="badge badge-rose">{criticalTickets.length} Ativos</span>}
               />
               <div className="space-y-4">
                 {criticalTickets.length === 0 ? (
@@ -421,22 +427,19 @@ export default function SuporteContent() {
                       borderBottom: '1px solid var(--border-secondary)',
                     }}
                   >
-                    {/* Hover Glow Effect */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ background: 'linear-gradient(90deg, var(--accent-rose-light) 0%, transparent 100%)' }} />
-                    
                     <div className="relative z-10 flex flex-col md:flex-row md:items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2.5 mb-2">
-                          <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded shadow-sm" style={{ background: 'var(--gradient-danger)', color: '#fff', letterSpacing: '0.05em' }}>
+                          <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: 'var(--accent-rose)', color: '#fff', letterSpacing: '0.05em' }}>
                             {t.jiraKey}
                           </span>
                           {t.isSLAViolated && (
-                            <span className="badge badge-amber flex items-center gap-1 shadow-sm">
+                            <span className="badge badge-amber flex items-center gap-1">
                               <AlertTriangle size={10} /> SLA Estourado
                             </span>
                           )}
                         </div>
-                        <p className="text-sm font-bold leading-snug group-hover:text-blue-400 transition-colors line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+                        <p className="text-sm font-semibold leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>
                           {t.summary}
                         </p>
                       </div>
@@ -464,8 +467,8 @@ export default function SuporteContent() {
         );
       case 'panel_overdue':
         return (
-          <div className="rounded-2xl border overflow-hidden shadow-sm" style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-            <div className="p-7">
+          <div className="rounded-[24px] border overflow-hidden" style={{ background: 'var(--bg-card-solid)', borderColor: 'var(--border-primary)' }}>
+            <div className="p-6">
               <SectionHeader icon={<Clock size={18} style={{ color: 'var(--accent-amber)' }} />} title="Tickets Atrasados" badge={<span className="badge badge-amber">{overdueTickets.length}</span>} />
               <div className="space-y-5">
                 {overdueTickets.length === 0 ? (
@@ -490,12 +493,19 @@ export default function SuporteContent() {
   };
 
   return (
-    <div className="space-y-16 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
+
+      <div className="ui-page-header">
+        <div>
+          <h1 className="ui-page-title">Suporte</h1>
+          <p className="ui-page-description">Operação de atendimento, SLA e volume de chamados.</p>
+        </div>
+      </div>
 
       {/* ═══════ TOP BAR: Connection + Edit Mode ═══════ */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-full"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg"
+          style={{ background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)' }}>
           <span className="live-dot" style={{
             background: data.mode === 'live' ? 'var(--accent-emerald)' : data.mode === 'cached' ? 'var(--accent-blue)' : 'var(--accent-amber)',
             boxShadow: data.mode === 'live' ? '0 0 0 0 rgba(16, 185, 129, 0.4)' : data.mode === 'cached' ? '0 0 0 0 rgba(59, 130, 246, 0.4)' : '0 0 0 0 rgba(245, 158, 11, 0.4)',
@@ -509,8 +519,8 @@ export default function SuporteContent() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => fetchData(true)} disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all hover:scale-105 active:scale-95"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', boxShadow: 'var(--shadow-sm)' }}>
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold"
+            style={{ background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
             Atualizar
           </button>
@@ -528,7 +538,7 @@ export default function SuporteContent() {
       )}
 
       {/* ═══════ FLAT CARD GRID (6 columns) ═══════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-6 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
         {drag.order.map((cardId) => {
           const content = renderCardContent(cardId);
           if (!content) return null;

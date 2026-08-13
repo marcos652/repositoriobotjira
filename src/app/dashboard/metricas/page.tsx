@@ -1,11 +1,28 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { BarChart3, TrendingUp, TrendingDown, Minus, Activity, Target, Gauge, Timer, Bug, Rocket, CheckCircle2, Loader2, WifiOff, RefreshCw, Ticket, Clock, Shield } from 'lucide-react';
+import { Target, Timer, Bug, Rocket, CheckCircle2, Loader2, WifiOff, RefreshCw, Ticket, Clock, Shield } from 'lucide-react';
+import { Chart2, Danger, Timer1 } from 'iconsax-react';
+import DataModeTag from '@/components/ui/DataModeTag';
 
 interface MetricsData {
-  support: any;
-  dev: any;
+  support: {
+    mode?: 'live' | 'cached' | 'demo';
+    metrics?: {
+      openCount?: number;
+      inProgressCount?: number;
+      resolvedCount?: number;
+      slaMetPercentage?: number;
+      avgResolutionTimeMinutes?: number;
+    };
+  };
+  dev: {
+    metrics?: {
+      bugCount?: number;
+      storyCount?: number;
+      criticalCount?: number;
+    };
+  };
 }
 
 export default function MetricasPage() {
@@ -30,7 +47,10 @@ export default function MetricasPage() {
     finally { setLoading(false); setRefreshing(false); }
   }
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => void fetchData());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   if (loading) {
     return (
@@ -47,7 +67,7 @@ export default function MetricasPage() {
         <div className="text-center space-y-5 max-w-sm">
           <WifiOff size={28} style={{ color: '#FB7185' }} />
           <p className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Erro ao carregar</p>
-          <button onClick={() => fetchData()} style={{ padding: '8px 20px', borderRadius: '12px', background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>Tentar novamente</button>
+          <button onClick={() => fetchData()} style={{ padding: '9px 18px', borderRadius: '8px', background: 'var(--accent-blue)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Tentar novamente</button>
         </div>
       </div>
     );
@@ -79,22 +99,16 @@ export default function MetricasPage() {
 
   return (
     <div className="met-root">
-      {/* Hero */}
-      <div className="met-hero">
-        <div className="met-hero-grid" />
-        <div className="met-hero-orb met-hero-orb-1" />
-        <div className="met-hero-orb met-hero-orb-2" />
-        <div className="met-hero-orb met-hero-orb-3" />
-        <div className="met-hero-content">
-          <div className="met-hero-left">
-            <div className="met-hero-icon"><BarChart3 size={24} color="#fff" /></div>
+      <div className="met-page-header">
+        <div className="met-header-content">
+          <div className="met-header-left">
             <div>
-              <h1 className="met-hero-title">Métricas</h1>
-              <p className="met-hero-sub">Dados reais do Jira — {data.support?.mode === 'live' ? '🟢 Live' : data.support?.mode === 'cached' ? '🔵 Cache' : '🟡 Demo'}</p>
+              <h1 className="met-title">Métricas</h1>
+              <p className="met-subtitle">Dados reais do Jira — <DataModeTag mode={data.support?.mode} /></p>
             </div>
           </div>
-          <div className="met-hero-right">
-            <button onClick={() => fetchData(true)} disabled={refreshing} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '999px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(148,163,184,0.6)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+          <div className="met-header-actions">
+            <button className="met-refresh" onClick={() => fetchData(true)} disabled={refreshing}>
               <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Atualizar
             </button>
             <div className="met-pill"><Target size={13} /> <span>{metrics.length} KPIs</span></div>
@@ -149,49 +163,45 @@ export default function MetricasPage() {
           <div className="met-sb-section">
             <h3 className="met-sb-title">Resumo</h3>
             <div className="met-highlights">
-              <div className="met-highlight"><span>📊</span><p>Total suporte: {(sm.openCount || 0) + (sm.inProgressCount || 0) + (sm.resolvedCount || 0)} chamados</p></div>
-              <div className="met-highlight"><span>🐛</span><p>{dm.bugCount || 0} bugs abertos no dev</p></div>
-              <div className="met-highlight"><span>⏱️</span><p>Tempo médio de resolução: {sm.avgResolutionTimeMinutes ? `${Math.round(sm.avgResolutionTimeMinutes / 60)}h` : 'N/A'}</p></div>
+              <div className="met-highlight"><span className="met-highlight-icon"><Chart2 size={16} variant="Bold" color="#60A5FA" aria-hidden="true" /></span><p>Total suporte: {(sm.openCount || 0) + (sm.inProgressCount || 0) + (sm.resolvedCount || 0)} chamados</p></div>
+              <div className="met-highlight"><span className="met-highlight-icon"><Danger size={16} variant="Bold" color="#FB7185" aria-hidden="true" /></span><p>{dm.bugCount || 0} bugs abertos no dev</p></div>
+              <div className="met-highlight"><span className="met-highlight-icon"><Timer1 size={16} variant="Bold" color="#22D3EE" aria-hidden="true" /></span><p>Tempo médio de resolução: {sm.avgResolutionTimeMinutes ? `${Math.round(sm.avgResolutionTimeMinutes / 60)}h` : 'N/A'}</p></div>
             </div>
           </div>
         </div>
       </div>
 
       <style jsx>{`
-        .met-root { display:flex;flex-direction:column;height:100%;border-radius:16px;overflow:hidden;border:1px solid var(--border-primary);background:var(--bg-card); }
-        .met-hero { position:relative;flex-shrink:0;overflow:hidden;background:linear-gradient(140deg,#080C18 0%,#0F1629 30%,#161340 60%,#0D0B22 100%);border-bottom:1px solid rgba(255,255,255,0.05);padding:28px 32px; }
-        .met-hero-grid { position:absolute;inset:0;opacity:0.03;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:40px 40px; }
-        .met-hero-orb { position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none; }
-        .met-hero-orb-1 { width:250px;height:250px;background:rgba(251,146,60,0.18);top:-80px;right:15%;animation:metOrb 8s ease-in-out infinite; }
-        .met-hero-orb-2 { width:180px;height:180px;background:rgba(99,102,241,0.15);bottom:-60px;left:25%;animation:metOrb 11s ease-in-out infinite reverse; }
-        .met-hero-orb-3 { width:120px;height:120px;background:rgba(59,130,246,0.1);top:30%;right:40%;animation:metOrb 14s ease-in-out infinite; }
-        @keyframes metOrb { 0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-15px) scale(1.08);} }
-        .met-hero-content { position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px; }
-        .met-hero-left { display:flex;align-items:center;gap:16px; }
-        .met-hero-icon { width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#F59E0B,#F97316);box-shadow:0 8px 28px rgba(245,158,11,0.35),inset 0 1px 0 rgba(255,255,255,0.2); }
-        .met-hero-title { font-size:20px;font-weight:800;color:#F1F5F9;letter-spacing:-0.02em; }
-        .met-hero-sub { font-size:13px;color:rgba(148,163,184,0.65);margin-top:2px; }
-        .met-hero-right { display:flex;align-items:center;gap:10px; }
-        .met-pill { display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:rgba(148,163,184,0.6);font-size:11px;font-weight:600; }
+        .met-root { display:flex;flex-direction:column;gap:24px;min-width:0; }
+        .met-page-header { flex-shrink:0; }
+        .met-header-content { display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px; }
+        .met-header-left { display:flex;align-items:center; }
+        .met-title { font-size:32px;line-height:36px;font-weight:500;color:var(--text-primary);letter-spacing:-0.02em; }
+        .met-subtitle { font-size:14px;color:var(--text-tertiary);margin-top:6px; }
+        .met-header-actions { display:flex;align-items:center;gap:10px; }
+        .met-refresh,.met-pill { min-height:40px;display:flex;align-items:center;gap:7px;padding:0 14px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border-primary);color:var(--text-secondary);font-size:12px;font-weight:600; }
+        .met-refresh { cursor:pointer;font-family:inherit;transition:background .15s,color .15s; }
+        .met-refresh:hover:not(:disabled) { background:var(--bg-secondary);color:var(--text-primary); }
+        .met-refresh:disabled { opacity:.55;cursor:not-allowed; }
 
-        .met-body { flex:1;display:flex;overflow:hidden; }
-        .met-main { flex:1;overflow-y:auto;padding:24px 28px; }
-        .met-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px; }
-        .met-card { padding:20px;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);transition:all 0.2s; }
-        .met-card:hover { border-color:var(--border-primary);box-shadow:0 4px 16px rgba(0,0,0,0.06);transform:translateY(-2px); }
+        .met-body { display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px;align-items:start; }
+        .met-main { min-width:0; }
+        .met-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px; }
+        .met-card { padding:20px;border-radius:24px;background:var(--bg-card);border:1px solid var(--border-primary);transition:border-color .15s; }
+        .met-card:hover { border-color:var(--border-focus); }
         .met-card-header { display:flex;align-items:center;gap:8px;margin-bottom:12px; }
         .met-card-icon { width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
-        .met-card-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-tertiary); }
-        .met-card-value { font-size:28px;font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;letter-spacing:-0.02em; }
+        .met-card-label { font-size:12px;font-weight:600;color:var(--text-secondary); }
+        .met-card-value { font-size:32px;line-height:36px;font-weight:500;color:var(--text-primary);font-variant-numeric:tabular-nums;letter-spacing:-0.02em; }
         .met-card-footer { display:flex;align-items:center;gap:8px;margin-top:8px; }
         .met-card-unit { font-size:10px;color:var(--text-tertiary); }
         .met-bar-track { height:3px;border-radius:2px;background:var(--border-secondary);margin-top:14px;overflow:hidden; }
         .met-bar-fill { height:100%;border-radius:2px;transition:width 0.6s ease; }
 
-        .met-sidebar { width:260px;flex-shrink:0;border-left:1px solid var(--border-primary);background:var(--bg-card);overflow-y:auto; }
-        .met-sb-section { padding:20px; }
-        .met-sb-title { font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-tertiary);margin-bottom:14px; }
-        .met-sb-divider { height:1px;margin:0 20px;background:var(--border-secondary); }
+        .met-sidebar { width:100%;border:1px solid var(--border-primary);border-radius:24px;background:var(--bg-card);overflow:hidden; }
+        .met-sb-section { padding:24px; }
+        .met-sb-title { font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:16px; }
+        .met-sb-divider { height:1px;margin:0 24px;background:var(--border-secondary); }
         .met-health { display:flex;flex-direction:column;gap:14px; }
         .met-health-item { }
         .met-health-header { display:flex;justify-content:space-between;margin-bottom:6px; }
@@ -201,8 +211,10 @@ export default function MetricasPage() {
         .met-health-fill { height:100%;border-radius:2px;transition:width 0.6s ease; }
         .met-highlights { display:flex;flex-direction:column;gap:10px; }
         .met-highlight { display:flex;gap:8px;align-items:flex-start; }
-        .met-highlight span { font-size:14px;flex-shrink:0;margin-top:1px; }
+        .met-highlight-icon { display:flex;flex-shrink:0;margin-top:1px; }
         .met-highlight p { font-size:11px;color:var(--text-secondary);line-height:1.5; }
+        @media (max-width:1100px){.met-body{grid-template-columns:1fr}.met-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.met-sb-divider{display:none}.met-sb-section+.met-sb-section{border-left:1px solid var(--border-secondary)}}
+        @media (max-width:640px){.met-header-actions{width:100%;flex-wrap:wrap}.met-body{display:block}.met-sidebar{display:block;margin-top:24px}.met-sb-section+.met-sb-section{border-left:0}.met-sb-divider{display:block}.met-grid{grid-template-columns:1fr}.met-title{font-size:28px;line-height:34px}}
       `}</style>
     </div>
   );

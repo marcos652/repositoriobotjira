@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { FileBarChart, Download, Eye, Clock, FileText, PieChart, BarChart3, TrendingUp } from 'lucide-react';
+import { BarChart3, Clock, Download, Eye, FileBarChart, FileText, PieChart, TrendingUp } from 'lucide-react';
 
 const reports = [
   { name: 'Relatório Mensal de SLA', type: 'SLA', date: '28/05/2026', status: 'ready', icon: PieChart, color: '#6366F1' },
@@ -12,114 +12,363 @@ const reports = [
   { name: 'Análise de Incidentes', type: 'Incidentes', date: '18/05/2026', status: 'ready', icon: BarChart3, color: '#8B5CF6' },
 ];
 
+const reportTypes = ['SLA', 'Performance', 'Qualidade', 'Sprint', 'Incidentes'];
+
 export default function RelatoriosPage() {
+  const readyCount = reports.filter((report) => report.status === 'ready').length;
+
   return (
     <div className="rel-root">
-      <div className="rel-hero">
-        <div className="rel-hero-grid" />
-        <div className="rel-hero-orb rel-hero-orb-1" />
-        <div className="rel-hero-orb rel-hero-orb-2" />
-        <div className="rel-hero-content">
-          <div className="rel-hero-left">
-            <div className="rel-hero-icon"><FileBarChart size={24} color="#fff" /></div>
-            <div>
-              <h1 className="rel-hero-title">Relatórios</h1>
-              <p className="rel-hero-sub">Reports e exportações de dados</p>
-            </div>
-          </div>
-          <div className="rel-pill">{reports.filter(r => r.status === 'ready').length} disponíveis</div>
+      <header className="rel-header">
+        <div className="rel-heading">
+          <div className="rel-kicker"><FileBarChart size={15} /> Dados e análises</div>
+          <h1>Relatórios</h1>
+          <p>Reports e exportações de dados</p>
         </div>
-      </div>
+        <span className="rel-chip">{readyCount} disponíveis</span>
+      </header>
 
-      <div className="rel-body">
-        <div className="rel-main">
+      <div className="rel-layout">
+        <section className="rel-surface rel-reports" aria-labelledby="rel-reports-title">
+          <div className="rel-surface-header">
+            <div>
+              <h2 id="rel-reports-title">Relatórios recentes</h2>
+              <p>Visualize ou exporte os documentos gerados.</p>
+            </div>
+            <span className="rel-count">{reports.length} arquivos</span>
+          </div>
+
+          <div className="rel-table-head" aria-hidden="true">
+            <span>Relatório</span>
+            <span>Tipo</span>
+            <span>Atualizado</span>
+            <span>Ações</span>
+          </div>
+
           <div className="rel-list">
-            {reports.map((r) => {
-              const Icon = r.icon;
+            {reports.map((report) => {
+              const Icon = report.icon;
+
               return (
-                <div key={r.name} className="rel-card">
-                  <div className="rel-card-icon" style={{ background: `${r.color}12`, color: r.color }}><Icon size={18} /></div>
-                  <div className="rel-card-info">
-                    <p className="rel-card-name">{r.name}</p>
-                    <div className="rel-card-meta">
-                      <span className="rel-card-type">{r.type}</span>
-                      <span className="rel-card-date"><Clock size={10} /> {r.date}</span>
+                <article key={report.name} className="rel-row">
+                  <div className="rel-report">
+                    <div className="rel-report-icon" style={{ background: `${report.color}12`, color: report.color }}>
+                      <Icon size={17} />
                     </div>
+                    <h3>{report.name}</h3>
                   </div>
-                  <div className="rel-card-actions">
-                    {r.status === 'ready' ? (
+                  <div className="rel-cell" data-label="Tipo"><span className="rel-type">{report.type}</span></div>
+                  <div className="rel-cell rel-date" data-label="Atualizado"><Clock size={13} /> {report.date}</div>
+                  <div className="rel-cell rel-actions" data-label="Ações">
+                    {report.status === 'ready' ? (
                       <>
-                        <button className="rel-btn"><Eye size={14} /> Visualizar</button>
-                        <button className="rel-btn primary"><Download size={14} /> PDF</button>
+                        <button className="rel-button"><Eye size={14} /> Visualizar</button>
+                        <button className="rel-button rel-button-primary"><Download size={14} /> PDF</button>
                       </>
                     ) : (
                       <span className="rel-generating">⏳ Gerando...</span>
                     )}
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
-        </div>
+        </section>
 
-        <div className="rel-sidebar">
-          <div className="rel-sb-section">
-            <h3 className="rel-sb-title">Tipos</h3>
-            <div className="rel-types">
-              {['SLA', 'Performance', 'Qualidade', 'Sprint', 'Incidentes'].map(t => (
-                <div key={t} className="rel-type-item"><span>{t}</span></div>
-              ))}
+        <aside className="rel-surface rel-sidebar" aria-label="Opções de relatórios">
+          <section className="rel-side-section" aria-labelledby="rel-types-title">
+            <div className="rel-side-heading">
+              <h2 id="rel-types-title">Tipos</h2>
+              <p>Navegue por categoria.</p>
             </div>
-          </div>
-          <div className="rel-sb-divider" />
-          <div className="rel-sb-section">
-            <h3 className="rel-sb-title">Exportação rápida</h3>
-            <p className="rel-sb-desc">Selecione um relatório e exporte em PDF, CSV ou JSON.</p>
-          </div>
-        </div>
+            <div className="rel-types">
+              {reportTypes.map((type) => <div key={type} className="rel-type-option">{type}</div>)}
+            </div>
+          </section>
+          <section className="rel-side-section rel-export" aria-labelledby="rel-export-title">
+            <div className="rel-export-icon"><Download size={17} /></div>
+            <div className="rel-side-heading">
+              <h2 id="rel-export-title">Exportação rápida</h2>
+              <p>Selecione um relatório e exporte em PDF, CSV ou JSON.</p>
+            </div>
+          </section>
+        </aside>
       </div>
 
       <style jsx>{`
-        .rel-root { display:flex;flex-direction:column;height:100%;border-radius:16px;overflow:hidden;border:1px solid var(--border-primary);background:var(--bg-card); }
-        .rel-hero { position:relative;flex-shrink:0;overflow:hidden;background:linear-gradient(140deg,#080C18 0%,#0F1629 30%,#0D2137 60%,#0D0B22 100%);border-bottom:1px solid rgba(255,255,255,0.05);padding:28px 32px; }
-        .rel-hero-grid { position:absolute;inset:0;opacity:0.03;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:40px 40px; }
-        .rel-hero-orb { position:absolute;border-radius:50%;filter:blur(60px);pointer-events:none; }
-        .rel-hero-orb-1 { width:250px;height:250px;background:rgba(59,130,246,0.18);top:-80px;right:15%;animation:relOrb 8s ease-in-out infinite; }
-        .rel-hero-orb-2 { width:180px;height:180px;background:rgba(99,102,241,0.14);bottom:-60px;left:25%;animation:relOrb 11s ease-in-out infinite reverse; }
-        @keyframes relOrb { 0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-15px) scale(1.08);} }
-        .rel-hero-content { position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between; }
-        .rel-hero-left { display:flex;align-items:center;gap:16px; }
-        .rel-hero-icon { width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#3B82F6,#6366F1);box-shadow:0 8px 28px rgba(59,130,246,0.35),inset 0 1px 0 rgba(255,255,255,0.2); }
-        .rel-hero-title { font-size:20px;font-weight:800;color:#F1F5F9; }
-        .rel-hero-sub { font-size:13px;color:rgba(148,163,184,0.65);margin-top:2px; }
-        .rel-pill { padding:7px 14px;border-radius:999px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:rgba(148,163,184,0.6);font-size:11px;font-weight:600; }
-
-        .rel-body { flex:1;display:flex;overflow:hidden; }
-        .rel-main { flex:1;overflow-y:auto;padding:24px 28px; }
-        .rel-list { display:flex;flex-direction:column;gap:10px; }
-        .rel-card { display:flex;align-items:center;gap:16px;padding:18px 20px;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-secondary);transition:all 0.2s; }
-        .rel-card:hover { border-color:var(--border-primary);box-shadow:0 4px 16px rgba(0,0,0,0.06);transform:translateY(-1px); }
-        .rel-card-icon { width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
-        .rel-card-info { flex:1;min-width:0; }
-        .rel-card-name { font-size:14px;font-weight:700;color:var(--text-primary); }
-        .rel-card-meta { display:flex;gap:12px;margin-top:4px; }
-        .rel-card-type { font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--bg-card);color:var(--text-tertiary); }
-        .rel-card-date { display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-tertiary); }
-        .rel-card-actions { display:flex;gap:6px;flex-shrink:0; }
-        .rel-btn { display:flex;align-items:center;gap:4px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border-primary);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:all 0.15s; }
-        .rel-btn:hover { border-color:var(--accent-blue);color:var(--accent-blue); }
-        .rel-btn.primary { background:var(--accent-blue);color:#fff;border-color:var(--accent-blue); }
-        .rel-btn.primary:hover { opacity:0.9; }
-        .rel-generating { font-size:11px;color:var(--text-tertiary);font-weight:600; }
-
-        .rel-sidebar { width:260px;flex-shrink:0;border-left:1px solid var(--border-primary);background:var(--bg-card);overflow-y:auto; }
-        .rel-sb-section { padding:20px; }
-        .rel-sb-title { font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-tertiary);margin-bottom:14px; }
-        .rel-sb-divider { height:1px;margin:0 20px;background:var(--border-secondary); }
-        .rel-types { display:flex;flex-wrap:wrap;gap:6px; }
-        .rel-type-item { padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-secondary);cursor:pointer;transition:all 0.15s; }
-        .rel-type-item:hover { border-color:var(--accent-blue);color:var(--accent-blue); }
-        .rel-sb-desc { font-size:11px;color:var(--text-tertiary);line-height:1.6; }
+        .rel-root {
+          display: flex;
+          min-height: 100%;
+          flex-direction: column;
+          gap: 24px;
+          color: var(--text-primary);
+        }
+        .rel-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 20px;
+          padding: 8px 4px 0;
+        }
+        .rel-heading { min-width: 0; }
+        .rel-kicker {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 8px;
+          color: #3B82F6;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .rel-heading h1 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 32px;
+          font-weight: 500;
+          line-height: 36px;
+          letter-spacing: -0.03em;
+        }
+        .rel-heading p,
+        .rel-surface-header p,
+        .rel-side-heading p {
+          margin: 6px 0 0;
+          color: var(--text-tertiary);
+          font-size: 13px;
+          line-height: 20px;
+        }
+        .rel-chip,
+        .rel-count {
+          display: inline-flex;
+          min-height: 36px;
+          align-items: center;
+          padding: 8px 12px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-card);
+          color: var(--text-secondary);
+          font-size: 12px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .rel-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 280px;
+          align-items: start;
+          gap: 24px;
+        }
+        .rel-surface {
+          overflow: hidden;
+          border: 1px solid var(--border-primary);
+          border-radius: 24px;
+          background: var(--bg-card);
+        }
+        .rel-surface-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 22px 24px;
+          border-bottom: 1px solid var(--border-secondary);
+        }
+        .rel-surface-header h2,
+        .rel-side-heading h2 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 18px;
+          font-weight: 600;
+          line-height: 24px;
+        }
+        .rel-count {
+          min-height: 32px;
+          padding: 6px 10px;
+          background: var(--bg-secondary);
+          color: var(--text-tertiary);
+          font-size: 11px;
+        }
+        .rel-table-head,
+        .rel-row {
+          display: grid;
+          grid-template-columns: minmax(250px, 1fr) 104px 104px 194px;
+          column-gap: 16px;
+          align-items: center;
+        }
+        .rel-table-head {
+          min-height: 42px;
+          padding: 0 24px;
+          border-bottom: 1px solid var(--border-secondary);
+          background: var(--bg-secondary);
+          color: var(--text-tertiary);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+        .rel-row {
+          min-height: 76px;
+          padding: 14px 24px;
+          border-bottom: 1px solid var(--border-secondary);
+        }
+        .rel-row:last-child { border-bottom: 0; }
+        .rel-row:hover { background: var(--bg-card-hover); }
+        .rel-report {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+        .rel-report-icon {
+          display: flex;
+          width: 38px;
+          height: 38px;
+          flex: 0 0 auto;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+        }
+        .rel-report h3 {
+          margin: 0;
+          overflow: hidden;
+          color: var(--text-primary);
+          font-size: 13px;
+          font-weight: 650;
+          line-height: 19px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .rel-cell {
+          color: var(--text-secondary);
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .rel-type {
+          display: inline-flex;
+          padding: 5px 8px;
+          border: 1px solid var(--border-secondary);
+          border-radius: 8px;
+          background: var(--bg-secondary);
+          color: var(--text-secondary);
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .rel-date {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          color: var(--text-tertiary);
+          font-weight: 500;
+        }
+        .rel-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 6px;
+        }
+        .rel-button {
+          display: inline-flex;
+          min-height: 34px;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          padding: 7px 10px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-secondary);
+          color: var(--text-secondary);
+          cursor: pointer;
+          font: inherit;
+          font-size: 10px;
+          font-weight: 650;
+        }
+        .rel-button:hover {
+          border-color: var(--accent-blue);
+          color: var(--accent-blue);
+        }
+        .rel-button-primary {
+          border-color: var(--accent-blue);
+          background: var(--accent-blue);
+          color: #fff;
+        }
+        .rel-button-primary:hover { color: #fff; opacity: 0.9; }
+        .rel-generating { color: var(--text-tertiary); font-size: 11px; }
+        .rel-side-section { padding: 22px 24px 24px; }
+        .rel-export {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          border-top: 1px solid var(--border-secondary);
+        }
+        .rel-export-icon {
+          display: flex;
+          width: 36px;
+          height: 36px;
+          flex: 0 0 auto;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          background: var(--accent-blue-light);
+          color: var(--accent-blue);
+        }
+        .rel-types {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 18px;
+        }
+        .rel-type-option {
+          padding: 7px 10px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-secondary);
+          color: var(--text-secondary);
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .rel-type-option:hover {
+          border-color: var(--accent-blue);
+          color: var(--accent-blue);
+        }
+        @media (max-width: 1140px) {
+          .rel-layout { grid-template-columns: minmax(0, 1fr); }
+          .rel-sidebar {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .rel-export { border-top: 0; border-left: 1px solid var(--border-secondary); }
+        }
+        @media (max-width: 820px) {
+          .rel-header { align-items: flex-start; flex-direction: column; }
+          .rel-table-head { display: none; }
+          .rel-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px 16px;
+            padding: 18px 20px;
+          }
+          .rel-report { grid-column: 1 / -1; }
+          .rel-cell::before {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-tertiary);
+            content: attr(data-label);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+          }
+          .rel-date { display: block; }
+          .rel-date :global(svg) { display: none; }
+          .rel-actions {
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+          }
+          .rel-sidebar { grid-template-columns: 1fr; }
+          .rel-export { border-top: 1px solid var(--border-secondary); border-left: 0; }
+        }
+        @media (max-width: 520px) {
+          .rel-heading h1 { font-size: 28px; line-height: 34px; }
+          .rel-surface-header { align-items: flex-start; padding: 20px; }
+          .rel-count { display: none; }
+        }
       `}</style>
     </div>
   );

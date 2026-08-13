@@ -11,7 +11,7 @@ export interface IssueLike {
   sections?: IssueSections;
 }
 
-type PanelType = 'info' | 'tip' | 'warning' | 'note';
+export type PanelType = 'info' | 'tip' | 'warning' | 'note';
 
 const PANEL_COLORS: Record<PanelType, string> = {
   info: '#DEEBFF',
@@ -23,7 +23,6 @@ const PANEL_COLORS: Record<PanelType, string> = {
 interface SectionDef {
   key: string;
   title: string;
-  emoji: string;
   panelType: PanelType;
   uiColor: string;
 }
@@ -31,42 +30,48 @@ interface SectionDef {
 function sectionDefs(data: IssueLike): SectionDef[] {
   if (data.issuetype === 'Bug') {
     return [
-      { key: 'contexto', title: 'Contexto', emoji: '📋', panelType: 'info', uiColor: '#3B82F6' },
-      { key: 'descricao_ou_problema', title: 'Problema', emoji: '⚠️', panelType: 'warning', uiColor: '#EF4444' },
-      { key: 'passos_reproduzir', title: 'Como replicar', emoji: '🔁', panelType: 'info', uiColor: '#3B82F6' },
-      { key: 'evidencias', title: 'Evidências', emoji: '📸', panelType: 'info', uiColor: '#3B82F6' },
-      { key: 'observacoes', title: 'Observações', emoji: '📝', panelType: 'note', uiColor: '#8B5CF6' },
+      { key: 'contexto', title: 'Contexto', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'descricao_ou_problema', title: 'Problema', panelType: 'warning', uiColor: '#EF4444' },
+      { key: 'passos_reproduzir', title: 'Como replicar', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'evidencias', title: 'Evidências', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'observacoes', title: 'Observações', panelType: 'note', uiColor: '#8B5CF6' },
     ];
   }
   if (data.story_type === 'FEATURE') {
     return [
-      { key: 'contexto', title: 'Contexto', emoji: '📋', panelType: 'info', uiColor: '#3B82F6' },
-      { key: 'descricao_ou_problema', title: 'Descrição', emoji: '📄', panelType: 'info', uiColor: '#3B82F6' },
-      { key: 'comportamento_esperado_ou_aceite', title: 'Critérios de aceite', emoji: '✅', panelType: 'tip', uiColor: '#22C55E' },
-      { key: 'observacoes', title: 'Observações', emoji: '📝', panelType: 'note', uiColor: '#8B5CF6' },
+      { key: 'contexto', title: 'Contexto', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'descricao_ou_problema', title: 'Descrição', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'comportamento_esperado_ou_aceite', title: 'Critérios de aceite', panelType: 'tip', uiColor: '#22C55E' },
+      { key: 'observacoes', title: 'Observações', panelType: 'note', uiColor: '#8B5CF6' },
     ];
   }
   if (data.story_type === 'MELHORIA') {
     return [
-      { key: 'contexto', title: 'Contexto', emoji: '📋', panelType: 'info', uiColor: '#3B82F6' },
-      { key: 'descricao_ou_problema', title: 'Comportamento atual', emoji: '⚠️', panelType: 'warning', uiColor: '#EF4444' },
-      { key: 'comportamento_esperado_ou_aceite', title: 'Comportamento esperado', emoji: '✅', panelType: 'tip', uiColor: '#22C55E' },
-      { key: 'observacoes', title: 'Observações', emoji: '📝', panelType: 'note', uiColor: '#8B5CF6' },
+      { key: 'contexto', title: 'Contexto', panelType: 'info', uiColor: '#3B82F6' },
+      { key: 'descricao_ou_problema', title: 'Comportamento atual', panelType: 'warning', uiColor: '#EF4444' },
+      { key: 'comportamento_esperado_ou_aceite', title: 'Comportamento esperado', panelType: 'tip', uiColor: '#22C55E' },
+      { key: 'observacoes', title: 'Observações', panelType: 'note', uiColor: '#8B5CF6' },
     ];
   }
   return [
-    { key: 'contexto', title: 'Contexto', emoji: '📋', panelType: 'info', uiColor: '#3B82F6' },
-    { key: 'descricao_ou_problema', title: 'Descrição', emoji: '📄', panelType: 'info', uiColor: '#3B82F6' },
-    { key: 'observacoes', title: 'Observações', emoji: '📝', panelType: 'note', uiColor: '#8B5CF6' },
+    { key: 'contexto', title: 'Contexto', panelType: 'info', uiColor: '#3B82F6' },
+    { key: 'descricao_ou_problema', title: 'Descrição', panelType: 'info', uiColor: '#3B82F6' },
+    { key: 'observacoes', title: 'Observações', panelType: 'note', uiColor: '#8B5CF6' },
   ];
 }
 
-/** Section list for the editable AI-preview UI, labels/colors, non-empty only. */
-export function getSectionConfig(data: IssueLike): { key: string; label: string; color: string }[] {
+/**
+ * Section list for the editable AI-preview UI, labels/colors, non-empty only.
+ * `panelType` volta junto para a UI escolher o ícone da seção — este módulo é
+ * importado também pelo servidor, então não referencia componentes React.
+ */
+export function getSectionConfig(
+  data: IssueLike,
+): { key: string; label: string; color: string; panelType: PanelType }[] {
   const s = data.sections || {};
   return sectionDefs(data)
     .filter(sec => s[sec.key] && String(s[sec.key]).trim())
-    .map(sec => ({ key: sec.key, label: `${sec.emoji} ${sec.title}`, color: sec.uiColor }));
+    .map(sec => ({ key: sec.key, label: sec.title, color: sec.uiColor, panelType: sec.panelType }));
 }
 
 /** Jira wiki-markup description ({panel} blocks) built from the same section config. */

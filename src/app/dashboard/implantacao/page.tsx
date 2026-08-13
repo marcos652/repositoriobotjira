@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Rocket, Plus, Loader2, CheckCircle2, AlertTriangle, MessageSquare, Trash2, Edit2, Play, Pause, Clock, RefreshCw, ExternalLink } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, MessageSquare, Edit2, Play, Pause, Clock, RefreshCw, ExternalLink } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
@@ -61,13 +61,12 @@ export default function ImplantacaoPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [renderTimestamp] = useState(() => Date.now());
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
-
-  useEffect(() => { loadClients(); }, []);
 
   const loadClients = async () => {
     setLoading(true);
@@ -77,6 +76,11 @@ export default function ImplantacaoPage() {
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => void loadClients());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const openModal = (client?: OnboardingClient) => {
     setEditingClient(client ?? null);
@@ -132,7 +136,7 @@ export default function ImplantacaoPage() {
 
   const getElapsedDays = (dateStr: string) => {
     if (!dateStr) return 0;
-    return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+    return Math.floor((renderTimestamp - new Date(dateStr).getTime()) / 86400000);
   };
 
   const filtered = clients.filter(c =>
@@ -145,7 +149,6 @@ export default function ImplantacaoPage() {
       {/* Header */}
       <div className="im-header">
         <div className="im-header-info">
-          <div className="im-icon-wrapper"><Rocket size={20} className="im-icon" /></div>
           <div>
             <h1 className="im-title">Implantação</h1>
             <p className="im-subtitle">{clients.length} clientes • Board DSMM #607</p>
@@ -231,7 +234,7 @@ export default function ImplantacaoPage() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                             {client.assigneeAvatar
                               ? <img src={client.assigneeAvatar} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
-                              : <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'linear-gradient(135deg,#6366F1,#8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', fontWeight: 800, color: '#fff' }}>
+                              : <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--accent-violet)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', fontWeight: 700, color: '#fff' }}>
                                   {client.assignee.split(' ').map(n => n[0]).join('').slice(0, 2)}
                                 </div>
                             }
@@ -287,38 +290,37 @@ export default function ImplantacaoPage() {
       {toast && <div className={`im-toast ${toast.type}`}>{toast.message}</div>}
 
       <style jsx>{`
-        .im-root { display: flex; flex-direction: column; height: 100%; gap: 20px; }
+        .im-root { display: flex; flex-direction: column; min-width:0; gap: 24px; }
 
-        .im-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-primary); }
-        .im-header-info { display: flex; align-items: center; gap: 16px; }
-        .im-icon-wrapper { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #EC4899, #8B5CF6); display: flex; align-items: center; justify-content: center; color: white; }
-        .im-title { font-size: 18px; font-weight: 800; color: var(--text-primary); }
-        .im-subtitle { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+        .im-header { display: flex; align-items: flex-end; justify-content: space-between; gap:16px;flex-wrap:wrap; }
+        .im-header-info { display: flex; align-items: flex-end; gap: 24px;flex-wrap:wrap; }
+        .im-title { font-size: 32px;line-height:36px; font-weight: 500;letter-spacing:-.02em; color: var(--text-primary); }
+        .im-subtitle { font-size: 14px; color: var(--text-tertiary); margin-top: 6px; }
 
-        .im-search-box { margin-left: 24px; border-left: 1px solid var(--border-primary); padding-left: 24px; }
-        .im-search-input { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-secondary); color: var(--text-primary); font-size: 13px; width: 220px; outline: none; transition: all 0.2s; }
-        .im-search-input:focus { border-color: var(--accent-blue); width: 260px; }
+        .im-search-box { margin-left:0; }
+        .im-search-input { height:40px;padding: 0 14px; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-card); color: var(--text-primary); font-size: 13px; width: 240px; outline: none; transition: border-color 0.15s; }
+        .im-search-input:focus { border-color: var(--accent-blue); }
 
-        .im-refresh-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; background: var(--bg-secondary); border: 1px solid var(--border-primary); color: var(--text-secondary); cursor: pointer; transition: all 0.2s; }
+        .im-refresh-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-primary); color: var(--text-secondary); cursor: pointer; transition: background .15s,color .15s; }
         .im-refresh-btn:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-        .im-add-btn { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; background: var(--accent-blue); color: white; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all 0.2s; }
-        .im-add-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(59,130,246,0.4); }
+        .im-add-btn { display: flex; align-items: center; gap: 8px; min-height:40px;padding: 0 18px; border-radius: 8px; background: var(--accent-blue); color: white; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: opacity .15s; }
+        .im-add-btn:hover { opacity:.9; }
 
-        .im-kanban { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; overflow-x: auto; padding-bottom: 10px; }
+        .im-kanban { display: grid; grid-template-columns: repeat(4,minmax(260px,1fr)); gap: 16px; overflow-x: auto; padding-bottom: 8px; }
         .im-loading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; height: 300px; }
 
-        .im-column { display: flex; flex-direction: column; background: var(--bg-card); border-radius: 14px; border: 1px solid var(--border-primary); overflow: hidden; transition: border-color 0.2s; }
+        .im-column { display: flex; flex-direction: column; background: var(--bg-card); border-radius: 24px; border: 1px solid var(--border-primary); overflow: hidden; transition: border-color 0.15s; }
         .im-drag-over { border-color: var(--accent-blue) !important; background: rgba(59,130,246,0.03); }
-        .im-col-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg-secondary); border-bottom: 2px solid; }
-        .im-col-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
-        .im-col-count { background: var(--bg-card); padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 800; color: var(--text-secondary); border: 1px solid var(--border-primary); }
+        .im-col-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; background: var(--bg-card); border-bottom: 2px solid; }
+        .im-col-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; }
+        .im-col-count { background: var(--bg-secondary); padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); border: 1px solid var(--border-primary); }
 
         .im-col-body { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: calc(100vh - 260px); }
         .im-empty-col { padding: 20px; text-align: center; font-size: 12px; color: var(--text-tertiary); font-weight: 600; border: 2px dashed var(--border-secondary); border-radius: 10px; pointer-events: none; }
 
-        .im-card { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 10px; padding: 14px; transition: all 0.2s; display: flex; flex-direction: column; gap: 8px; cursor: grab; }
+        .im-card { background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: 8px; padding: 14px; transition: border-color .15s; display: flex; flex-direction: column; gap: 8px; cursor: grab; }
         .im-card:active { cursor: grabbing; opacity: 0.9; }
-        .im-card:hover { border-color: var(--border-focus); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .im-card:hover { border-color: var(--border-focus); }
 
         .im-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
         .im-card-name { font-size: 13px; font-weight: 700; color: var(--text-primary); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -328,7 +330,7 @@ export default function ImplantacaoPage() {
         .im-icon-btn { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; border: none; background: var(--bg-card); cursor: pointer; color: var(--text-tertiary); transition: all 0.2s; }
         .im-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
-        .im-card-obs { display: flex; align-items: flex-start; gap: 6px; background: rgba(0,0,0,0.1); padding: 8px 10px; border-radius: 8px; font-size: 11px; color: var(--text-secondary); line-height: 1.5; border: 1px solid rgba(255,255,255,0.02); }
+        .im-card-obs { display: flex; align-items: flex-start; gap: 6px; background: var(--bg-card); padding: 8px 10px; border-radius: 8px; font-size: 11px; color: var(--text-secondary); line-height: 1.5; border: 1px solid var(--border-secondary); }
         .im-obs-content { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; word-break: break-word; }
         .im-obs-content :global(p) { margin: 0; }
         .im-obs-content :global(ul) { padding-left: 14px; margin: 0; }
@@ -337,37 +339,35 @@ export default function ImplantacaoPage() {
         .im-badge-days { background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; font-weight: 700; color: var(--text-secondary); border: 1px solid var(--border-primary); }
 
         /* Modal */
-        .im-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-        .im-modal { width: 100%; max-width: 500px; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-primary); box-shadow: 0 20px 40px rgba(0,0,0,0.2); overflow: hidden; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .im-modal-overlay { position: fixed; inset: 0; background: var(--bg-overlay); padding:20px;display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .im-modal { width: 100%; max-width: 500px; background: var(--bg-card); border-radius: 24px; border: 1px solid var(--border-primary); overflow: hidden; }
         .im-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border-primary); }
         .im-modal-header h2 { font-size: 16px; font-weight: 800; color: var(--text-primary); }
         .im-close-btn { background: none; border: none; font-size: 24px; color: var(--text-tertiary); cursor: pointer; line-height: 1; }
         .im-modal-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
         .im-form-group { display: flex; flex-direction: column; gap: 8px; }
         .im-form-group label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
-        .im-input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border-primary); background: var(--bg-secondary); color: var(--text-primary); font-size: 13px; outline: none; transition: border-color 0.2s; box-sizing: border-box; }
+        .im-input { width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-secondary); color: var(--text-primary); font-size: 13px; outline: none; transition: border-color 0.15s; box-sizing: border-box; }
         .im-input:focus { border-color: var(--accent-blue); }
         .im-modal-footer { padding: 16px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border-primary); display: flex; justify-content: flex-end; gap: 12px; }
-        .im-btn-secondary { padding: 10px 18px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border-primary); color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; }
-        .im-btn-primary { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; background: var(--accent-blue); color: white; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .im-btn-secondary { padding: 10px 18px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border-primary); color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; }
+        .im-btn-primary { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; background: var(--accent-blue); color: white; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
         .im-btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
 
-        .im-tiptap-wrapper { border: 1px solid var(--border-primary); border-radius: 10px; background: var(--bg-secondary); overflow: hidden; }
+        .im-tiptap-wrapper { border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-secondary); overflow: hidden; }
         .im-tiptap-wrapper:focus-within { border-color: var(--accent-blue); }
         .im-tiptap-toolbar { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--border-primary); background: var(--bg-card); }
         .im-tiptap-toolbar button { padding: 4px 8px; border-radius: 6px; border: none; background: transparent; cursor: pointer; color: var(--text-secondary); font-size: 12px; font-weight: 600; }
         .im-tiptap-toolbar button.active { background: var(--accent-blue); color: white; }
 
-        .im-toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; color: white; z-index: 10000; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: slideUpToast 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .im-toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; color: white; z-index: 10000; }
         .im-toast.success { background: #10B981; }
         .im-toast.error { background: #F43F5E; }
-
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        @keyframes slideUpToast { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
         :global(.im-tiptap-content .ProseMirror) { padding: 12px 14px; min-height: 80px; outline: none; font-size: 13px; color: var(--text-primary); }
         :global(.im-tiptap-content .ProseMirror p) { margin: 0 0 6px 0; }
         :global(.im-tiptap-content .ProseMirror ul) { padding-left: 20px; margin: 0 0 6px 0; }
+        @media (max-width:780px){.im-header,.im-header-info{align-items:flex-start;flex-direction:column}.im-search-box,.im-search-input{width:100%}.im-header>div:last-child{width:100%}.im-add-btn{flex:1;justify-content:center}.im-title{font-size:28px;line-height:34px}.im-modal-header,.im-modal-body,.im-modal-footer{padding-left:18px;padding-right:18px}}
       `}</style>
     </div>
   );
