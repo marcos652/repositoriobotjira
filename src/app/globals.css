@@ -743,8 +743,11 @@ body {
    All color roles continue to use JiraOps' existing palette above.
    ============================================ */
 
+/* column: a navegação virou faixa no topo. Enquanto era sidebar, o shell dividia
+   a LARGURA (row) entre menu e conteúdo; agora empilha navbar sobre o workspace. */
 .dashboard-shell {
   display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100dvh;
   overflow: hidden;
@@ -772,6 +775,258 @@ body {
 .dashboard-page-frame {
   width: 100%;
   min-height: 100%;
+}
+
+/* ============================================
+   NAVBAR — navegação principal na horizontal
+   ============================================ */
+
+.dashboard-navbar {
+  position: relative;
+  z-index: 50; /* acima da topbar (30), senão os menus abrem por baixo dela */
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-card-solid);
+}
+
+/* flex:1 com max-width: ocupa o vão entre a marca e os grupos, mas sem virar uma
+   faixa de 900px em monitor ultrawide. */
+.dashboard-navbar__search {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 440px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-control);
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.dashboard-navbar__search:hover,
+.dashboard-navbar__search:focus-visible {
+  border-color: var(--border-focus);
+  color: var(--text-secondary);
+}
+
+.dashboard-navbar__search svg {
+  flex: 0 0 16px;
+}
+
+.dashboard-navbar__search > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-navbar__search kbd {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--border-primary);
+  border-radius: 5px;
+  background: var(--bg-card-solid);
+  color: var(--text-tertiary);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dashboard-navbar__groups {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dashboard-navgroup {
+  position: relative;
+}
+
+.dashboard-navgroup__trigger {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.dashboard-navgroup__trigger:hover,
+.dashboard-navgroup__trigger.is-open {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* Mesmo tratamento de ativo da sidebar: com os itens escondidos nos menus, é isto
+   que responde "em qual área eu estou". */
+.dashboard-navgroup__trigger.is-active {
+  background: var(--accent-blue-light);
+  border-color: color-mix(in srgb, var(--accent-blue) 28%, transparent);
+  color: var(--accent-blue);
+}
+
+.dashboard-navgroup__trigger svg {
+  transition: transform var(--transition-fast);
+}
+
+.dashboard-navgroup__trigger.is-open svg {
+  transform: rotate(180deg);
+}
+
+.dashboard-navgroup__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 1;
+  min-width: 228px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-card, 12px);
+  background: var(--bg-card-solid);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+}
+
+.dashboard-navgroup__menu.is-open {
+  display: flex;
+}
+
+/* Compartilhado com o menu de perfil da topbar — um item de menu é a mesma coisa
+   nos dois lugares, e duplicar o estilo faria os dois divergirem com o tempo. */
+.dashboard-navgroup__item {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.dashboard-navgroup__item:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.dashboard-navgroup__item.is-active {
+  background: var(--accent-blue-light);
+  border-color: color-mix(in srgb, var(--accent-blue) 28%, transparent);
+  color: var(--accent-blue);
+}
+
+.dashboard-navgroup__item svg {
+  flex: 0 0 16px;
+}
+
+.dashboard-navbar__toggle {
+  display: none;
+  margin-left: auto;
+}
+
+/* Abaixo de 1024px os 5 grupos não caem lado a lado junto da marca, então viram
+   um painel sob a navbar. */
+@media (max-width: 1023px) {
+  .dashboard-navbar__toggle {
+    display: inline-grid;
+  }
+
+  .dashboard-navbar__groups {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    max-height: calc(100dvh - 56px);
+    overflow-y: auto;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-primary);
+    background: var(--bg-card-solid);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .dashboard-navbar__groups.is-mobile-open {
+    display: flex;
+  }
+
+  /* Dentro do painel cada grupo já lista seus itens — o trigger passa a ser só um
+     rótulo de seção. Um segundo nível de toque para abrir/fechar em tela pequena
+     dobra o esforço sem ganho nenhum. */
+  .dashboard-navgroup__trigger {
+    width: 100%;
+    padding: 10px 10px 4px;
+    color: var(--text-tertiary);
+    font-size: 12px;
+    pointer-events: none;
+  }
+
+  .dashboard-navgroup__trigger.is-active {
+    border-color: transparent;
+    background: none;
+  }
+
+  .dashboard-navgroup__trigger svg {
+    display: none;
+  }
+
+  .dashboard-navgroup__menu,
+  .dashboard-navgroup__menu.is-open {
+    position: static;
+    min-width: 0;
+    display: flex;
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+  }
+}
+
+/* Em telefone não há teclado físico: a dica do atalho só rouba largura do campo. */
+@media (max-width: 639px) {
+  .dashboard-navbar__search kbd {
+    display: none;
+  }
+
+  .dashboard-navbar {
+    gap: 12px;
+    padding: 0 12px;
+  }
 }
 
 .dashboard-sidebar {
@@ -1095,9 +1350,20 @@ body {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 20px;
-  padding: 0 24px 0 40px;
+  /* 24px à esquerda para alinhar com a navbar acima. Os 40px anteriores existiam
+     porque a sidebar ficava à esquerda e dava o respiro; empilhadas, as duas barras
+     precisam começar no mesmo x, senão a marca e o breadcrumb ficam desencontrados. */
+  padding: 0 24px;
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-card-solid);
+}
+
+/* Só as páginas com filtro de período têm 3 filhos. Sem ele sobravam 2 filhos num
+   template de 3 colunas: as ações caíam na coluna do MEIO e a 3ª (1fr) ficava vazia
+   à direita — o bloco de ações parava longe da borda em vez de encostar nela.
+   :has() adapta o template à presença real do filtro. */
+.dashboard-topbar:not(:has(.dashboard-topbar__period)) {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .dashboard-topbar__breadcrumb {
@@ -1196,14 +1462,67 @@ body {
   box-shadow: 0 0 0 2px var(--bg-card-solid);
 }
 
+.dashboard-topbar__profile-wrap {
+  position: relative;
+}
+
+/* Era <div>; virou <button> para abrir o menu de conta — daí o reset de aparência
+   de botão, mantendo o divisor à esquerda que já existia. */
 .dashboard-topbar__profile {
   max-width: 190px;
   display: flex;
   align-items: center;
   gap: 10px;
   margin-left: 4px;
-  padding-left: 12px;
+  padding: 4px 6px 4px 12px;
+  border: none;
   border-left: 1px solid var(--border-primary);
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dashboard-topbar__profile:hover strong {
+  color: var(--accent-blue);
+}
+
+.dashboard-topbar__profile-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-card, 12px);
+  background: var(--bg-card-solid);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+}
+
+.dashboard-topbar__profile-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.dashboard-topbar__profile-id strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.dashboard-topbar__profile-id small {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .dashboard-topbar__profile strong {
@@ -1530,7 +1849,11 @@ body {
   .dashboard-topbar__breadcrumb nav a,
   .dashboard-topbar__breadcrumb nav > span:first-of-type,
   .dashboard-topbar__profile strong,
-  .dashboard-topbar__actions > .dashboard-icon-button:nth-child(2) {
+  /* Era `.dashboard-icon-button:nth-child(2)`, que apontava para o sino enquanto o
+     ícone de busca era o 1º filho. Com a busca movida pra navbar os filhos
+     deslizaram e o seletor passou a esconder o BOTÃO DE TEMA. Alvo explícito agora:
+     posição de filho é frágil justamente porque muda quando a barra muda. */
+  .dashboard-topbar__actions > a[href="/dashboard/notificacoes"] {
     display: none;
   }
 

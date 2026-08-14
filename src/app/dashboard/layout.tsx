@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import Sidebar from '@/components/layout/Sidebar';
+import Navbar from '@/components/layout/Navbar';
 import Header from '@/components/layout/Header';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { FilterProvider } from '@/contexts/FilterContext';
@@ -24,8 +24,6 @@ function useSessionAutoRefresh() {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const currentItem = getNavigationItem(pathname);
   const pageInfo = currentItem || {
     label: 'JiraOps',
@@ -34,50 +32,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useSessionAutoRefresh();
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem('jiraops-sidebar-collapsed');
-    const frame = window.requestAnimationFrame(() => setSidebarCollapsed(stored === 'true'));
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setMobileOpen(false));
-    return () => window.cancelAnimationFrame(frame);
-  }, [pathname]);
-
-  const closeMobile = useCallback(() => setMobileOpen(false), []);
-  const toggleSidebar = () => {
-    setSidebarCollapsed((current) => {
-      window.localStorage.setItem('jiraops-sidebar-collapsed', String(!current));
-      return !current;
-    });
-  };
-
   return (
     <ThemeProvider>
       <FilterProvider>
         <ToastProvider>
+          {/* A navegação passou de coluna lateral para faixa no topo, então o shell
+              empilha (column) em vez de dividir a largura (row). O estado de
+              recolher/gaveta da sidebar saiu junto: a navbar controla o próprio
+              menu mobile internamente. */}
           <div className="dashboard-shell">
-            <Sidebar
-              collapsed={sidebarCollapsed}
-              mobileOpen={mobileOpen}
-              onToggle={toggleSidebar}
-              onMobileClose={closeMobile}
-            />
-            {mobileOpen && (
-              <button
-                type="button"
-                className="dashboard-sidebar-backdrop"
-                aria-label="Fechar menu"
-                onClick={closeMobile}
-              />
-            )}
+            <Navbar />
             <div className="dashboard-workspace">
-              <Header
-                title={pageInfo.label}
-                subtitle={pageInfo.description}
-                onMenuOpen={() => setMobileOpen(true)}
-              />
+              <Header title={pageInfo.label} subtitle={pageInfo.description} />
               <main className="dashboard-content">
                 <div key={pathname} className="dashboard-page-frame animate-page-enter">
                   {children}
