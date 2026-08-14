@@ -71,10 +71,37 @@ export default function Navbar() {
 
   return (
     <nav ref={navRef} className="dashboard-navbar" aria-label="Navegação principal">
-      <Link href="/dashboard" className="dashboard-brand" aria-label="JiraOps — ir para o overview">
-        <span className="dashboard-brand__mark" aria-hidden="true"><Zap size={18} /></span>
-        <span className="dashboard-brand__name">JiraOps</span>
-      </Link>
+      {/* Co-branding: JiraOps (o produto) | Movingpay (a empresa), mesmo par do
+          login. Agrupados num container só para o gap de 24px da navbar não se
+          repetir entre a marca, o divisor e o co-brand. */}
+      <div className="dashboard-navbar__brands">
+        <Link href="/dashboard" className="dashboard-brand" aria-label="JiraOps — ir para o overview">
+          <span className="dashboard-brand__mark" aria-hidden="true"><Zap size={18} /></span>
+          <span className="dashboard-brand__name">JiraOps</span>
+        </Link>
+
+        <span aria-hidden="true" className="dashboard-navbar__divider" />
+
+        {/* Nova aba de propósito: é um app externo, e navegar na mesma aba
+            descartaria trabalho em andamento aqui (uma demanda sendo escrita, por
+            exemplo). rel="noopener noreferrer" impede que a página aberta acesse
+            este window pelo window.opener. */}
+        <a
+          className="dashboard-navbar__cobrand"
+          href="https://console.movingpay.com.br/login"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Console Movingpay — abre em nova aba"
+          title="Abrir o Console Movingpay"
+        >
+          {/* aria-hidden: o "M" é decorativo — com o nome escrito ao lado, um leitor
+              de tela anunciaria "M Movingpay". */}
+          <span className="dashboard-navbar__mp-mark" aria-hidden="true">
+            <span className="dashboard-navbar__mp-glyph">M</span>
+          </span>
+          <span className="dashboard-navbar__cobrand-name">Movingpay</span>
+        </a>
+      </div>
 
       {/* Abre a paleta de comandos em vez de ser um campo próprio: ela já é a busca
           global (páginas e recursos, com navegação por teclado). Dois campos de

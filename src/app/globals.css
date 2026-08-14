@@ -793,6 +793,87 @@ body {
   background: var(--bg-card-solid);
 }
 
+.dashboard-navbar__brands {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dashboard-navbar__divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 24px;
+  background: var(--border-primary);
+}
+
+/* Virou link para o Console Movingpay: o lockup inteiro (badge + nome) é a área
+   clicável, que é o padrão de assinatura de marca e dá um alvo bem maior que só
+   as letras. */
+.dashboard-navbar__cobrand {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-control);
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+.dashboard-navbar__cobrand:hover {
+  opacity: 0.82;
+}
+
+.dashboard-navbar__cobrand:hover .dashboard-navbar__cobrand-name {
+  color: var(--text-primary);
+}
+
+/* O foco fica no lockup todo — sem isto o contorno sairia colado nas letras e o
+   badge, que faz parte do mesmo link, ficaria de fora. */
+.dashboard-navbar__cobrand:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 3px;
+}
+
+/* Navy fixo nos DOIS temas, e não um token: isto é marca, não elemento de UI.
+   No tema claro (--bg-secondary #F1F5F9) o degradê verde/azul cairia para ~2:1
+   de contraste — invisível. Sobre este navy fica 8:1 no verde e 5,8:1 no azul. */
+.dashboard-navbar__mp-mark {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-control);
+  background: #001147;
+}
+
+/* Degradê recortado no próprio glifo. Três paradas em vez de duas porque num
+   glifo de 18px um degradê de dois pontos vira quase uma cor média — puxando o
+   verde para 28% ele ocupa a diagonal superior-esquerda de forma perceptível.
+   WebkitTextFillColor junto do color: só o color falha em algumas versões do
+   Safari, deixando a letra invisível. */
+.dashboard-navbar__mp-glyph {
+  background-image: linear-gradient(135deg, #34D399 0%, #22C55E 28%, #4C93F5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.dashboard-navbar__cobrand-name {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
 /* flex:1 com max-width: ocupa o vão entre a marca e os grupos, mas sem virar uma
    faixa de 900px em monitor ultrawide. */
 .dashboard-navbar__search {
@@ -844,18 +925,28 @@ body {
   line-height: 16px;
 }
 
+/* O container ocupa a faixa que resta (flex:1), mas os itens ficam JUNTOS e
+   centrados nela. space-between empurrava cada um para uma extremidade e abria vãos
+   de ~60px — a barra ficava preenchida e os grupos, soltos. Centralizado com gap
+   fixo, o conjunto lê como um bloco e ainda fica equilibrado na barra. */
 .dashboard-navbar__groups {
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 8px;
 }
 
 .dashboard-navgroup {
   position: relative;
 }
 
+/* flex:0 0 auto para o gatilho nunca encolher: o rótulo é nowrap, então largura
+   menor que o conteúdo faria o texto vazar da caixa. Quando a barra aperta, quem
+   cede é a busca (tem min-width:0), não os nomes dos grupos. */
 .dashboard-navgroup__trigger {
+  flex: 0 0 auto;
   min-height: 36px;
   display: flex;
   align-items: center;
@@ -952,7 +1043,12 @@ body {
   flex: 0 0 16px;
 }
 
-.dashboard-navbar__toggle {
+/* Especificidade de DUAS classes de propósito. O botão também é .dashboard-icon-button,
+   que declara `display: inline-grid` mais adiante no arquivo — com uma classe só, a
+   regra posterior vencia e o hambúrguer aparecia em qualquer largura. Pior: o
+   `margin-left: auto` dele então engolia todo o espaço livre, criando um vão morto
+   entre a busca e os grupos. Duas classes vencem independente da ordem no arquivo. */
+.dashboard-navbar .dashboard-navbar__toggle {
   display: none;
   margin-left: auto;
 }
@@ -960,7 +1056,9 @@ body {
 /* Abaixo de 1024px os 5 grupos não caem lado a lado junto da marca, então viram
    um painel sob a navbar. */
 @media (max-width: 1023px) {
-  .dashboard-navbar__toggle {
+  /* Precisa das mesmas duas classes: a regra base agora tem essa especificidade, e
+     um seletor de uma classe aqui perderia mesmo estando dentro de @media. */
+  .dashboard-navbar .dashboard-navbar__toggle {
     display: inline-grid;
   }
 
@@ -972,6 +1070,9 @@ body {
     display: none;
     flex-direction: column;
     align-items: stretch;
+    /* No painel a direção é coluna: o space-between do desktop espalharia os grupos
+       verticalmente, deixando vãos enormes entre eles. */
+    justify-content: flex-start;
     gap: 4px;
     max-height: calc(100dvh - 56px);
     overflow-y: auto;
@@ -1017,9 +1118,23 @@ body {
   }
 }
 
-/* Em telefone não há teclado físico: a dica do atalho só rouba largura do campo. */
+/* Espaço fica disputado antes do painel mobile: some o NOME da Movingpay e fica
+   só o monograma, que já identifica a empresa sem custar largura. */
+@media (max-width: 1023px) {
+  .dashboard-navbar__cobrand-name {
+    display: none;
+  }
+}
+
+/* Em telefone não há teclado físico: a dica do atalho só rouba largura do campo.
+   E o co-branding inteiro sai, para a busca ter espaço utilizável. */
 @media (max-width: 639px) {
   .dashboard-navbar__search kbd {
+    display: none;
+  }
+
+  .dashboard-navbar__divider,
+  .dashboard-navbar__cobrand {
     display: none;
   }
 
@@ -1347,7 +1462,10 @@ body {
   z-index: 30;
   flex: 0 0 68px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* 2 colunas: breadcrumb + ações. Era 1fr auto 1fr por causa do filtro de período
+     no meio; com o filtro removido, manter 3 colunas jogaria as ações na coluna do
+     meio e deixaria a 3ª (1fr) vazia à direita, afastando-as da borda. */
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 20px;
   /* 24px à esquerda para alinhar com a navbar acima. Os 40px anteriores existiam
@@ -1356,14 +1474,6 @@ body {
   padding: 0 24px;
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-card-solid);
-}
-
-/* Só as páginas com filtro de período têm 3 filhos. Sem ele sobravam 2 filhos num
-   template de 3 colunas: as ações caíam na coluna do MEIO e a 3ª (1fr) ficava vazia
-   à direita — o bloco de ações parava longe da borda em vez de encostar nela.
-   :has() adapta o template à presença real do filtro. */
-.dashboard-topbar:not(:has(.dashboard-topbar__period)) {
-  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .dashboard-topbar__breadcrumb {
@@ -1403,44 +1513,6 @@ body {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.dashboard-topbar__period {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-control);
-  background: var(--bg-card-solid);
-}
-
-.dashboard-topbar__period button {
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-tertiary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.dashboard-topbar__period button:hover,
-.dashboard-topbar__period button.is-active {
-  background: var(--accent-blue-light);
-  color: var(--accent-blue);
-}
-
-.dashboard-topbar__period .dashboard-topbar__clear {
-  width: 30px;
-  padding: 0;
-  color: var(--accent-rose);
 }
 
 .dashboard-topbar__actions {
@@ -1829,12 +1901,6 @@ body {
     padding-block: 12px;
   }
 
-  .dashboard-topbar__period {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-self: stretch;
-    overflow-x: auto;
-  }
 }
 
 @media (max-width: 639px) {

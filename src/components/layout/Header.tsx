@@ -3,11 +3,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, ChevronDown, LogOut, Moon, Sun, X } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useFilters } from '@/contexts/FilterContext';
 import { settingsNavigationItem } from '@/config/navigation';
-import type { DateRange } from '@/types';
 
 interface HeaderProps {
   title: string;
@@ -32,21 +30,12 @@ export default function Header({ title, subtitle }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
-  const { filters, setDateRange, hasActiveFilters, clearFilters } = useFilters();
   const [userEmail, setUserEmail] = useState('');
   const [userImage, setUserImage] = useState('');
   const [userRole, setUserRole] = useState<'admin' | 'user'>('user');
   const [authMethod, setAuthMethod] = useState<'google' | 'slack' | ''>('');
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-
-  const showsDateFilter = ['/dashboard', '/dashboard/suporte', '/dashboard/dev'].includes(pathname);
-  const dateRanges: { label: string; value: DateRange }[] = [
-    { label: 'Hoje', value: 'today' },
-    { label: '7 dias', value: '7d' },
-    { label: '30 dias', value: '30d' },
-    { label: '90 dias', value: '90d' },
-  ];
 
   useEffect(() => {
     fetch('/api/custom-session')
@@ -114,27 +103,6 @@ export default function Header({ title, subtitle }: HeaderProps) {
         </nav>
         {subtitle && <span className="dashboard-topbar__context">{subtitle}</span>}
       </div>
-
-      {showsDateFilter && (
-        <div className="dashboard-topbar__period" aria-label="Período dos dados">
-          {dateRanges.map(({ label, value }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setDateRange(value)}
-              aria-pressed={filters.dateRange === value}
-              className={filters.dateRange === value ? 'is-active' : ''}
-            >
-              {label}
-            </button>
-          ))}
-          {hasActiveFilters && (
-            <button type="button" className="dashboard-topbar__clear" onClick={clearFilters} aria-label="Limpar filtros">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      )}
 
       {/* O ícone de busca saiu daqui: a navbar agora tem a barra de pesquisa, e as
           duas abriam a MESMA paleta de comandos — dois gatilhos idênticos na mesma
