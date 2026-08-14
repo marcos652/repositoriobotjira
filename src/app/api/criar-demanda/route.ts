@@ -117,6 +117,7 @@ NÃO COPIE E COLE o texto original. Reescreva de forma profissional e extraia as
 
 IMPORTANTE SOBRE IMAGENS E ANEXOS:
 MANTENHA AS MARCAÇÕES DE IMAGEM (no formato !nome_do_arquivo.ext!) EXATAMENTE no mesmo contexto/seção em que apareceram no texto original. Por exemplo, se a imagem (!imagem.png!) estava explicando o problema, mantenha-a na seção "descricao_ou_problema" ou "passos_reproduzir". A pessoa precisa que a imagem fique na descrição na ordem que ela escolheu.
+Cada marcação deve ficar SOZINHA EM UMA LINHA, logo depois do trecho de texto que ela ilustra — nunca no meio de uma frase e nunca agrupada com as outras no fim da seção. Se o relato alterna texto e imagem (escreve, imagem, escreve, imagem), reproduza essa mesma alternância na seção correspondente.
 
 REGRAS DE IDENTIFICAÇÃO DE PRODUTO:
 Identifique se o problema/demanda ocorre em um dos seguintes painéis/produtos e retorne o ID correspondente na chave "produto_id". Caso não consiga identificar, retorne null.

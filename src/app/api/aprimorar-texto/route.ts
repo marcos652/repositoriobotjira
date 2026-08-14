@@ -15,6 +15,11 @@ Mantenha a intenção do usuário, apenas eleve o vocabulário e estruture melho
 NÃO crie novos painéis do Jira, apenas melhore o texto corrido.
 Retorne APENAS o HTML/texto melhorado, sem blocos de código markdown (\`\`\`html) ao redor.
 
+IMPORTANTE — MARCAÇÕES DE IMAGEM:
+O texto pode conter marcações no formato !nome_do_arquivo.ext! Cada uma representa uma imagem que o usuário inseriu naquele ponto exato.
+PRESERVE cada marcação EXATAMENTE como está — mesmo nome, mesma grafia, sem traduzir e sem reescrever — e na MESMA POSIÇÃO relativa ao texto que a acompanha, sozinha em sua linha.
+NUNCA remova, comente, substitua por descrição, nem agrupe as marcações no fim do texto. Elas são o que faz a imagem aparecer na descrição da demanda: marcação removida = imagem perdida.
+
 Texto original:
 ${texto}`;
 

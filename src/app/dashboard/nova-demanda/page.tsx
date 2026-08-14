@@ -194,7 +194,14 @@ export default function NovaDemandaPage() {
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
-    extensions: [StarterKit, ImageExtension.configure({ inline: true })],
+    // allowBase64 é OBRIGATÓRIO aqui: o padrão da extensão é false, e nesse modo a
+    // regra de parse dela é 'img[src]:not([src^="data:"])' — ou seja, ela DESCARTA
+    // silenciosamente toda imagem base64 na entrada. Como o /api/upload-image
+    // devolve data URL (para funcionar no serverless da Vercel, sem filesystem),
+    // nenhuma imagem colada aparecia dentro do editor. E como não sobrava <img> no
+    // getHTML(), a extração no submit também não achava nada para virar marcador:
+    // a imagem ia pro Jira só como anexo solto, fora da descrição.
+    extensions: [StarterKit, ImageExtension.configure({ inline: true, allowBase64: true })],
     content: texto,
     immediatelyRender: false,
     editorProps: {
@@ -202,7 +209,7 @@ export default function NovaDemandaPage() {
       // em vez de um listener global. O handler do ProseMirror roda antes de qualquer
       // listener em "window", então só aqui dá pra evitar que ele insira o clipboard
       // bruto como texto (o "MBNDLÇDMÇ..." ilegível) antes do preventDefault surtir efeito.
-      handlePaste: (_view, event) => {
+      handlePaste: (view, event) => {
         const items = event.clipboardData?.items;
         if (!items) return false;
         for (const item of Array.from(items)) {
@@ -210,7 +217,10 @@ export default function NovaDemandaPage() {
             event.preventDefault();
             event.stopPropagation();
             const file = item.getAsFile();
-            if (file) uploadFile(file);
+            // Guarda ONDE o cursor está agora: o upload é assíncrono e a imagem
+            // precisa entrar aqui, não no fim do texto. É isso que permite
+            // escrever, colar a imagem, e continuar escrevendo abaixo.
+            if (file) uploadFile(file, view.state.selection.to);
             return true;
           }
         }
@@ -278,21 +288,54 @@ export default function NovaDemandaPage() {
     editor?.commands.focus();
   };
 
+  // Agora que o editor aceita base64, o HTML dele pode ter megabytes de imagem
+  // embutida. Enviar isso pra IA custaria caro, estouraria o limite de tokens, e ela
+  // devolveria o texto SEM as imagens — que o setContent então apagaria. Então as
+  // imagens saem como marcador na ida e voltam no lugar na volta.
+  const trocarImagensPorMarcador = (html: string) =>
+    html.replace(/<img[^>]*src="data:[^"]*"[^>]*>/g, (tag) => {
+      const alt = /alt="([^"]*)"/.exec(tag)?.[1];
+      return alt ? ` !${alt}! ` : '';
+    });
+
+  const blocoImagem = (url: string, filename: string) =>
+    `<p><img src="${url}" alt="${filename}" style="max-width: 100%; max-height: 300px; border-radius: 8px;" /></p>`;
+
+  const restaurarImagens = (html: string) => {
+    const comImagens = uploadedImages.reduce((acc, img) => {
+      if (!img.isImage) return acc;
+      const escapado = img.filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return acc.replace(new RegExp(`\\s*!${escapado}!\\s*`, 'g'), blocoImagem(img.url, img.filename));
+    }, html);
+
+    // Rede de segurança: a IA às vezes apaga o marcador apesar da instrução, e aí
+    // não há onde recolocar a imagem — ela desapareceria do editor E da descrição.
+    // O que não voltou é reanexado no fim: melhor no lugar errado do que perdido.
+    const perdidas = uploadedImages.filter(
+      (img) => img.isImage && !comImagens.includes(`alt="${img.filename}"`)
+    );
+    if (perdidas.length === 0) return comImagens;
+
+    console.warn(`[Aprimorar] IA removeu ${perdidas.length} marcação(ões) de imagem; reanexando no fim`);
+    return comImagens + perdidas.map((img) => blocoImagem(img.url, img.filename)).join('');
+  };
+
   const enhanceText = async () => {
     const htmlContent = editor?.getHTML() || texto;
     if (!htmlContent.trim() || htmlContent === '<p></p>') return;
-    
+
     setEnhancing(true);
     try {
       const res = await fetch('/api/aprimorar-texto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto: htmlContent })
+        body: JSON.stringify({ texto: trocarImagensPorMarcador(htmlContent) })
       });
       const data = await res.json();
       if (res.ok && data.success && data.text) {
-        editor?.commands.setContent(data.text);
-        setTexto(data.text);
+        const comImagens = restaurarImagens(data.text);
+        editor?.commands.setContent(comImagens);
+        setTexto(comImagens);
       } else {
         setResult({ success: false, error: data.error || 'Erro ao aprimorar texto' });
       }
@@ -305,7 +348,12 @@ export default function NovaDemandaPage() {
 
   // Upload file helper
   const ALLOWED_TYPES = ['image/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats', 'text/plain', 'text/csv'];
-  const uploadFile = async (file: File) => {
+  // `insertAt` é a posição no documento onde a imagem deve entrar — capturada no
+  // momento da colagem, ANTES do upload. Sem ela a imagem ia sempre pro fim, o que
+  // impedia escrever, colar, escrever de novo (o formato do Jira). A posição é
+  // capturada e não lida depois porque o upload é assíncrono: o cursor pode ter se
+  // movido enquanto o arquivo subia.
+  const uploadFile = async (file: File, insertAt?: number) => {
     const isAllowed = ALLOWED_TYPES.some(t => file.type.startsWith(t));
     if (!isAllowed) {
       setResult({ success: false, error: `Tipo de arquivo não suportado: ${file.type}` });
@@ -329,13 +377,27 @@ export default function NovaDemandaPage() {
         setUploadedImages(prev => [...prev, img]);
         setUrlsImagens(prev => [...prev, data.url]);
 
-        // Insere sempre no final do texto, como um bloco próprio — fica "texto em cima, imagem embaixo"
-        // em vez de entrar no meio da frase onde o cursor estava.
+        // Bloco próprio (<p>) para a imagem virar uma linha entre parágrafos, e não
+        // entrar no meio da frase — é o que dá o "texto, imagem, texto" do Jira.
+        // Mesmo helper usado na restauração pós-aprimoramento: se a marcação do
+        // <img> divergir entre os dois lugares, a restauração deixa de reconhecer
+        // a imagem (ela casa por alt="...").
         const insertion = isImage
-          ? `<p><img src="${data.url}" alt="${finalFilename}" style="max-width: 100%; max-height: 300px; border-radius: 8px;" /></p>`
+          ? blocoImagem(data.url, finalFilename)
           : `<p><a href="${data.url}" target="_blank" rel="noopener noreferrer">${finalFilename}</a></p>`;
         if (editor) {
-          editor.chain().focus('end').insertContent(insertion).run();
+          if (typeof insertAt === 'number') {
+            // Clamp: o documento pode ter encurtado enquanto o upload rodava, e uma
+            // posição além do fim faz o ProseMirror lançar RangeError.
+            const pos = Math.min(insertAt, editor.state.doc.content.size);
+            // focus() depois do insert deixa o cursor após a imagem, pronto pra
+            // continuar escrevendo abaixo dela.
+            editor.chain().insertContentAt(pos, insertion).focus().run();
+          } else {
+            // Sem posição (colagem fora do editor, dropzone, seleção de arquivo):
+            // vai pro fim, que é o comportamento previsível quando não há cursor.
+            editor.chain().focus('end').insertContent(insertion).run();
+          }
         } else {
           setTexto(prev => prev + insertion);
         }
