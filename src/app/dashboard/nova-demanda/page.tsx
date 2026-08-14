@@ -348,6 +348,54 @@ export default function NovaDemandaPage() {
 
   // Upload file helper
   const ALLOWED_TYPES = ['image/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats', 'text/plain', 'text/csv'];
+  // Reduz a imagem ANTES do upload. Print de monitor 4K vira ~2 MB de PNG, que em
+  // base64 passa de 2,7 MB — duas dessas já estouram o limite de 4,5 MB por
+  // requisição da Vercel (o 413 / FUNCTION_PAYLOAD_TOO_LARGE). WebP em vez de JPEG
+  // porque screenshot é cheio de texto e borda dura, onde o JPEG cria halo.
+  // Falha em qualquer etapa devolve o arquivo original: melhor grande que perdido.
+  const LADO_MAX = 1600;
+  const BYTES_LIMITE = 400 * 1024;
+
+  const comprimirImagem = (file: File): Promise<File> =>
+    new Promise((resolve) => {
+      // SVG é vetor (redimensionar não reduz) e GIF pode ser animado (canvas
+      // achataria no primeiro frame).
+      if (!file.type.startsWith('image/') || /svg|gif/.test(file.type)) return resolve(file);
+
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const maiorLado = Math.max(img.width, img.height);
+        if (maiorLado <= LADO_MAX && file.size <= BYTES_LIMITE) return resolve(file);
+
+        const escala = Math.min(1, LADO_MAX / maiorLado);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * escala);
+        canvas.height = Math.round(img.height * escala);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(
+          (blob) => {
+            // Se o "comprimido" ficou maior (acontece com print pequeno e chapado),
+            // fica o original.
+            if (!blob || blob.size >= file.size) return resolve(file);
+            const nome = `${file.name.replace(/\.[^.]+$/, '')}.webp`;
+            resolve(new File([blob], nome, { type: 'image/webp' }));
+          },
+          'image/webp',
+          0.85
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+
   // `insertAt` é a posição no documento onde a imagem deve entrar — capturada no
   // momento da colagem, ANTES do upload. Sem ela a imagem ia sempre pro fim, o que
   // impedia escrever, colar, escrever de novo (o formato do Jira). A posição é
@@ -365,17 +413,19 @@ export default function NovaDemandaPage() {
     }
     setUploading(true);
     try {
+      const arquivo = await comprimirImagem(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', arquivo);
       const res = await fetch('/api/upload-image', { method: 'POST', body: formData });
       const data = await res.json();
       if (res.ok) {
-        const isImage = file.type.startsWith('image/');
-        const preview = isImage ? URL.createObjectURL(file) : undefined;
-        const finalFilename = data.displayName || file.name;
-        const img: UploadedImage = { url: data.url, filename: finalFilename, preview, isImage, type: file.type };
+        const isImage = arquivo.type.startsWith('image/');
+        const preview = isImage ? URL.createObjectURL(arquivo) : undefined;
+        const finalFilename = data.displayName || arquivo.name;
+        const img: UploadedImage = { url: data.url, filename: finalFilename, preview, isImage, type: arquivo.type };
         setUploadedImages(prev => [...prev, img]);
-        setUrlsImagens(prev => [...prev, data.url]);
+        // NÃO empilha o data URL em urlsImagens: ele já vai em "arquivos" no submit,
+        // e mandar nos dois lugares dobrava o tamanho da requisição.
 
         // Bloco próprio (<p>) para a imagem virar uma linha entre parágrafos, e não
         // entrar no meio da frase — é o que dá o "texto, imagem, texto" do Jira.
@@ -493,7 +543,12 @@ export default function NovaDemandaPage() {
     const body: Record<string, unknown> = { texto: textoLimpo };
     if (nomeCliente.trim()) body.nome_cliente = nomeCliente.trim();
     if (referencia.trim()) body.referencia = referencia.trim();
-    if (urlsImagens.length > 0) body.urls_imagens = urlsImagens; // legacy fallback
+    // Só URLs http digitadas à mão entram aqui. Os uploads NÃO: eles já vão em
+    // "arquivos" com o mesmo data URL, e a rota só usa urls_imagens como fallback
+    // quando "arquivos" está vazio — mandar os dois dobrava o payload à toa e era
+    // metade do caminho para o 413 (limite de 4,5 MB por requisição na Vercel).
+    const urlsExternas = urlsImagens.filter((u) => !u.startsWith('data:'));
+    if (urlsExternas.length > 0) body.urls_imagens = urlsExternas;
     
     // Unir os arquivos das imagens embutidas (do quill) com os uploads da dropzone
     const todosArquivos = [...uploadedImages.map(img => ({ url: img.url, filename: img.filename })), ...extractedArquivos];
@@ -505,6 +560,22 @@ export default function NovaDemandaPage() {
     }
     if (prioridade) body.prioridade = prioridade;
     if (urgencia) body.urgencia = urgencia;
+
+    // A Vercel corta requisição acima de 4,5 MB e devolve 413
+    // FUNCTION_PAYLOAD_TOO_LARGE — um erro de plataforma, sem pista do motivo. Se
+    // ainda passar do limite depois da compressão, é melhor dizer o que aconteceu e
+    // quanto ficou do que deixar a demanda morrer com código de erro cru.
+    const LIMITE_REQUISICAO = 4 * 1024 * 1024;
+    const tamanhoPayload = new Blob([JSON.stringify(body)]).size;
+    if (tamanhoPayload > LIMITE_REQUISICAO) {
+      const mb = (tamanhoPayload / 1024 / 1024).toFixed(1);
+      setResult({
+        success: false,
+        error: `As imagens somam ${mb} MB e o limite por requisição é 4,5 MB. Remova uma imagem ou envie as maiores como anexo direto no Jira depois de criar a demanda.`,
+      });
+      setLoading(false);
+      return;
+    }
 
     // Simulate progress steps
     const stepInterval = setInterval(() => {
