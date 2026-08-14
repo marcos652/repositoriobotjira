@@ -11,6 +11,20 @@ export interface IssueLike {
   sections?: IssueSections;
 }
 
+/**
+ * Todas as chaves de seção que podem aparecer, somando os tipos de issue tratados
+ * em sectionDefs(). Fonte única para o schema que restringe a saída da IA — se uma
+ * seção nova entrar em sectionDefs e não aqui, a IA não terá como preenchê-la.
+ */
+export const ALL_SECTION_KEYS = [
+  'contexto',
+  'descricao_ou_problema',
+  'comportamento_esperado_ou_aceite',
+  'passos_reproduzir',
+  'evidencias',
+  'observacoes',
+] as const;
+
 export type PanelType = 'info' | 'tip' | 'warning' | 'note';
 
 const PANEL_COLORS: Record<PanelType, string> = {

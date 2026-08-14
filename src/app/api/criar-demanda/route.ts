@@ -2,10 +2,47 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Aumenta o timeout para 60s no plano Pro da Vercel (padrão Hobby é 10s)
 export const maxDuration = 60;
-import { generateText } from '@/lib/aiFallback';
+import { generateText, parseAiJson, type AiProvider } from '@/lib/aiFallback';
 import { CLIENTS } from '@/lib/clients';
 import { backofficeEndpoints, slcEndpoints, cnabEndpoints } from '@/lib/endpoints';
-import { buildDescription } from '@/lib/issuePanels';
+import { buildDescription, ALL_SECTION_KEYS, type IssueLike } from '@/lib/issuePanels';
+
+// Restringe a saída da IA à forma da demanda. Sem isso o modelo pode devolver
+// JSON perfeitamente válido mas de OUTRA COISA — e devolveu: veio um payload
+// paginado de API ({total, page, perPage, lastPage, recuperado, em_atraso...}),
+// provavelmente ecoando um trecho colado no próprio relato em vez de estruturá-lo.
+// O parse acertava, a demanda saía sem summary, e o erro não dizia por quê.
+// Como cada seção é declarada STRING, o schema também impede o caso de a IA
+// mandar uma seção como array (visto em "passos_reproduzir").
+const DEMANDA_SCHEMA_GEMINI = {
+  type: 'OBJECT',
+  properties: {
+    summary: { type: 'STRING' },
+    client_name: { type: 'STRING' },
+    client_id: { type: 'STRING', nullable: true },
+    issuetype: { type: 'STRING', enum: ['Bug', 'Story', 'Task'] },
+    story_type: { type: 'STRING', nullable: true },
+    produto_id: { type: 'STRING', nullable: true },
+    resumo_slack: { type: 'STRING' },
+    sections: {
+      type: 'OBJECT',
+      properties: Object.fromEntries(ALL_SECTION_KEYS.map((k) => [k, { type: 'STRING' }])),
+      required: ['contexto', 'descricao_ou_problema', 'observacoes'],
+    },
+  },
+  required: ['summary', 'client_name', 'issuetype', 'resumo_slack', 'sections'],
+};
+
+// Forma do objeto que a IA devolve. Estende IssueLike (o que buildDescription
+// consome) com os campos que só existem no fluxo de criação da demanda.
+interface DemandaGerada extends IssueLike {
+  summary?: string;
+  client_name?: string;
+  client_id?: string;
+  produto_id?: string;
+  resumo_slack?: string;
+  description?: string;
+}
 import { isSafeExternalUrl } from '@/lib/ssrfGuard';
 import { reserveDemandaSlot, releaseDemandaSlot } from '@/lib/demandaLimit';
 
@@ -103,44 +140,80 @@ O "sections" deve ser um objeto com as chaves descritas acima.
 O campo "summary" DEVE começar com o nome do cliente seguido de um hífen (ex: Nome do Cliente - Título curto e técnico). NÃO use colchetes.
 O campo "resumo_slack" deve conter de 1 a 2 linhas explicando resumidamente a demanda.`;
 
-  // Gemini primeiro (grátis até a cota diária), Claude como fallback se ele falhar.
-  const { text: generated, provider } = await generateText(prompt, { maxTokens: 4096, jsonMode: true });
-  console.log(`[IA] Demanda gerada via ${provider}`);
-  let text = generated;
+  // O fallback do generateText só cobria FALHA DE API. Saída que não parseia, ou
+  // que parseia mas não é uma demanda, é igualmente fatal — e é variação do
+  // modelo, não erro de prompt. Vale uma segunda tentativa antes de errar.
+  const erroMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-  // Remove markdown code fences if present
-  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    text = jsonMatch[1].trim();
-  } else {
-    // Remove leading/trailing ``` in case they're not matched
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  }
+  const gerarEValidar = async (forceProvider?: AiProvider) => {
+    const { text, provider } = await generateText(prompt, {
+      maxTokens: 4096,
+      jsonMode: true,
+      geminiResponseSchema: DEMANDA_SCHEMA_GEMINI,
+      forceProvider,
+    });
+    try {
+      const parsed = parseAiJson<DemandaGerada>(text);
+      // O schema garante a forma no Gemini, mas o Claude ainda não é restringido
+      // por schema — então a checagem fica no código, valendo para os dois.
+      if (!parsed || typeof parsed !== 'object' || typeof parsed.summary !== 'string' || !parsed.summary.trim()) {
+        const campos = parsed && typeof parsed === 'object' ? Object.keys(parsed).join(', ') : typeof parsed;
+        throw new Error(`resposta sem o campo "summary" (recebido: ${campos})`);
+      }
+      return { data: parsed, provider };
+    } catch (e) {
+      console.error(`[IA/${provider}] Saída inaproveitável. Cru:`, text.slice(0, 500));
+      throw e;
+    }
+  };
 
+  // Gemini primeiro (grátis até a cota diária), Claude como fallback.
+  let result: { data: DemandaGerada; provider: AiProvider };
   try {
-    const data = JSON.parse(text);
+    result = await gerarEValidar();
+  } catch (e) {
+    console.warn(`[IA] 1ª tentativa inválida (${erroMsg(e)}) — refazendo no Claude`);
+    try {
+      result = await gerarEValidar('claude');
+    } catch (e2) {
+      throw new Error(`IA não devolveu uma demanda válida: ${erroMsg(e2)}`);
+    }
+  }
+  const data = result.data;
+  console.log(`[IA] Demanda gerada via ${result.provider}`);
 
-    // Rede de segurança: o modelo às vezes "esquece" de manter a marcação !arquivo.ext! quando
-    // o relato é muito curto/vago (ex: só a imagem, sem texto explicando o que ela mostra).
-    // Sem isso a imagem vira só um anexo solto no Jira, sem aparecer na descrição.
-    const markers = Array.from(new Set(texto.match(/!([\w-]+\.[a-zA-Z0-9]{2,5})!/g) || []));
-    if (markers.length > 0) {
-      data.sections = data.sections || {};
-      const currentText = Object.values(data.sections).filter((v: any) => typeof v === 'string').join(' ');
-      const missing = markers.filter(m => !currentText.includes(m));
-      if (missing.length > 0) {
-        const fallbackKey = data.issuetype === 'Bug' ? 'evidencias' : 'observacoes';
-        data.sections[fallbackKey] = [data.sections[fallbackKey], ...missing].filter(Boolean).join('\n');
+  // A IA às vezes devolve uma seção como ARRAY em vez de string — visto em
+  // "passos_reproduzir", que ela lista como um passo por item. Sem normalizar,
+  // o painel do Jira recebe o JSON cru (buildDescription faz JSON.stringify do
+  // que não é string) e o preview do cliente mostra os passos separados por
+  // vírgula. Converter aqui, na fonte, resolve para os dois consumidores — e
+  // faz a rede de segurança de marcações abaixo enxergar o conteúdo também.
+  const sections = data.sections as Record<string, unknown> | undefined;
+  if (sections) {
+    for (const [chave, valor] of Object.entries(sections)) {
+      if (Array.isArray(valor)) {
+        sections[chave] = valor.filter(Boolean).map(String).join('\n');
       }
     }
-
-    // Descrição Jira Wiki Markup construída pela mesma config de seções usada no preview do cliente.
-    data.description = buildDescription(data);
-    return data;
-  } catch (e: any) {
-    console.error(`[IA/${provider}] Failed to parse JSON. Raw output:`, text.slice(0, 500));
-    throw new Error(`IA (${provider}) retornou JSON inválido: ${e.message}`);
   }
+
+  // Rede de segurança: o modelo às vezes "esquece" de manter a marcação !arquivo.ext! quando
+  // o relato é muito curto/vago (ex: só a imagem, sem texto explicando o que ela mostra).
+  // Sem isso a imagem vira só um anexo solto no Jira, sem aparecer na descrição.
+  const markers = Array.from(new Set(texto.match(/!([\w-]+\.[a-zA-Z0-9]{2,5})!/g) || []));
+  if (markers.length > 0) {
+    data.sections = data.sections || {};
+    const currentText = Object.values(data.sections).filter((v) => typeof v === 'string').join(' ');
+    const missing = markers.filter(m => !currentText.includes(m));
+    if (missing.length > 0) {
+      const fallbackKey = data.issuetype === 'Bug' ? 'evidencias' : 'observacoes';
+      data.sections[fallbackKey] = [data.sections[fallbackKey], ...missing].filter(Boolean).join('\n');
+    }
+  }
+
+  // Descrição Jira Wiki Markup construída pela mesma config de seções usada no preview do cliente.
+  data.description = buildDescription(data);
+  return data;
 }
 
 // ─── Jira ───
@@ -405,7 +478,19 @@ export async function POST(request: NextRequest) {
       issueData = await generateIssueData(texto.trim(), referencia, nome_cliente, urgencia);
       if (!issueData || !issueData.summary) {
         if (demandaSlotReserved) await releaseDemandaSlot();
-        return NextResponse.json({ error: 'Falha na geração dos dados via IA', success: false }, { status: 500 });
+        // "Falha na geração dos dados via IA" não dizia nada: o parse pode ter
+        // funcionado e só o summary estar faltando. Reportar o que chegou torna
+        // a próxima ocorrência diagnosticável em vez de um mistério.
+        const recebido = issueData ? Object.keys(issueData).join(', ') || '(objeto vazio)' : `${typeof issueData}`;
+        console.error('[IA] Resposta sem "summary". Campos recebidos:', recebido);
+        return NextResponse.json(
+          {
+            error: 'A IA respondeu, mas sem o campo obrigatório "summary".',
+            details: `Campos recebidos: ${recebido}`,
+            success: false,
+          },
+          { status: 500 }
+        );
       }
     }
 
