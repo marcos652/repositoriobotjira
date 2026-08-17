@@ -14,7 +14,7 @@ import { useFilters } from '@/contexts/FilterContext';
 import type { DevMetrics, Sprint, SupportMetrics } from '@/types';
 import {
   Headphones, Code2, Ticket, CheckCircle2, Clock, AlertTriangle,
-  ArrowRight, Target, Bug, Loader2, WifiOff, RefreshCw, Quote
+  ArrowRight, Target, Bug, Loader2, WifiOff, RefreshCw, Quote, Sparkles
 } from 'lucide-react';
 import { Sun1, CloudSunny, Moon } from 'iconsax-react';
 
@@ -431,14 +431,46 @@ export default function DashboardOverview() {
           </p>
           {/* Frase do dia. Calculada com Intl fixado em America/Sao_Paulo, então servidor e
               cliente chegam à MESMA data independente do fuso de cada um — sem isso seria mais
-              um hydration mismatch. */}
-          <p
-            className="flex items-start gap-2 text-[13px] leading-5 mt-2.5 max-w-[520px]"
-            style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}
+              um hydration mismatch.
+
+              Ganhou peso visual de propósito: como textinho cinza itálico, ela lia como nota de
+              rodapé e ninguém parava nela. A barra colorida à esquerda e o fundo tênue a
+              separam do subtítulo sem competir com o "Boa tarde" — o degradê é discreto porque
+              o destaque vem do contraste com o resto da coluna, não de cor forte. */}
+          <figure
+            className="relative mt-4 max-w-[560px] overflow-hidden"
+            style={{
+              padding: '14px 18px 14px 20px',
+              borderRadius: '16px',
+              background: 'linear-gradient(100deg, var(--accent-violet-light) 0%, transparent 85%)',
+              border: '1px solid var(--border-primary)',
+            }}
           >
-            <Quote size={13} style={{ color: 'var(--accent-violet)', flexShrink: 0, marginTop: '2px' }} aria-hidden="true" />
-            <span>{frase.texto}</span>
-          </p>
+            {/* Barra na lateral, não ícone solto: guia o olho para a linha inteira. */}
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
+                background: 'linear-gradient(180deg, var(--accent-violet) 0%, var(--accent-blue) 100%)',
+              }}
+            />
+            <figcaption
+              className="flex items-center gap-1.5 text-[10px] font-bold uppercase"
+              style={{ color: 'var(--accent-violet)', letterSpacing: '0.08em' }}
+            >
+              <Sparkles size={11} aria-hidden="true" />
+              Frase do dia
+            </figcaption>
+            {/* 16px e peso médio: tamanho suficiente para ser lido de passagem, sem virar
+                título. O itálico saiu — em fonte maior ele atrapalhava a leitura. */}
+            <blockquote
+              className="text-[16px] leading-6 font-medium mt-1.5"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              <Quote size={13} style={{ color: 'var(--accent-violet)', opacity: 0.6, display: 'inline', marginRight: '6px', verticalAlign: 'text-top' }} aria-hidden="true" />
+              {frase.texto}
+            </blockquote>
+          </figure>
         </div>
         <ClimaMarilia />
         </div>
