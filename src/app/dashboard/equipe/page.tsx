@@ -26,13 +26,24 @@ interface Resposta {
 
 const avatarColors = ['#6366F1', '#EC4899', '#F59E0B', '#06B6D4', '#22C55E', '#8B5CF6', '#EF4444', '#14B8A6'];
 
-const PERIODOS = [
-  { id: 'today', label: 'Hoje' },
-  { id: '7d', label: 'Últimos 7 dias' },
-  { id: '30d', label: 'Últimos 30 dias' },
-  { id: '90d', label: 'Últimos 90 dias' },
-  { id: 'custom', label: 'Período personalizado' },
-] as const;
+/** Hoje em Marília. Não usa toISOString: ele converte para UTC e, depois das 21h, devolveria
+ *  a data de amanhã. en-CA porque o formato dele já é AAAA-MM-DD. */
+function hojeISO(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
+/** Soma dias a AAAA-MM-DD sem passar por fuso. */
+function somarDias(dia: string, n: number): string {
+  const [a, m, d] = dia.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+function rotuloDia(dia: string): string {
+  const [a, m, d] = dia.split('-').map(Number);
+  return new Date(a, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+}
 
 const CORES_CATEGORIA: Record<string, string> = {
   done: 'var(--accent-emerald)',
@@ -58,21 +69,19 @@ export default function EquipePage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [range, setRange] = useState<string>('30d');
-  const [inicio, setInicio] = useState('');
-  const [fim, setFim] = useState('');
+  // Busca por DIA: o campo principal é a data. `ate` vazio significa um único dia.
+  const [dia, setDia] = useState(hojeISO());
+  const [ate, setAte] = useState('');
   const [expandido, setExpandido] = useState<string | null>(null);
+  const [verParados, setVerParados] = useState(false);
 
   const buscar = useCallback(async (isRefresh = false) => {
-    // Período personalizado sem data de início não tem o que consultar — a rota devolveria 400.
-    if (range === 'custom' && !inicio) return;
+    if (!dia) return;
     try {
       if (isRefresh) setRefreshing(true); else setLoading(true);
-      let qs = `?range=${range}`;
-      if (range === 'custom') {
-        qs += `&start=${inicio}`;
-        if (fim) qs += `&end=${fim}`;
-      }
+      // Sempre range=custom: a tela pergunta por dia, não por "últimos N". Um dia só vira
+      // start=end, que a rota traduz para a janela daquele dia inteiro.
+      const qs = `?range=custom&start=${dia}&end=${ate || dia}`;
       const res = await fetch(`/api/jira/team-periodo${qs}`);
       const j = await res.json();
       if (!res.ok || !j.success) throw new Error(j.error || `HTTP ${res.status}`);
@@ -80,7 +89,7 @@ export default function EquipePage() {
       setError(null);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [range, inicio, fim]);
+  }, [dia, ate]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => void buscar());
@@ -105,11 +114,16 @@ export default function EquipePage() {
   );
 
   const { membros, totais } = dados;
-  // Ranking pelo que foi entregue NO PERÍODO — antes era o total de todos os tempos, que fazia
-  // o pódio nunca mudar.
-  const podio = membros.filter(m => m.entregou > 0).slice(0, 3);
-  const maxEntregou = Math.max(...membros.map(m => m.entregou), 1);
-  const rotuloPeriodo = PERIODOS.find(p => p.id === range)?.label || range;
+  // Quem MEXEU no dia vem primeiro e sozinho na grade. Quem aparece só por ter issue aberta
+  // (a busca do "está fazendo" traz todo mundo com trabalho em curso) fica numa lista separada:
+  // numa consulta de um dia, misturar os dois dava a impressão de que 9 pessoas trabalharam
+  // naquele dia quando só 3 tinham tocado em algo.
+  const ativos = membros.filter(m => m.tocou > 0);
+  const parados = membros.filter(m => m.tocou === 0 && m.fazendo > 0);
+  const podio = ativos.filter(m => m.entregou > 0).slice(0, 3);
+  const maxEntregou = Math.max(...ativos.map(m => m.entregou), 1);
+  const umDiaSo = !ate || ate === dia;
+  const rotuloPeriodo = umDiaSo ? rotuloDia(dia) : `${rotuloDia(dia)} até ${rotuloDia(ate)}`;
 
   return (
     <div className="eq-root">
@@ -118,42 +132,46 @@ export default function EquipePage() {
           <div className="eq-header-left">
             <div>
               <h1 className="eq-title">Equipe</h1>
-              <p className="eq-subtitle">Projeto DSMM · {rotuloPeriodo.toLowerCase()}</p>
+              <p className="eq-subtitle">Projeto DSMM · {rotuloPeriodo}</p>
             </div>
           </div>
           <div className="eq-header-actions">
-            {/* Um <select> nativo: é o controle "fechado" pedido, e no celular abre o seletor do
-                próprio sistema, que é melhor que qualquer menu que eu desenhasse. */}
-            <label className="eq-periodo">
-              <CalendarRange size={13} aria-hidden="true" />
-              <select value={range} onChange={e => { setRange(e.target.value); setExpandido(null); }} aria-label="Período">
-                {PERIODOS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
-            </label>
+            {/* A DATA é o controle principal. Setas para andar de um dia em um dia, que é como
+                se consulta na prática ("e ontem?"), sem abrir o calendário a cada passo. */}
+            <div className="eq-diaseletor">
+              <button className="eq-seta" onClick={() => { setDia(somarDias(dia, -1)); setExpandido(null); }} aria-label="Dia anterior">‹</button>
+              <label className="eq-datacampo">
+                <CalendarRange size={13} aria-hidden="true" />
+                <input type="date" value={dia} max={ate || undefined} onChange={e => { setDia(e.target.value); setExpandido(null); }} aria-label="Dia" />
+              </label>
+              {/* Desabilitada quando o dia é hoje: não existe dado de amanhã, e um botão que
+                  não faz nada é pior que um botão apagado. */}
+              <button className="eq-seta" onClick={() => { setDia(somarDias(dia, 1)); setExpandido(null); }} disabled={dia >= hojeISO()} aria-label="Dia seguinte">›</button>
+            </div>
 
-            {range === 'custom' && (
-              <>
-                <input className="eq-data" type="date" value={inicio} max={fim || undefined} onChange={e => setInicio(e.target.value)} aria-label="Início" />
-                <input className="eq-data" type="date" value={fim} min={inicio || undefined} onChange={e => setFim(e.target.value)} aria-label="Fim" />
-              </>
+            {ate ? (
+              <label className="eq-datacampo">
+                <span className="eq-ate">até</span>
+                <input type="date" value={ate} min={dia} max={hojeISO()} onChange={e => setAte(e.target.value)} aria-label="Até o dia" />
+                <button className="eq-limpar" onClick={() => setAte('')} aria-label="Voltar para um dia só">×</button>
+              </label>
+            ) : (
+              <button className="eq-refresh" onClick={() => setAte(dia)}>+ intervalo</button>
             )}
+
+            <button className="eq-refresh" onClick={() => { setDia(hojeISO()); setAte(''); }} disabled={umDiaSo && dia === hojeISO()}>Hoje</button>
 
             <button className="eq-refresh" onClick={() => void buscar(true)} disabled={refreshing}>
               <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /> Atualizar
             </button>
-            <div className="eq-pill-total">{membros.length} com atividade</div>
           </div>
         </div>
-
-        {range === 'custom' && !inicio && (
-          <p className="eq-dica">Escolha a data de início para consultar o período.</p>
-        )}
       </div>
 
       <div className="eq-body">
         <div className="eq-main">
           <div className="eq-grid">
-            {membros.map((m, i) => {
+            {ativos.map((m, i) => {
               const aberto = expandido === (m.accountId || m.email || m.name);
               const id = m.accountId || m.email || m.name;
               return (
@@ -230,10 +248,31 @@ export default function EquipePage() {
               );
             })}
 
-            {membros.length === 0 && (
-              <div className="eq-vazio">Ninguém movimentou issue do DSMM neste período.</div>
+            {ativos.length === 0 && (
+              <div className="eq-vazio">
+                Ninguém movimentou issue do DSMM {umDiaSo ? `em ${rotuloDia(dia)}` : 'neste intervalo'}.
+              </div>
             )}
           </div>
+
+          {parados.length > 0 && (
+            <div className="eq-parados">
+              <button onClick={() => setVerParados(v => !v)} aria-expanded={verParados}>
+                <ChevronDown size={12} style={{ transform: verParados ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} aria-hidden="true" />
+                {parados.length} {parados.length === 1 ? 'pessoa' : 'pessoas'} sem movimento {umDiaSo ? 'neste dia' : 'neste intervalo'}, mas com trabalho em aberto
+              </button>
+              {verParados && (
+                <div className="eq-parados-lista">
+                  {parados.map(m => (
+                    <div key={m.accountId || m.email || m.name} className="eq-parado">
+                      <span className="eq-parado-nome">{m.name}</span>
+                      <span className="eq-parado-num">{m.fazendo} em aberto{m.emAndamento > 0 ? ` · ${m.emAndamento} em andamento` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="eq-sidebar">
@@ -306,10 +345,25 @@ export default function EquipePage() {
         .eq-header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
         .eq-refresh,.eq-pill-total,.eq-periodo,.eq-data{min-height:40px;display:flex;align-items:center;gap:7px;padding:0 14px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border-primary);color:var(--text-secondary);font-size:12px;font-weight:600}
         .eq-refresh{cursor:pointer;font-family:inherit;transition:background .15s,color .15s}.eq-refresh:hover:not(:disabled){background:var(--bg-secondary);color:var(--text-primary)}.eq-refresh:disabled{opacity:.55;cursor:not-allowed}
-        .eq-periodo{padding-right:8px;cursor:pointer}
-        .eq-periodo select{border:0;background:transparent;color:var(--text-primary);font:inherit;font-size:12px;font-weight:600;cursor:pointer;outline:none;padding:0 4px}
-        .eq-data{font-family:inherit;color-scheme:dark}
-        .eq-dica{margin-top:10px;font-size:12px;color:var(--accent-amber)}
+        .eq-diaseletor{display:flex;align-items:stretch;gap:0}
+        .eq-seta{width:32px;min-height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-primary);background:var(--bg-card);color:var(--text-secondary);font:inherit;font-size:16px;cursor:pointer;transition:background .15s,color .15s}
+        .eq-seta:first-child{border-radius:8px 0 0 8px;border-right:0}
+        .eq-seta:last-child{border-radius:0 8px 8px 0;border-left:0}
+        .eq-seta:hover:not(:disabled){background:var(--bg-secondary);color:var(--text-primary)}
+        .eq-seta:disabled{opacity:.35;cursor:not-allowed}
+        .eq-diaseletor .eq-datacampo{border-radius:0}
+        .eq-datacampo{min-height:40px;display:flex;align-items:center;gap:7px;padding:0 12px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border-primary);color:var(--text-secondary);font-size:12px;font-weight:600}
+        .eq-datacampo input{border:0;background:transparent;color:var(--text-primary);font:inherit;font-size:12px;font-weight:600;outline:none;color-scheme:dark;cursor:pointer}
+        .eq-ate{color:var(--text-tertiary);font-size:11px}
+        .eq-limpar{border:0;background:transparent;color:var(--text-tertiary);font:inherit;font-size:14px;cursor:pointer;padding:0 2px}
+        .eq-limpar:hover{color:var(--accent-rose)}
+        .eq-parados{margin-top:16px}
+        .eq-parados>button{width:100%;min-height:38px;display:flex;align-items:center;justify-content:center;gap:7px;border:1px dashed var(--border-primary);border-radius:12px;background:transparent;color:var(--text-tertiary);font:inherit;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s,color .15s}
+        .eq-parados>button:hover{background:var(--bg-secondary);color:var(--text-secondary)}
+        .eq-parados-lista{margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+        .eq-parado{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:var(--bg-secondary)}
+        .eq-parado-nome{font-size:12px;font-weight:600;color:var(--text-secondary)}
+        .eq-parado-num{font-size:10px;color:var(--text-tertiary);font-variant-numeric:tabular-nums}
         .eq-body{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px;align-items:start}.eq-main{min-width:0}
         .eq-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
         .eq-card{padding:20px;border-radius:24px;background:var(--bg-card);border:1px solid var(--border-primary);transition:border-color .15s;min-width:0}
