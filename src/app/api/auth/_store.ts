@@ -907,13 +907,15 @@ async function pushTotpToRedis(hash: string, entry: TOTPEntry): Promise<void> {
   }
 }
 
-async function deleteTotpFromRedis(hash: string): Promise<void> {
+/** Retorna true se havia mesmo um cadastro no Redis para apagar. */
+async function deleteTotpFromRedis(hash: string): Promise<boolean> {
   const redis = getRedisClient();
-  if (!redis) return;
+  if (!redis) return false;
   try {
-    await redis.hdel(REDIS_TOTP_KEY, hash);
+    return (await redis.hdel(REDIS_TOTP_KEY, hash)) > 0;
   } catch (e: any) {
     console.error('[TOTP] Falha ao remover do Redis:', e?.message || e);
+    return false;
   }
 }
 
@@ -953,12 +955,15 @@ export const TOTP_STORE = {
   remove: async (email: string): Promise<boolean> => {
     const hash = totpEmailHash(email);
     const store = getTOTPStore();
-    const removed = store.delete(hash);
-    if (removed) {
-      saveTOTPStore();
-      await deleteTotpFromRedis(hash);
-    }
-    return removed;
+    const removidoLocal = store.delete(hash);
+    if (removidoLocal) saveTOTPStore();
+    // O hdel roda SEMPRE, e não só quando o delete local acerta: o Redis é a fonte
+    // de verdade e o cache em memória de uma instância recém-criada está vazio. Se
+    // dependesse do local, um reset feito por uma instância que nunca viu esse
+    // usuário não apagaria nada — o QR antigo continuaria valendo e o admin veria
+    // "resetado com sucesso".
+    const removidoRedis = await deleteTotpFromRedis(hash);
+    return removidoLocal || removidoRedis;
   },
 
   /** Get email hash */
@@ -1017,6 +1022,10 @@ export interface UserOverview {
   lastIp: string | null;
   lastLogin: string | null;
   ipBlocked: boolean;
+  // Se já concluiu o cadastro do Authenticator. Serve para o admin ver quem ainda não
+  // configurou o 2FA e se há algo a resetar — é informativo, não bloqueia nenhuma ação
+  // (ver o botão de resetar 2FA na tela de usuários).
+  hasTotp: boolean;
 }
 
 function displayNameFromEmail(email: string): string {
@@ -1041,6 +1050,7 @@ export function getUsersOverview(): UserOverview[] {
         lastIp: lastIpEntry?.ip || null,
         lastLogin: lastIpEntry?.lastSeen || null,
         ipBlocked: lastIpEntry?.blocked || false,
+        hasTotp: TOTP_STORE.has(email),
       };
     })
     .filter((u): u is UserOverview => u !== null);

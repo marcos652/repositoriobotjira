@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, ShieldCheck, ShieldOff, Hash, Search, Filter,
-  RefreshCw, Loader2, CheckCircle2, AlertTriangle, Globe, Clock, Lock, Unlock, ChevronDown, ChevronUp,
+  RefreshCw, Loader2, CheckCircle2, AlertTriangle, Globe, Clock, Lock, Unlock, ChevronDown, ChevronUp, X,
 } from 'lucide-react';
 
 interface UserRow {
@@ -17,6 +17,10 @@ interface UserRow {
   lastIp: string | null;
   lastLogin: string | null;
   ipBlocked: boolean;
+  // Opcional de propósito: isso vem de um fetch JSON, não de um contrato garantido.
+  // Um dado antigo em cache (ou o Fast Refresh preservando estado de antes do campo
+  // existir) chega sem ele, e "ausente" não é o mesmo que "não tem 2FA".
+  hasTotp?: boolean;
 }
 
 interface IpRow {
@@ -48,6 +52,10 @@ export default function UsuariosPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'blocked'>('all');
   const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
   const [togglingIp, setTogglingIp] = useState<string | null>(null);
+  const [resetandoTotp, setResetandoTotp] = useState<string | null>(null);
+  // Usuário aguardando confirmação do reset de 2FA. Guarda a linha inteira (e não só
+  // o e-mail) porque o modal mostra nome e situação do cadastro.
+  const [confirmarReset, setConfirmarReset] = useState<UserRow | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
@@ -76,6 +84,15 @@ export default function UsuariosPage() {
   }, []);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  // Escape fecha a confirmação. Sem isso o único jeito de sair de um modal de ação
+  // destrutiva seria mirar no Cancelar.
+  useEffect(() => {
+    if (!confirmarReset) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setConfirmarReset(null); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [confirmarReset]);
 
   useEffect(() => {
     if (message) {
@@ -112,6 +129,34 @@ export default function UsuariosPage() {
       if (res.ok) await loadUsers();
     } catch { setMessage({ type: 'error', text: 'Erro de conexão' }); }
     finally { setTogglingIp(null); }
+  };
+
+  // Apaga o segredo do Authenticator da pessoa. No próximo login ela cai na tela de QR
+  // code de novo, como se fosse o primeiro acesso.
+  //
+  // Confirmação obrigatória porque é irreversível e derruba o acesso dela até reescanear:
+  // não existe "desfazer" — o segredo é apagado, não desativado.
+  // O window.confirm nativo mostrava "localhost:3000 diz" e não dá para formatar nada;
+  // a confirmação virou um modal do próprio painel.
+  const handleResetTotp = async (user: UserRow) => {
+    setConfirmarReset(null);
+    setResetandoTotp(user.email);
+    try {
+      const res = await fetch('/api/auth/totp', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const data = await res.json();
+      // A rota responde 200 com success:false quando não havia cadastro (nada a
+      // apagar), então res.ok sozinho pintaria "Nenhum TOTP encontrado" de verde.
+      setMessage({
+        type: res.ok && data.success ? 'success' : 'error',
+        text: data.message || data.error || 'Não foi possível resetar',
+      });
+      if (res.ok) await loadUsers();
+    } catch { setMessage({ type: 'error', text: 'Erro de conexão' }); }
+    finally { setResetandoTotp(null); }
   };
 
   const handleToggleSpecificIp = async (email: string, ip: string, currentlyBlocked: boolean) => {
@@ -257,6 +302,14 @@ export default function UsuariosPage() {
                     <span className="us-user-name">
                       {user.name}
                       {user.role === 'admin' && <span className="us-badge us-badge-admin">Admin</span>}
+                      {/* "sem 2FA" só aparece quando falta — quem já configurou é o caso
+                          normal e não precisa de selo. Isso também sinaliza quem foi
+                          autorizado mas nunca concluiu o primeiro acesso. */}
+                      {user.hasTotp === false && (
+                        <span className="us-badge us-badge-no2fa" title="Ainda não configurou o Google Authenticator">
+                          sem 2FA
+                        </span>
+                      )}
                     </span>
                     <span className="us-user-email">{user.email}</span>
                   </div>
@@ -319,6 +372,22 @@ export default function UsuariosPage() {
                     {togglingIp === user.email ? <Loader2 size={13} className="us-spin" /> : <Globe size={13} />}
                     {user.ipBlocked ? 'Liberar IP' : 'Banir IP'}
                   </button>
+                  {/* hasTotp NÃO desabilita o botão: já foi visto reportar "tem 2FA" para
+                      quem não tinha, e um botão morto por dado errado deixaria o admin
+                      sem nenhuma forma de resetar. Ele só informa — o modal avisa quando
+                      parece não haver cadastro, e a rota é idempotente (responde
+                      "Nenhum TOTP encontrado" sem quebrar nada). */}
+                  <button
+                    className="us-action-btn"
+                    onClick={() => setConfirmarReset(user)}
+                    disabled={resetandoTotp === user.email}
+                    title={user.hasTotp === false
+                      ? 'Este usuário parece não ter Authenticator configurado'
+                      : 'Apagar o Authenticator: no próximo login ele escaneia um novo QR code'}
+                  >
+                    {resetandoTotp === user.email ? <Loader2 size={13} className="us-spin" /> : <ShieldOff size={13} />}
+                    Resetar 2FA
+                  </button>
                 </span>
               </div>
 
@@ -351,6 +420,70 @@ export default function UsuariosPage() {
           </div>
         )}
       </div>
+
+      {confirmarReset && (
+        // Clicar fora fecha, como nos outros modais do painel. O onClick fica no
+        // overlay e o conteúdo interrompe a propagação, senão clicar no texto
+        // fecharia a janela.
+        <div className="us-modal-overlay" onClick={() => setConfirmarReset(null)}>
+          <div
+            className="us-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="us-reset-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="us-modal-header">
+              <div className="us-modal-icon"><ShieldOff size={18} /></div>
+              <h2 id="us-reset-titulo">Resetar o Authenticator</h2>
+              <button className="us-modal-close" onClick={() => setConfirmarReset(null)} aria-label="Fechar">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="us-modal-body">
+              <p className="us-modal-lead">
+                <strong>{confirmarReset.name}</strong> vai precisar escanear um novo QR code
+                no próximo login.
+              </p>
+              <p className="us-modal-email">{confirmarReset.email}</p>
+
+              {/* O passo mais esquecido: o app antigo continua gerando códigos de 6
+                  dígitos que parecem válidos, e a pessoa erra sem entender o motivo. */}
+              <div className="us-modal-warn">
+                <AlertTriangle size={15} />
+                <span>
+                  Peça para apagar antes a entrada <strong>&quot;JiraOps Dashboard&quot;</strong> no
+                  app do celular. Se ela ficar lá, o código antigo será lido por engano e o
+                  login vai falhar.
+                </span>
+              </div>
+
+              {confirmarReset.hasTotp === false && (
+                <p className="us-modal-nota">
+                  Este usuário aparentemente ainda não concluiu o cadastro — não deve haver
+                  nada para apagar.
+                </p>
+              )}
+
+              <p className="us-modal-nota">Esta ação não pode ser desfeita.</p>
+            </div>
+
+            <div className="us-modal-footer">
+              <button className="us-modal-btn" onClick={() => setConfirmarReset(null)}>
+                Cancelar
+              </button>
+              <button
+                className="us-modal-btn us-modal-btn-danger"
+                onClick={() => handleResetTotp(confirmarReset)}
+              >
+                <ShieldOff size={14} />
+                Resetar 2FA
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .us-root { display: flex; flex-direction: column; gap: 24px; min-width: 0; min-height: 0; height: 100%; }
@@ -409,6 +542,31 @@ export default function UsuariosPage() {
         .us-badge-active { background: var(--accent-emerald-light); color: var(--accent-emerald); border: 1px solid var(--accent-emerald-light); }
         .us-badge-blocked { background: var(--accent-rose-light); color: var(--accent-rose); border: 1px solid var(--accent-rose-light); }
         .us-badge-admin { background: var(--accent-blue-light); color: var(--accent-blue); border: 1px solid var(--accent-blue-light); }
+        .us-badge-no2fa { background: rgba(245,158,11,0.12); color: #F59E0B; border: 1px solid rgba(245,158,11,0.25); }
+
+        /* Mesmo desenho dos modais das outras abas (im-modal / nd-modal). */
+        .us-modal-overlay { position: fixed; inset: 0; background: var(--bg-overlay); padding: 20px; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .us-modal { width: 100%; max-width: 480px; background: var(--bg-card); border-radius: 24px; border: 1px solid var(--border-primary); overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.28); }
+        .us-modal-header { display: flex; align-items: center; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--border-primary); }
+        .us-modal-header h2 { margin: 0; flex: 1; font-size: 16px; font-weight: 800; color: var(--text-primary); }
+        .us-modal-icon { width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(245,158,11,0.12); color: #F59E0B; }
+        .us-modal-close { width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-card); color: var(--text-tertiary); cursor: pointer; transition: background .15s, color .15s; }
+        .us-modal-close:hover { background: var(--bg-secondary); color: var(--text-primary); }
+        .us-modal-body { padding: 24px; display: flex; flex-direction: column; gap: 12px; }
+        .us-modal-lead { margin: 0; font-size: 14px; line-height: 20px; color: var(--text-secondary); }
+        .us-modal-lead strong { color: var(--text-primary); }
+        .us-modal-email { margin: 0; font: 600 12px var(--font-mono, monospace); color: var(--text-tertiary); word-break: break-all; }
+        /* Texto em --text-secondary, não em âmbar: âmbar sobre o fundo âmbar claro
+           fica ilegível no tema escuro. A cor fica só no ícone e na borda. */
+        .us-modal-warn { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 8px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); color: var(--text-secondary); font-size: 12px; line-height: 18px; }
+        .us-modal-warn strong { color: var(--text-primary); }
+        .us-modal-warn svg { flex-shrink: 0; margin-top: 1px; color: #F59E0B; }
+        .us-modal-nota { margin: 0; font-size: 12px; color: var(--text-tertiary); }
+        .us-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border-primary); background: var(--bg-secondary); }
+        .us-modal-btn { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border-primary); background: var(--bg-card); color: var(--text-secondary); font: 700 12px var(--font-sans); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+        .us-modal-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
+        .us-modal-btn-danger { background: #DC2626; border-color: #DC2626; color: #fff; }
+        .us-modal-btn-danger:hover { background: #B91C1C; border-color: #B91C1C; color: #fff; }
         .us-col-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
         .us-btn-toggle, .us-action-btn { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: 8px; font: 700 11px var(--font-sans); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
         .us-btn-toggle:disabled, .us-action-btn:disabled { opacity: .45; cursor: not-allowed; }

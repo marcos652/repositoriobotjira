@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ALLOWED_EMAILS, IP_TRACKER, getUsersOverview } from '../_store';
+import { ALLOWED_EMAILS, IP_TRACKER, TOTP_STORE, getUsersOverview } from '../_store';
 import { isAdmin, getSessionEmail } from '../_admin';
 
 // GET — Merged view of ALLOWED_EMAILS + IP_TRACKER, one row per user
@@ -8,7 +8,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Acesso restrito ao administrador' }, { status: 403 });
   }
 
-  await Promise.all([ALLOWED_EMAILS.sync(), IP_TRACKER.sync()]);
+  // TOTP_STORE.sync() é obrigatório aqui: hasTotp lê o cache em memória, que numa
+  // instância recém-criada está vazio. Sem sincronizar, todo mundo apareceria como
+  // "sem 2FA" na tela de usuários.
+  await Promise.all([ALLOWED_EMAILS.sync(), IP_TRACKER.sync(), TOTP_STORE.sync()]);
 
   const users = getUsersOverview();
   return NextResponse.json({
