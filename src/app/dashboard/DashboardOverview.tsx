@@ -420,7 +420,7 @@ export default function DashboardOverview() {
 
       {/* ═══ GREETING ═══ */}
       <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-5 flex-wrap">
+        <div className="flex items-center gap-4 flex-wrap flex-1">
         <div>
           <h1 className="flex items-center gap-2.5 text-[32px] leading-9 font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>
             <span>{greeting.label}{userName ? `, ${userName}` : ''}</span>
@@ -429,50 +429,53 @@ export default function DashboardOverview() {
           <p className="text-[15px] leading-6 mt-1" style={{ color: 'var(--text-tertiary)' }}>
             Aqui está o resumo do seu workspace hoje.
           </p>
-          {/* Frase do dia. Calculada com Intl fixado em America/Sao_Paulo, então servidor e
-              cliente chegam à MESMA data independente do fuso de cada um — sem isso seria mais
-              um hydration mismatch.
-
-              Ganhou peso visual de propósito: como textinho cinza itálico, ela lia como nota de
-              rodapé e ninguém parava nela. A barra colorida à esquerda e o fundo tênue a
-              separam do subtítulo sem competir com o "Boa tarde" — o degradê é discreto porque
-              o destaque vem do contraste com o resto da coluna, não de cor forte. */}
-          <figure
-            className="relative mt-4 max-w-[560px] overflow-hidden"
-            style={{
-              padding: '14px 18px 14px 20px',
-              borderRadius: '16px',
-              background: 'linear-gradient(100deg, var(--accent-violet-light) 0%, transparent 85%)',
-              border: '1px solid var(--border-primary)',
-            }}
-          >
-            {/* Barra na lateral, não ícone solto: guia o olho para a linha inteira. */}
-            <span
-              aria-hidden="true"
-              style={{
-                position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
-                background: 'linear-gradient(180deg, var(--accent-violet) 0%, var(--accent-blue) 100%)',
-              }}
-            />
-            <figcaption
-              className="flex items-center gap-1.5 text-[10px] font-bold uppercase"
-              style={{ color: 'var(--accent-violet)', letterSpacing: '0.08em' }}
-            >
-              <Sparkles size={11} aria-hidden="true" />
-              Frase do dia
-            </figcaption>
-            {/* 16px e peso médio: tamanho suficiente para ser lido de passagem, sem virar
-                título. O itálico saiu — em fonte maior ele atrapalhava a leitura. */}
-            <blockquote
-              className="text-[16px] leading-6 font-medium mt-1.5"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              <Quote size={13} style={{ color: 'var(--accent-violet)', opacity: 0.6, display: 'inline', marginRight: '6px', verticalAlign: 'text-top' }} aria-hidden="true" />
-              {frase.texto}
-            </blockquote>
-          </figure>
         </div>
         <ClimaMarilia />
+          {/* Frase do dia. Calculada com Intl fixado em America/Sao_Paulo, então servidor e
+            cliente chegam à MESMA data independente do fuso de cada um — sem isso seria mais
+            um hydration mismatch.
+
+            Ganhou peso visual de propósito: como textinho cinza itálico, ela lia como nota de
+            rodapé e ninguém parava nela.
+
+            Fica na MESMA linha do cabeçalho, ao lado do card do tempo, ocupando o vão que
+            sobrava antes dos selos de contagem. flex-1 com mínimo e máximo: ela estica até
+            440px, e desce inteira para a linha de baixo quando a tela não dá conta, em vez de
+            espremer o card do tempo. */}
+        <figure
+          className="relative flex-1 min-w-[260px] max-w-[440px] overflow-hidden"
+          style={{
+            padding: '14px 18px 14px 20px',
+            borderRadius: '16px',
+            background: 'linear-gradient(100deg, var(--accent-violet-light) 0%, transparent 85%)',
+            border: '1px solid var(--border-primary)',
+          }}
+        >
+          {/* Barra na lateral, não ícone solto: guia o olho para a linha inteira. */}
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px',
+              background: 'linear-gradient(180deg, var(--accent-violet) 0%, var(--accent-blue) 100%)',
+            }}
+          />
+          <figcaption
+            className="flex items-center gap-1.5 text-[10px] font-bold uppercase"
+            style={{ color: 'var(--accent-violet)', letterSpacing: '0.08em' }}
+          >
+            <Sparkles size={11} aria-hidden="true" />
+            Frase do dia
+          </figcaption>
+          {/* 16px e peso médio: tamanho suficiente para ser lido de passagem, sem virar
+              título. O itálico saiu — em fonte maior ele atrapalhava a leitura. */}
+          <blockquote
+            className="text-[16px] leading-6 font-medium mt-1.5"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <Quote size={13} style={{ color: 'var(--accent-violet)', opacity: 0.6, display: 'inline', marginRight: '6px', verticalAlign: 'text-top' }} aria-hidden="true" />
+            {frase.texto}
+          </blockquote>
+        </figure>
         </div>
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' }}>
