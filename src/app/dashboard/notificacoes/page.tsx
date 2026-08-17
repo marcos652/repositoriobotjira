@@ -29,6 +29,24 @@ interface Identidade {
   reconhecido: boolean;
 }
 
+/**
+ * Uma linha por id. Guarda contra id repetido chegando do servidor: sem isso o React
+ * reclama de chave duplicada e o MESMO aviso aparece duas vezes na tela — e, pior, dispensar
+ * um dos dois deixaria a cópia orfa na lista, ja que a acao e por id.
+ *
+ * A causa raiz (mencao repetida no mesmo comentario) foi consertada na rota; isto e cinto de
+ * seguranca, porque a lista vem de fora e pode ficar velha em cache.
+ */
+function porId(lista: Notification[]): Notification[] {
+  const vistos = new Set<string>();
+  return lista.filter((n) => {
+    const chave = n.id || `${n.issueKey}-${n.date}-${n.type}-${n.author}`;
+    if (vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  });
+}
+
 function timeAgo(date: string) {
   const diff = Date.now() - new Date(date).getTime();
   const minutes = Math.floor(diff / 60000);
@@ -157,7 +175,7 @@ export default function NotificacoesPage() {
       else setLoading(true);
 
       const data = await requestNotifications();
-      setNotifications(data.notifications);
+      setNotifications(porId(data.notifications));
       setIdentidade(data.identidade);
       setJanelaDias(data.janelaDias);
       setError(null);
@@ -213,25 +231,13 @@ export default function NotificacoesPage() {
     }
   }
 
+  // Um único caminho de busca (fetchData), e não uma segunda cópia da mesma lógica aqui:
+  // duas rotinas gravando a mesma lista era manutenção dobrada e uma chance a mais de as
+  // duas respostas se atropelarem. requestAnimationFrame adia o setState para fora da
+  // renderização, como nas outras telas do painel.
   useEffect(() => {
-    let active = true;
-
-    void requestNotifications()
-      .then((data) => {
-        if (!active) return;
-        setNotifications(data.notifications);
-        setIdentidade(data.identidade);
-        setJanelaDias(data.janelaDias);
-        setError(null);
-      })
-      .catch((fetchError) => {
-        if (active) setError(String(fetchError));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => { active = false; };
+    const frame = window.requestAnimationFrame(() => void fetchData());
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   // "paraMim" não é um tipo, é um recorte: reúne menções e atribuições dirigidas a você.
@@ -332,7 +338,7 @@ export default function NotificacoesPage() {
 
               return (
                 <article
-                  key={notification.id || `${notification.issueKey}-${notification.date}-${index}`}
+                  key={notification.id || `${notification.issueKey}-${notification.date}-${notification.type}-${index}`}
                   className={`nt-row ${notification.paraMim ? 'nt-row-mine' : ''}`}
                 >
                   <div className="nt-type-icon" style={{ background: config.bg, color: config.color }}>
