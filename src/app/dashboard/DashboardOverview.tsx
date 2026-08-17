@@ -8,12 +8,13 @@ import DraggableItem from '@/components/ui/DraggableItem';
 import EditToolbar from '@/components/ui/EditToolbar';
 import CountersTable from '@/components/ui/CountersTable';
 import ClimaMarilia from '@/components/ui/ClimaMarilia';
+import { fraseDoDia } from '@/lib/frase-do-dia';
 import { useDragOrder } from '@/hooks/useDragOrder';
 import { useFilters } from '@/contexts/FilterContext';
 import type { DevMetrics, Sprint, SupportMetrics } from '@/types';
 import {
   Headphones, Code2, Ticket, CheckCircle2, Clock, AlertTriangle,
-  ArrowRight, Target, Bug, Loader2, WifiOff, RefreshCw
+  ArrowRight, Target, Bug, Loader2, WifiOff, RefreshCw, Quote
 } from 'lucide-react';
 import { Sun1, CloudSunny, Moon } from 'iconsax-react';
 
@@ -237,6 +238,7 @@ export default function DashboardOverview() {
   const totalResolved = sM.resolvedCount + dM.doneCount;
   const totalCritical = sM.criticalCount + dM.blockedCount;
 
+  const frase = fraseDoDia();
   const currentHour = new Date().getHours();
   const greeting = GREETINGS.find((entry) => currentHour < entry.until) ?? GREETINGS[2];
   const GreetingIcon = greeting.Icon;
@@ -418,16 +420,27 @@ export default function DashboardOverview() {
 
       {/* ═══ GREETING ═══ */}
       <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-5 flex-wrap">
         <div>
-          <h1 className="flex items-center gap-2.5 text-[32px] leading-9 font-medium tracking-tight flex-wrap" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="flex items-center gap-2.5 text-[32px] leading-9 font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>
             <span>{greeting.label}{userName ? `, ${userName}` : ''}</span>
             <GreetingIcon size={26} variant="Bold" color={greeting.color} aria-hidden="true" />
-            {/* Fora do <span> do texto para não herdar o tamanho de 32px do título. */}
-            <ClimaMarilia />
           </h1>
           <p className="text-[15px] leading-6 mt-1" style={{ color: 'var(--text-tertiary)' }}>
             Aqui está o resumo do seu workspace hoje.
           </p>
+          {/* Frase do dia. Calculada com Intl fixado em America/Sao_Paulo, então servidor e
+              cliente chegam à MESMA data independente do fuso de cada um — sem isso seria mais
+              um hydration mismatch. */}
+          <p
+            className="flex items-start gap-2 text-[13px] leading-5 mt-2.5 max-w-[520px]"
+            style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}
+          >
+            <Quote size={13} style={{ color: 'var(--accent-violet)', flexShrink: 0, marginTop: '2px' }} aria-hidden="true" />
+            <span>{frase.texto}</span>
+          </p>
+        </div>
+        <ClimaMarilia />
         </div>
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--accent-emerald-light)', color: 'var(--accent-emerald)' }}>

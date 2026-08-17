@@ -32,10 +32,14 @@ export interface HoraPrevista {
   temperatura: number;
   /** Probabilidade de chuva, 0..100. */
   chuva: number;
+  tipo: TipoTempo;
+  /**
+   * Dia ou noite NAQUELA hora. O is_day da Open-Meteo só existe para o "agora", então isto sai
+   * do nascer/pôr do sol do dia correspondente — sem isso, a faixa de horas mostraria ícone de
+   * sol às 22h.
+   */
+  dia: boolean;
 }
-// Sem `tipo` aqui de propósito: o is_day da Open-Meteo vale só para o "agora", então a
-// condição por hora sairia como "sol" às 22h. Guardar dado errado é pior que não guardar; a
-// probabilidade de chuva já responde o que a dica precisa dizer.
 
 export interface Clima {
   cidade: string;
@@ -100,6 +104,34 @@ interface HourlyOpenMeteo {
   time?: unknown[];
   temperature_2m?: unknown[];
   precipitation_probability?: unknown[];
+  weather_code?: unknown[];
+}
+
+interface DailyOpenMeteo {
+  time?: unknown[];
+  sunrise?: unknown[];
+  sunset?: unknown[];
+  temperature_2m_min?: unknown[];
+  temperature_2m_max?: unknown[];
+}
+
+/**
+ * É dia naquele instante? Compara com o nascer e o pôr do sol do dia correspondente.
+ *
+ * Todas as pontas são strings locais sem fuso e no mesmo formato ("2026-08-17T18:05"), então a
+ * comparação de texto responde certo sem construir Date nenhum — e portanto sem chance de o
+ * fuso do servidor entrar no meio. Na dúvida (dia sem nascer/pôr do sol na resposta) assume
+ * DIA: um sol indevido às 3h seria estranho, mas uma lua ao meio-dia seria pior.
+ */
+function ehDia(instante: string, daily: DailyOpenMeteo | undefined): boolean {
+  const dias = daily?.time;
+  if (!Array.isArray(dias)) return true;
+  const i = dias.findIndex((d) => String(d) === instante.slice(0, 10));
+  if (i < 0) return true;
+  const nascer = daily?.sunrise?.[i];
+  const porDoSol = daily?.sunset?.[i];
+  if (typeof nascer !== 'string' || typeof porDoSol !== 'string') return true;
+  return instante >= nascer && instante < porDoSol;
 }
 
 /**
@@ -111,7 +143,11 @@ interface HourlyOpenMeteo {
  * pontas são strings ISO no mesmo formato e fuso, comparar texto já ordena corretamente, e
  * ainda atravessa a meia-noite sem caso especial.
  */
-function proximasHoras(agora: unknown, hourly: HourlyOpenMeteo | undefined): HoraPrevista[] {
+function proximasHoras(
+  agora: unknown,
+  hourly: HourlyOpenMeteo | undefined,
+  daily?: DailyOpenMeteo
+): HoraPrevista[] {
   const corte = typeof agora === 'string' ? agora : '';
   const t = hourly?.time;
   if (!corte || !Array.isArray(t)) return [];
@@ -123,10 +159,13 @@ function proximasHoras(agora: unknown, hourly: HourlyOpenMeteo | undefined): Hor
     const temp = hourly?.temperature_2m?.[i];
     if (typeof temp !== 'number') continue;
     const prob = hourly?.precipitation_probability?.[i];
+    const cod = hourly?.weather_code?.[i];
     saida.push({
       hora: quando.slice(11, 16),
       temperatura: Math.round(temp),
       chuva: typeof prob === 'number' ? prob : 0,
+      tipo: typeof cod === 'number' ? traduzir(cod).tipo : 'nuvem',
+      dia: ehDia(quando, daily),
     });
   }
   return saida;
@@ -139,7 +178,7 @@ async function buscar(): Promise<Clima> {
     `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
     `&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m` +
     `&hourly=temperature_2m,weather_code,precipitation_probability` +
-    `&daily=temperature_2m_min,temperature_2m_max` +
+    `&daily=temperature_2m_min,temperature_2m_max,sunrise,sunset` +
     `&forecast_days=2&timezone=America%2FSao_Paulo`;
 
   // Timeout curto: isto enfeita o cabeçalho do dashboard. Se a Open-Meteo estiver lenta, é
@@ -155,7 +194,7 @@ async function buscar(): Promise<Clima> {
 
   const { tipo, descricao } = traduzir(atual.weather_code);
 
-  const horas = proximasHoras(atual.time, dados?.hourly);
+  const horas = proximasHoras(atual.time, dados?.hourly, dados?.daily);
   const comChuva = horas.find((x) => x.chuva >= LIMIAR_CHUVA);
   const diario = dados?.daily;
   const num = (v: unknown) => (typeof v === 'number' ? Math.round(v) : null);
