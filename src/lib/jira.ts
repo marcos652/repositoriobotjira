@@ -9,6 +9,26 @@ interface JiraConfig {
   apiToken: string;
 }
 
+/** Uma entrada do histórico de alterações: quem mudou o quê, e quando. */
+export interface JiraChangelogEntry {
+  id?: string;
+  created: string;
+  author?: {
+    accountId?: string;
+    displayName?: string;
+    emailAddress?: string;
+    avatarUrls?: Record<string, string>;
+  };
+  items?: {
+    field?: string;
+    fieldId?: string;
+    from?: string;
+    to?: string;
+    fromString?: string;
+    toString?: string;
+  }[];
+}
+
 export interface JiraIssue {
   id: string;
   key: string;
@@ -123,20 +143,64 @@ export class JiraClient {
     return data.count;
   }
 
-  async searchAllIssues(jql: string, fields: string[] = DEFAULT_FIELDS): Promise<JiraIssue[]> {
+  /**
+   * `expand` vai como STRING separada por vírgula, nunca array: /search/jql responde 400
+   * "Invalid request payload" com `expand: ['changelog']`.
+   */
+  async searchAllIssues(jql: string, fields: string[] = DEFAULT_FIELDS, expand?: string): Promise<JiraIssue[]> {
     const allIssues: JiraIssue[] = [];
     let nextPageToken: string | undefined;
 
     // Safety limit: max 20 pages (up to 2000 issues)
     for (let page = 0; page < 20; page++) {
-      const result = await this.searchIssues(jql, fields, 100, nextPageToken);
-      allIssues.push(...result.issues);
+      const body: Record<string, unknown> = { jql, fields, maxResults: 100 };
+      if (expand) body.expand = expand;
+      if (nextPageToken) body.nextPageToken = nextPageToken;
+
+      const res = await fetch(`${this.baseUrl}/rest/api/3/search/jql`, {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(`Jira API error: ${res.status} ${res.statusText} - ${await res.text()}`);
+      }
+      const result: JiraSearchResult = await res.json();
+      allIssues.push(...(result.issues || []));
 
       if (result.isLast || !result.nextPageToken) break;
       nextPageToken = result.nextPageToken;
     }
 
     return allIssues;
+  }
+
+  /** Todos os status da instância, com a categoria de cada um. */
+  async listarStatus(): Promise<{ id: string; name: string; statusCategory?: { key: string } }[]> {
+    const res = await fetch(`${this.baseUrl}/rest/api/3/status`, { headers: this.headers });
+    if (!res.ok) throw new Error(`Jira status error: ${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  /**
+   * Changelog completo de uma issue, paginado. A busca com expand=changelog pode truncar o
+   * histórico das issues muito movimentadas, e um histórico truncado esconde atividade sem
+   * avisar.
+   */
+  async changelogCompleto(issueKey: string): Promise<JiraChangelogEntry[]> {
+    const todas: JiraChangelogEntry[] = [];
+    let startAt = 0;
+    for (let p = 0; p < 20; p++) {
+      const res = await fetch(`${this.baseUrl}/rest/api/3/issue/${issueKey}/changelog?startAt=${startAt}&maxResults=100`, {
+        headers: this.headers,
+      });
+      if (!res.ok) throw new Error(`Jira changelog error: ${res.status} ${res.statusText}`);
+      const j = await res.json();
+      todas.push(...(j.values || []));
+      if (j.isLast || todas.length >= (j.total ?? todas.length)) break;
+      startAt += (j.values || []).length || 100;
+    }
+    return todas;
   }
 
   async getIssue(issueKey: string, expand?: string[]): Promise<JiraIssue> {

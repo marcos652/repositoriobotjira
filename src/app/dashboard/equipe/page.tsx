@@ -4,21 +4,23 @@ import { Loader2, WifiOff, RefreshCw, ChevronDown, Info, CalendarRange } from 'l
 import { Cup } from 'iconsax-react';
 
 interface ItemPeriodo {
-  key: string; summary: string; status: string; categoria: string;
-  tipo: string; prioridade: string | null; criadoEm: string; atualizadoEm: string;
-  novaNoPeriodo: boolean;
+  key: string; summary: string; status: string; categoria: string; tipo: string;
+  /** O que a pessoa fez neste item no período ("moveu para Deploy", "comentou"...). */
+  acoes: string[];
+  quando: string;
+  concluiu: boolean;
 }
 interface Membro {
   name: string; email: string; avatar: string | null; accountId: string;
-  entregou: number; recebeu: number; tocou: number;
+  entregou: number; recebeu: number; tocou: number; mudancas: number;
   fazendo: number; emAndamento: number; naFila: number;
   itens: ItemPeriodo[];
 }
 interface Resposta {
   membros: Membro[];
-  periodo: { range: string; jqlPeriodo: string; inicio: string | null; fim: string | null };
+  periodo: { inicio: string; fim: string; jqlBusca: string };
   totais: {
-    entregou: number; recebeu: number; fazendo: number; emAndamento: number;
+    entregou: number; recebeu: number; mudancas: number;
     issuesNoPeriodo: number; issuesAbertasAgora: number; semResponsavel: number;
   };
   aviso: string;
@@ -81,7 +83,7 @@ export default function EquipePage() {
       if (isRefresh) setRefreshing(true); else setLoading(true);
       // Sempre range=custom: a tela pergunta por dia, não por "últimos N". Um dia só vira
       // start=end, que a rota traduz para a janela daquele dia inteiro.
-      const qs = `?range=custom&start=${dia}&end=${ate || dia}`;
+      const qs = `?start=${dia}${ate ? `&end=${ate}` : ''}`;
       const res = await fetch(`/api/jira/team-periodo${qs}`);
       const j = await res.json();
       if (!res.ok || !j.success) throw new Error(j.error || `HTTP ${res.status}`);
@@ -201,7 +203,7 @@ export default function EquipePage() {
                     </div>
                     <div className="eq-stat">
                       <p className="eq-stat-val" style={{ color: 'var(--accent-amber)' }}>{m.tocou}</p>
-                      <p className="eq-stat-label">Tocou</p>
+                      <p className="eq-stat-label">Mexeu em</p>
                     </div>
                   </div>
 
@@ -234,10 +236,12 @@ export default function EquipePage() {
                             >
                               <span className="eq-item-key">{it.key}</span>
                               <span className="eq-item-sum">{it.summary}</span>
-                              <span className="eq-item-status" style={{ color: CORES_CATEGORIA[it.categoria] || 'var(--text-tertiary)' }}>
-                                {it.status}
+                              {/* O que ela FEZ, não só onde a issue está: é a diferença entre
+                                  "tocou nisso" e "moveu para Deploy". */}
+                              <span className="eq-item-status" style={{ color: it.concluiu ? 'var(--accent-emerald)' : 'var(--text-tertiary)' }}>
+                                {it.acoes.length > 0 ? it.acoes.join(', ') : it.status}
                               </span>
-                              <span className="eq-item-data">{dataCurta(it.atualizadoEm)}</span>
+                              <span className="eq-item-data">{dataCurta(it.quando)}</span>
                             </a>
                           ))}
                         </div>
@@ -303,7 +307,8 @@ export default function EquipePage() {
               {[
                 { label: 'Entregues', value: totais.entregou, color: 'var(--accent-emerald)' },
                 { label: 'Recebidas', value: totais.recebeu, color: 'var(--accent-blue)' },
-                { label: 'Issues com movimento', value: totais.issuesNoPeriodo, color: 'var(--text-secondary)' },
+                { label: 'Issues movimentadas', value: totais.issuesNoPeriodo, color: 'var(--text-secondary)' },
+                { label: 'Alterações registradas', value: totais.mudancas, color: 'var(--text-secondary)' },
               ].map(s => (
                 <div key={s.label} className="eq-summary-item">
                   <span className="eq-summary-label">{s.label}</span>
@@ -316,7 +321,6 @@ export default function EquipePage() {
             <div className="eq-summary">
               {[
                 { label: 'Em aberto', value: totais.issuesAbertasAgora, color: 'var(--accent-blue)' },
-                { label: 'Em andamento', value: totais.emAndamento, color: 'var(--accent-amber)' },
                 { label: 'Sem responsável', value: totais.semResponsavel, color: 'var(--accent-rose)' },
               ].map(s => (
                 <div key={s.label} className="eq-summary-item">
