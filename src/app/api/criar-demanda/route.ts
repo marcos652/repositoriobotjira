@@ -46,6 +46,7 @@ interface DemandaGerada extends IssueLike {
 }
 import { isSafeExternalUrl } from '@/lib/ssrfGuard';
 import { reserveDemandaSlot, releaseDemandaSlot } from '@/lib/demandaLimit';
+import { incrementar } from '@/lib/metric-counters';
 
 const ALL_ENDPOINTS = [
   ...backofficeEndpoints,
@@ -617,7 +618,14 @@ export async function POST(request: NextRequest) {
     
     await Promise.allSettled([
       notifySlack(issueKey, issueUrl, clientFinal, issueData.resumo_slack || ''),
-      callRovoAgent(issueKey)
+      callRovoAgent(issueKey),
+      // +1 nas linhas da tabela de contadores. É o caminho rápido: a tela mostra o número
+      // novo na hora, sem esperar a próxima recontagem no Jira. Dentro do allSettled porque
+      // um contador que não somou não pode derrubar uma demanda que já foi criada — a
+      // reconciliação periódica conserta o valor.
+      incrementar('jiraops:demandas_criadas', 1),
+      incrementar('dev:criados_hoje', 1),
+      incrementar('dev:abertos', 1),
     ]);
 
     return NextResponse.json({

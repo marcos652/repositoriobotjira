@@ -15,7 +15,16 @@ const WAITING_CLIENT_STATUSES = ['aguardando cliente', 'waiting for customer', '
 const WAITING_THIRD_STATUSES = ['aguardando terceiro', 'aguardando fornecedor', 'waiting for support'];
 const RESOLVED_STATUSES = ['resolvido', 'resolved', 'concluído', 'done', 'closed', 'fechado'];
 
-function classifyStatus(statusName: string): 'open' | 'inprogress' | 'waiting_client' | 'waiting_third' | 'resolved' {
+// A statusCategory vem do próprio Jira ('new' | 'indeterminate' | 'done') e vale mais que
+// a lista de nomes: são 113 status na instância, muitos com o mesmo nome em workflows
+// diferentes, e qualquer status novo que alguém criar cairia no default abaixo. Para
+// "resolvido" a categoria é decisiva; a subdivisão do que está aberto continua por nome,
+// porque a categoria não distingue "aguardando cliente" de "em atendimento".
+function classifyStatus(
+  statusName: string,
+  statusCategoryKey?: string
+): 'open' | 'inprogress' | 'waiting_client' | 'waiting_third' | 'resolved' {
+  if (statusCategoryKey === 'done') return 'resolved';
   const s = statusName.toLowerCase().trim();
   if (RESOLVED_STATUSES.includes(s)) return 'resolved';
   if (WAITING_CLIENT_STATUSES.includes(s)) return 'waiting_client';
@@ -26,12 +35,15 @@ function classifyStatus(statusName: string): 'open' | 'inprogress' | 'waiting_cl
   return 'inprogress';
 }
 
+// As prioridades desta instância são, exatamente: Altíssima | Alta | Médio | Baixa |
+// Baixíssima. "Médio" (não "média") e "baixíssima" não estavam nas listas e caíam no
+// default 'medium' — o que classificava Baixíssima como média.
 function mapPriority(name: string): 'critical' | 'high' | 'medium' | 'low' {
   const p = name.toLowerCase().trim();
   if (['altíssima', 'highest', 'critical', 'blocker'].includes(p)) return 'critical';
   if (['alta', 'high'].includes(p)) return 'high';
-  if (['média', 'medium', 'normal'].includes(p)) return 'medium';
-  if (['baixa', 'low', 'lowest', 'trivial'].includes(p)) return 'low';
+  if (['médio', 'média', 'medium', 'normal'].includes(p)) return 'medium';
+  if (['baixa', 'baixíssima', 'low', 'lowest', 'trivial'].includes(p)) return 'low';
   return 'medium';
 }
 
@@ -95,9 +107,21 @@ export async function fetchSupportMetrics(
   }
 
   // Fetch all issues from SUP project (last 90 days + open)
+  //
+  // statusCategory != Done, e NÃO `status != Resolvido`: filtrar status por NOME está
+  // quebrado nesta instância do Jira. Medido contra a API:
+  //   status = "Resolvido"   ->      0 issues
+  //   status = 5 (o mesmo status, por id) -> 18.872 issues
+  //   status != "Resolvido"  -> 20.733 = o projeto INTEIRO (não excluía nada)
+  //   statusCategory != Done ->     36 = os tickets realmente abertos
+  // Com o filtro por nome, esta consulta casava 20.733 issues e o searchAllIssues parava
+  // no limite de 20 páginas: as métricas da tela eram calculadas sobre uma fatia truncada
+  // de 2.000 issues (7,6 MB, 12,8s). Com statusCategory são 232 issues, 3 páginas,
+  // 0,88 MB, 2,23s — e completo. Há 113 status na instância, com nomes repetidos entre
+  // workflows, então nenhuma JQL daqui deve filtrar status por nome.
   const [allIssues, recentResolved] = await Promise.all([
     client.searchAllIssues(
-      `project = SUP AND (status != Resolvido OR ${resolvedJqlCondition}) ORDER BY created DESC`,
+      `project = SUP AND (statusCategory != Done OR ${resolvedJqlCondition}) ORDER BY created DESC`,
       fields,
     ),
     client.searchAllIssues(
@@ -183,7 +207,7 @@ export async function fetchSupportMetrics(
   for (const issue of allIssues) {
     const f = issue.fields;
     const statusName = f.status.name;
-    const classification = classifyStatus(statusName);
+    const classification = classifyStatus(statusName, f.status.statusCategory?.key);
     const priority = mapPriority(f.priority?.name || 'medium');
     const assigneeName = f.assignee?.displayName || 'Não atribuído';
     const assigneeEmail = f.assignee?.emailAddress || '';

@@ -6,6 +6,7 @@ import MetricCard from '@/components/ui/MetricCard';
 import ChartCard from '@/components/charts/ChartCard';
 import DraggableItem from '@/components/ui/DraggableItem';
 import EditToolbar from '@/components/ui/EditToolbar';
+import CountersTable from '@/components/ui/CountersTable';
 import { useDragOrder } from '@/hooks/useDragOrder';
 import { useFilters } from '@/contexts/FilterContext';
 import type { DevMetrics, Sprint, SupportMetrics } from '@/types';
@@ -63,7 +64,7 @@ function useUserName(): string {
 
 const DEFAULT_CARDS_ORDER = [
   'open', 'resolved', 'sla', 'avgtime', 'bugs', 'critical',
-  'suporte_module', 'dev_module', 'chart_volume', 'chart_burndown'
+  'suporte_module', 'dev_module', 'counters', 'chart_volume', 'chart_burndown'
 ];
 
 const CARD_LABELS: Record<string, string> = {
@@ -77,6 +78,7 @@ const CARD_LABELS: Record<string, string> = {
   dev_module: 'Link: Atalho Desenvolvimento',
   chart_volume: 'Overview Gráfico: Volume de Demandas',
   chart_burndown: 'Overview Gráfico: Sprint Burndown',
+  counters: 'Overview: Tabela de Estatísticas',
 };
 
 const DEFAULT_CARD_SIZES: Record<string, number> = {
@@ -90,6 +92,7 @@ const DEFAULT_CARD_SIZES: Record<string, number> = {
   dev_module: 50,
   chart_volume: 50,
   chart_burndown: 50,
+  counters: 50,
 };
 
 function formatMinutes(mins: number): string {
@@ -255,6 +258,11 @@ export default function DashboardOverview() {
         return <MetricCard title="Bugs Ativos" value={dM.bugCount} change={22} icon={<Bug size={20} />} accentColor="var(--accent-amber)" accentBg="var(--accent-amber-light)" index={editMode ? 0 : i} />;
       case 'critical':
         return <MetricCard title="Itens Críticos" value={totalCritical} change={-5} icon={<AlertTriangle size={20} />} accentColor="var(--accent-rose)" accentBg="var(--accent-rose-light)" index={editMode ? 0 : i} />;
+
+      // Não recebe nada de `data`: busca a própria tabela em /api/metrics/counters, que só
+      // lê o Redis. É o card que aparece preenchido primeiro.
+      case 'counters':
+        return <CountersTable index={editMode ? 0 : i} />;
 
       case 'suporte_module':
         return (
