@@ -36,7 +36,9 @@ const LIMITE = 200;
 // cache é compartilhado entre usuários e o recorte pessoal é aplicado depois de ler.
 // Sem isso, medido no dev: 3,2s / 5,7s / 9,1s em três chamadas seguidas — a tela abriria em
 // nove segundos.
-const CACHE_KEY = 'jiraops:notificacoes';
+// v2: a v1 guardou listas com menções duplicadas (uma por ocorrência, não por pessoa).
+// Trocar a chave descarta o que já estava lá em vez de esperar o TTL entregar dado errado.
+const CACHE_KEY = 'jiraops:notificacoes:v2';
 const CACHE_TTL_MS = 3 * 60 * 1000;
 
 interface CacheNotificacoes { lista: Notificacao[]; ts: number }
@@ -105,18 +107,37 @@ interface NoADF {
   content?: NoADF[];
 }
 
-/** Todas as menções do corpo, em qualquer profundidade. */
-function extrairMencoes(no: NoADF | NoADF[] | undefined, achados: { id: string; text: string }[] = []) {
+/** Percorre a árvore juntando todo nó de menção, inclusive repetidos. */
+function coletarMencoes(no: NoADF | NoADF[] | undefined, achados: { id: string; text: string }[] = []) {
   if (!no || typeof no !== 'object') return achados;
   if (Array.isArray(no)) {
-    for (const n of no) extrairMencoes(n, achados);
+    for (const n of no) coletarMencoes(n, achados);
     return achados;
   }
   if (no.type === 'mention' && no.attrs?.id) {
     achados.push({ id: no.attrs.id, text: no.attrs.text || '@alguém' });
   }
-  if (no.content) extrairMencoes(no.content, achados);
+  if (no.content) coletarMencoes(no.content, achados);
   return achados;
+}
+
+/**
+ * As PESSOAS mencionadas num comentário — uma vez cada, mesmo que o texto marque a mesma
+ * pessoa várias vezes.
+ *
+ * Isso acontece de verdade: o comentário 99059 de DSMM-219 tem 5 nós de menção para 3
+ * pessoas (duas delas marcadas duas vezes). Sem deduplicar, a mesma notificação saía
+ * repetida na lista e o React reclamava de chave duplicada — as duas cópias tinham o mesmo
+ * id, que é justamente `mention:<issue>:<comentario>:<accountId>`.
+ *
+ * Ser mencionado duas vezes no mesmo comentário é UM aviso, não dois.
+ */
+function extrairMencoes(no: NoADF | NoADF[] | undefined): { id: string; text: string }[] {
+  const porPessoa = new Map<string, { id: string; text: string }>();
+  for (const m of coletarMencoes(no)) {
+    if (!porPessoa.has(m.id)) porPessoa.set(m.id, m);
+  }
+  return [...porPessoa.values()];
 }
 
 /** Texto plano do ADF, para mostrar um trecho do comentário na lista. */
