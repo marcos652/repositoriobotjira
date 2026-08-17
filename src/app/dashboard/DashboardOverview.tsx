@@ -7,6 +7,7 @@ import ChartCard from '@/components/charts/ChartCard';
 import DraggableItem from '@/components/ui/DraggableItem';
 import EditToolbar from '@/components/ui/EditToolbar';
 import CountersTable from '@/components/ui/CountersTable';
+import ClimaMarilia from '@/components/ui/ClimaMarilia';
 import { useDragOrder } from '@/hooks/useDragOrder';
 import { useFilters } from '@/contexts/FilterContext';
 import type { DevMetrics, Sprint, SupportMetrics } from '@/types';
@@ -418,9 +419,11 @@ export default function DashboardOverview() {
       {/* ═══ GREETING ═══ */}
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="flex items-center gap-2.5 text-[32px] leading-9 font-medium tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="flex items-center gap-2.5 text-[32px] leading-9 font-medium tracking-tight flex-wrap" style={{ color: 'var(--text-primary)' }}>
             <span>{greeting.label}{userName ? `, ${userName}` : ''}</span>
             <GreetingIcon size={26} variant="Bold" color={greeting.color} aria-hidden="true" />
+            {/* Fora do <span> do texto para não herdar o tamanho de 32px do título. */}
+            <ClimaMarilia />
           </h1>
           <p className="text-[15px] leading-6 mt-1" style={{ color: 'var(--text-tertiary)' }}>
             Aqui está o resumo do seu workspace hoje.
