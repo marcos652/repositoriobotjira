@@ -191,7 +191,11 @@ export default function NovaDemandaPage() {
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
   const [result, setResult] = useState<DemandaResult | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>(loadHistory);
+  // Começa vazio, IGUAL ao que o servidor renderiza, e só carrega o localStorage depois de
+  // montar (no efeito de restauração abaixo). Iniciar o estado com loadHistory() fazia o
+  // servidor renderizar "0 criadas" e o cliente "25 criadas" no mesmo <span> — é o
+  // hydration mismatch: o React compara os dois e descarta a árvore inteira.
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [activeView, setActiveView] = useState<'editor' | 'history'>('editor');
   const [showMeta, setShowMeta] = useState(true);
   const [focusEditor, setFocusEditor] = useState(false);
@@ -280,6 +284,9 @@ export default function NovaDemandaPage() {
   // Restore draft on mount
   /* eslint-disable react-hooks/set-state-in-effect -- restores the browser-backed draft on first client render */
   useEffect(() => {
+    // Histórico junto do rascunho: os dois vivem no localStorage, que não existe no
+    // servidor, então só podem ser lidos depois da hidratação.
+    setHistory(loadHistory());
     try {
       const draft = localStorage.getItem('jiraops-demanda-draft');
       if (draft) {

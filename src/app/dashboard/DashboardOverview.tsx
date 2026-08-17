@@ -122,13 +122,18 @@ export default function DashboardOverview() {
 
   const drag = useDragOrder('jiraops-overview-flat-order', DEFAULT_CARDS_ORDER);
 
-  const [cardSizes, setCardSizes] = useState<Record<string, number>>(() => {
-    if (typeof window === 'undefined') return {};
+  // Vazio no primeiro render, igual ao servidor; os tamanhos salvos entram depois de montar.
+  // Ler o localStorage no inicializador do useState fazia o servidor emitir uma largura e o
+  // cliente outra no mesmo style — hydration mismatch.
+  const [cardSizes, setCardSizes] = useState<Record<string, number>>({});
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem('jiraops-overview-card-sizes');
-      return saved ? JSON.parse(saved) : {};
-    } catch { return {}; }
-  });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- tamanhos ficam no navegador, indisponíveis no servidor
+      if (saved) setCardSizes(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, []);
 
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
