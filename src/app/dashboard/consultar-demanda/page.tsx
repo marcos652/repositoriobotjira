@@ -41,13 +41,42 @@ interface DemandaData {
   saude: { id: string; value: string } | null;
   impacto: { id: string; value: string } | null;
   dataInicio: string | null;
+  cliente: { id: string; value: string }[];
+  po: string | null;
+  poAvatar: string | null;
+  techLead: string | null;
+  techLeadAvatar: string | null;
+  creator: string | null;
+  reporterAvatar: string | null;
+  assigneeAvatar: string | null;
+  duedate: string | null;
+  estimativaSegundos: number | null;
+  tempoGastoSegundos: number | null;
+  implementationPlan: string | null;
+  developer: string | null;
+  plannedEnd: string | null;
 }
 
 // ─── Helpers ───
 const SEARCH_HISTORY_KEY = 'jiraops_search_history';
 function loadHistory(): string[] { try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); } catch { return []; } }
 function saveHistory(h: string[]) { localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(h.slice(0, 10))); }
-function formatDate(d: string | null) { return d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'; }
+/**
+ * Datas do Jira em duas formas: com hora ("2026-08-17T15:06:45.875-0300") e SEM hora
+ * ("2026-08-17", o caso de Data de início e Planned end).
+ *
+ * O `new Date('2026-08-17')` é interpretado como meia-noite UTC, que no Brasil (UTC-3) é 21h
+ * do dia ANTERIOR — a tela mostrava "16 de ago." onde o Jira mostrava 17. Data sem hora não
+ * tem fuso: é montada como data local, campo por campo, para não sofrer conversão.
+ */
+function formatDate(d: string | null) {
+  if (!d) return '—';
+  const soData = /^\d{4}-\d{2}-\d{2}$/.exec(d);
+  const data = soData
+    ? new Date(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)))
+    : new Date(d);
+  return data.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 function formatDateTime(d: string) { return `${new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} às ${new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`; }
 function formatBytes(b: number) { return b < 1024 ? `${b}B` : b < 1048576 ? `${(b/1024).toFixed(1)}KB` : `${(b/1048576).toFixed(1)}MB`; }
 function timeAgo(d: string) {
@@ -662,6 +691,59 @@ export default function ConsultarDemandaPage() {
                     <label style={S.label}><User size={11} /> Relator</label>
                     <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.reporter || '—'}</p>
                   </div>
+
+                  {/* PO e Tech Lead: o painel do Jira mostra os dois logo abaixo do Relator, e
+                      sem eles a tela não reflete o mesmo quadro. */}
+                  <div style={S.card}>
+                    <label style={S.label}><User size={11} /> PO</label>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.po || '—'}</p>
+                  </div>
+
+                  <div style={S.card}>
+                    <label style={S.label}><User size={11} /> Tech Lead</label>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.techLead || '—'}</p>
+                  </div>
+
+                  {/* Criador só aparece quando difere do Relator: no Jira são campos distintos
+                      (em DSMM-287 o criador é a conta de serviço e a relatora é a Fabiana), mas
+                      repetir o mesmo nome em dois cards seria só ruído. */}
+                  {demanda.creator && demanda.creator !== demanda.reporter && (
+                    <div style={S.card}>
+                      <label style={S.label}><User size={11} /> Criador</label>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.creator}</p>
+                    </div>
+                  )}
+
+                  {demanda.duedate && (
+                    <div style={S.card}>
+                      <label style={S.label}><Calendar size={11} /> Previsão de entrega</label>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{formatDate(demanda.duedate)}</p>
+                    </div>
+                  )}
+
+                  {/* Estes três só aparecem quando preenchidos: o Jira os esconde atrás de
+                      "Mais campos", e um card "—" para cada um empurraria os campos que
+                      importam para fora da tela. */}
+                  {demanda.developer && (
+                    <div style={S.card}>
+                      <label style={S.label}><User size={11} /> Developer</label>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.developer}</p>
+                    </div>
+                  )}
+
+                  {demanda.plannedEnd && (
+                    <div style={S.card}>
+                      <label style={S.label}><Calendar size={11} /> Planned end</label>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{formatDate(demanda.plannedEnd)}</p>
+                    </div>
+                  )}
+
+                  {demanda.implementationPlan && (
+                    <div style={{ ...S.card, gridColumn: '1 / -1' }}>
+                      <label style={S.label}><Activity size={11} /> Implementation plan</label>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap' }}>{demanda.implementationPlan}</p>
+                    </div>
+                  )}
 
                   {/* Criado */}
                   <div style={S.card}>

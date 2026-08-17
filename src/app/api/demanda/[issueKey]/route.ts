@@ -25,6 +25,20 @@ function adfToText(node: any): string {
 }
 
 // ─── GET: Consultar demanda com tudo ───
+interface OpcaoJira { id: string; value: string }
+
+/** Campo de opção do Jira em forma de lista, venha ele como array, objeto único ou vazio. */
+function normalizarOpcoes(campo: unknown): OpcaoJira[] {
+  const paraOpcao = (x: unknown): OpcaoJira | null => {
+    if (!x || typeof x !== 'object') return null;
+    const o = x as { id?: string; value?: string };
+    return o.value ? { id: String(o.id ?? ''), value: o.value } : null;
+  };
+  if (Array.isArray(campo)) return campo.map(paraOpcao).filter((o): o is OpcaoJira => o !== null);
+  const unico = paraOpcao(campo);
+  return unico ? [unico] : [];
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ issueKey: string }> }
@@ -43,7 +57,7 @@ export async function GET(
 
     // 1) Fetch issue (all useful fields)
     const issueRes = await fetch(
-      `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}?fields=summary,description,status,issuetype,priority,assignee,reporter,created,updated,labels,comment,subtasks,issuelinks,attachment,customfield_10062,customfield_10015,customfield_10016,customfield_10020,customfield_10436,customfield_10333,customfield_10004,timetracking&expand=renderedFields,changelog`,
+      `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}?fields=summary,description,status,issuetype,priority,assignee,reporter,creator,created,updated,duedate,labels,comment,subtasks,issuelinks,attachment,timetracking,customfield_10062,customfield_10015,customfield_10016,customfield_10020,customfield_10436,customfield_10333,customfield_10004,customfield_10469,customfield_10636,customfield_10637,customfield_10602,customfield_10061&expand=renderedFields,changelog`,
       { headers, signal: AbortSignal.timeout(15000) }
     );
 
@@ -175,7 +189,26 @@ export async function GET(
       summary: f.summary || null,
       texto: descriptionText || null,
       textoHtml: rendered.description || null,
-      nome_cliente: f.customfield_10062 ? (typeof f.customfield_10062 === 'string' ? f.customfield_10062 : adfToText(f.customfield_10062).trim()) : null,
+      // Cliente é o customfield_10469 (multi-seleção, ex: "[207] TBKBANKS"). Antes isto lia
+      // o customfield_10062, que NÃO é o cliente — é o "Implementation plan". Por isso a tela
+      // mostrava "—" enquanto o Jira mostrava o cliente ao lado.
+      // Aceita as duas formas: o campo é multi-seleção (array), mas se um dia virar
+      // seleção única o valor chega como objeto, e o código não deve quebrar por isso.
+      nome_cliente: normalizarOpcoes(f.customfield_10469).map((c) => c.value).join(', ') || null,
+      cliente: normalizarOpcoes(f.customfield_10469),
+      // O painel do Jira mostra PO e Tech Lead junto de Relator/Responsável; sem eles a tela
+      // do JiraOps não reflete o mesmo quadro.
+      po: f.customfield_10636?.displayName || null,
+      poAvatar: f.customfield_10636?.avatarUrls?.['24x24'] || null,
+      techLead: f.customfield_10637?.displayName || null,
+      techLeadAvatar: f.customfield_10637?.avatarUrls?.['24x24'] || null,
+      // "Mais campos" do painel do Jira. Vêm mesmo vazios: assim que alguém preencher no Jira,
+      // a tela reflete sem precisar de outra alteração aqui.
+      developer: f.customfield_10602?.displayName || null,
+      plannedEnd: f.customfield_10061 || null,
+      implementationPlan: f.customfield_10062
+        ? (typeof f.customfield_10062 === 'string' ? f.customfield_10062 : adfToText(f.customfield_10062).trim())
+        : null,
       status: f.status?.name || null,
       statusCategory: f.status?.statusCategory?.key || null,
       issuetype: f.issuetype?.name || null,
@@ -183,7 +216,15 @@ export async function GET(
       assignee: f.assignee?.displayName || null,
       assigneeId: f.assignee?.accountId || null,
       reporter: f.reporter?.displayName || null,
+      reporterAvatar: f.reporter?.avatarUrls?.['24x24'] || null,
+      assigneeAvatar: f.assignee?.avatarUrls?.['24x24'] || null,
+      // "Criador" e "Relator" são campos DIFERENTES no Jira e podem divergir: em DSMM-287 o
+      // criador é a conta de serviço e a relatora é a Fabiana.
+      creator: f.creator?.displayName || null,
       created: f.created || null,
+      duedate: f.duedate || null,
+      estimativaSegundos: f.timetracking?.originalEstimateSeconds ?? null,
+      tempoGastoSegundos: f.timetracking?.timeSpentSeconds ?? null,
       updated: f.updated || null,
       labels: f.labels || [],
       produto: f.customfield_10436 ? f.customfield_10436.map((p: any) => ({ id: p.id, value: p.value })) : [],
