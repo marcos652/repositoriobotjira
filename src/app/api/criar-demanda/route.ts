@@ -6,6 +6,7 @@ import { generateText, parseAiJson, type AiProvider } from '@/lib/aiFallback';
 import { CLIENTS } from '@/lib/clients';
 import { backofficeEndpoints, slcEndpoints, cnabEndpoints } from '@/lib/endpoints';
 import { buildDescription, ALL_SECTION_KEYS, type IssueLike } from '@/lib/issuePanels';
+import { getSessionEmail } from '@/app/api/auth/_admin';
 
 // Restringe a saída da IA à forma da demanda. Sem isso o modelo pode devolver
 // JSON perfeitamente válido mas de OUTRA COISA — e devolveu: veio um payload
@@ -71,6 +72,14 @@ function getJiraAuth() {
   return Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
 }
 
+// Mesma leitura do proxy.ts: atrás da Vercel o IP real está no x-forwarded-for, e o
+// primeiro item da lista é o cliente (os demais são proxies no caminho).
+function getClientIP(request: NextRequest): string {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    || request.headers.get('x-real-ip')
+    || '127.0.0.1';
+}
+
 function getJiraHeaders() {
   return {
     'Accept': 'application/json',
@@ -80,6 +89,57 @@ function getJiraHeaders() {
 }
 
 const CLIENTS_MAPPING = CLIENTS.map(c => `${c.name}: ${c.id}`).join(', ') + ', GERAL MOVINGPAY: N/A, HOLDING: N/A';
+
+// e-mail -> accountId do Jira. São poucos usuários e o accountId não muda, então cachear
+// evita uma ida à API do Jira em cada demanda criada. Vive em globalThis: some no cold
+// start, o que só custa uma busca a mais.
+const JIRA_ACCOUNT_CACHE_KEY = '__jiraops_jira_account_ids__';
+
+function getAccountCache(): Map<string, string | null> {
+  const g = globalThis as Record<string, unknown>;
+  if (!g[JIRA_ACCOUNT_CACHE_KEY]) g[JIRA_ACCOUNT_CACHE_KEY] = new Map<string, string | null>();
+  return g[JIRA_ACCOUNT_CACHE_KEY] as Map<string, string | null>;
+}
+
+/**
+ * Descobre o accountId do Jira a partir do e-mail de quem está criando a demanda, para
+ * entrar como RELATOR da issue.
+ *
+ * Devolve null (e a demanda é criada sem relator explícito, caindo na conta de serviço)
+ * quando o e-mail não tem conta no Jira, está inativo, ou a busca falha. Nunca lança:
+ * perder o relator é chato, perder a demanda inteira é bem pior.
+ *
+ * O match é por e-mail EXATO. A busca do Jira é textual e casa por nome também — sem essa
+ * checagem, "ana@..." poderia trazer outra Ana e a issue sairia com o relator errado, o que
+ * é pior que não ter relator.
+ */
+async function resolveJiraAccountId(email: string): Promise<string | null> {
+  const chave = email.trim().toLowerCase();
+  const cache = getAccountCache();
+  if (cache.has(chave)) return cache.get(chave) ?? null;
+
+  try {
+    const res = await fetch(
+      `${JIRA_BASE_URL}/rest/api/3/user/search?query=${encodeURIComponent(chave)}&maxResults=5`,
+      { headers: getJiraHeaders() }
+    );
+    if (!res.ok) {
+      console.warn(`[Relator] Busca de usuário no Jira falhou (HTTP ${res.status}) para ${chave}`);
+      return null; // não cacheia falha de rede: pode ser transitória
+    }
+    const usuarios: { accountId?: string; emailAddress?: string; active?: boolean }[] = await res.json();
+    const exato = usuarios.find(
+      (u) => (u.emailAddress || '').trim().toLowerCase() === chave && u.active !== false
+    );
+    const accountId = exato?.accountId || null;
+    if (!accountId) console.warn(`[Relator] Sem conta ativa no Jira para ${chave} — issue sairá sem relator explícito`);
+    cache.set(chave, accountId);
+    return accountId;
+  } catch (e) {
+    console.warn('[Relator] Erro ao buscar usuário no Jira:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
 
 const REFINAMENTO_TRANSITION_ID = '13';
 
@@ -227,7 +287,10 @@ const DEFAULT_SAUDE_ID = '10119'; // 🟢
 // faz o Jira rejeitar a criação inteira da issue, não só o campo.
 const VALID_PRIORITIES = new Set(['Altíssima', 'Alta', 'Médio', 'Baixa', 'Baixíssima']);
 
-async function createJiraIssue(issueData: any, meta: { prioridade?: string; urgencia?: string } = {}) {
+async function createJiraIssue(
+  issueData: any,
+  meta: { prioridade?: string; urgencia?: string; reporterAccountId?: string | null } = {}
+) {
   const jiraHeaders = getJiraHeaders();
 
   const now = new Date();
@@ -241,6 +304,15 @@ async function createJiraIssue(issueData: any, meta: { prioridade?: string; urge
     customfield_10004: { id: DEFAULT_IMPACTO_ID }, // Impacto
     customfield_10333: { id: DEFAULT_SAUDE_ID }, // Saude
   };
+
+  // Relator = quem criou a demanda no JiraOps, e não a conta de serviço. O campo não
+  // aparece no createmeta do projeto (está fora da tela de criação), mas a API aceita
+  // porque a conta tem MODIFY_REPORTER — verificado contra o Jira: com accountId inválido o
+  // erro é "especifique algum valor válido para reporter", ou seja validação de VALOR, e não
+  // "field cannot be set".
+  if (meta.reporterAccountId) {
+    fields.reporter = { id: meta.reporterAccountId };
+  }
 
   if (meta.prioridade && VALID_PRIORITIES.has(meta.prioridade)) {
     fields.priority = { name: meta.prioridade };
@@ -264,11 +336,26 @@ async function createJiraIssue(issueData: any, meta: { prioridade?: string; urge
   }
 
   // 1. Create issue using v2 API to support Wiki Markup directly
-  const createRes = await fetch(`${JIRA_BASE_URL}/rest/api/2/issue`, {
+  const criar = (corpo: Record<string, unknown>) => fetch(`${JIRA_BASE_URL}/rest/api/2/issue`, {
     method: 'POST',
     headers: jiraHeaders,
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields: corpo }),
   });
+
+  let createRes = await criar(fields);
+
+  // Se o Jira recusar por causa do relator (permissão revogada, conta desativada, mudança
+  // na configuração de tela), tenta de novo SEM ele. Relator é enfeite comparado a perder a
+  // demanda que a pessoa acabou de escrever — e ela já gastou uma vaga da cota diária.
+  if (!createRes.ok && fields.reporter) {
+    const erro = await createRes.clone().text().catch(() => '');
+    if (/reporter/i.test(erro)) {
+      console.warn(`[Relator] Jira recusou o relator (${createRes.status}); recriando sem ele. Resposta: ${erro.slice(0, 200)}`);
+      const { reporter, ...semRelator } = fields;
+      void reporter;
+      createRes = await criar(semRelator);
+    }
+  }
 
   if (!createRes.ok) {
     const errText = await createRes.text().catch(() => '');
@@ -501,7 +588,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 2: Create Jira issue
-    const { issueKey, issueUrl } = await createJiraIssue(issueData, { prioridade, urgencia });
+    // Quem está criando: vem do cookie de sessão assinado, não do corpo da requisição —
+    // aceitar um e-mail enviado pelo cliente deixaria qualquer um abrir demanda no nome de
+    // outra pessoa. Chamadas do jirabot (token de serviço) não têm sessão: ficam sem relator
+    // explícito, o que é o comportamento correto (não há pessoa por trás).
+    const criadorEmail = await getSessionEmail(request);
+    const reporterAccountId = criadorEmail ? await resolveJiraAccountId(criadorEmail) : null;
+    if (reporterAccountId) console.log(`[Relator] ${criadorEmail} -> ${reporterAccountId}`);
+
+    const { issueKey, issueUrl } = await createJiraIssue(issueData, { prioridade, urgencia, reporterAccountId });
 
     // Step 3: Upload Attachments (se houver)
     // Se "arquivos" estiver presente (novo formato), use-os. Senão, mapeie as urls_imagens (legacy)
@@ -533,6 +628,12 @@ export async function POST(request: NextRequest) {
       issuetype: issueData.issuetype || 'Task',
       client_name: issueData.client_name,
       message: `Demanda ${issueKey} criada com sucesso!`,
+      // Autoria, para o histórico da tela. Vem do servidor porque nenhuma das duas o
+      // cliente consegue saber com confiança: o e-mail sai do cookie de sessão assinado
+      // (aceitar do corpo permitiria falsificar), e o IP só existe no cabeçalho da
+      // requisição — o navegador não conhece o próprio IP público.
+      criado_por: criadorEmail || 'jirabot (token de serviço)',
+      ip: getClientIP(request),
     });
   } catch (error: any) {
     console.error('Erro ao criar demanda:', error);

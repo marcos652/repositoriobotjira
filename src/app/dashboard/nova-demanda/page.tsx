@@ -6,7 +6,7 @@ import {
   ImagePlus, User, Hash, Sparkles, Clock,
   Zap, Bot, MessageSquare, ChevronDown, Wand2, ArrowUpRight,
   Layers, Target, PenTool, Upload, Image as ImageIcon, Trash2,
-  Mic, MicOff, Eye, EyeOff, Copy, Shield, AlertCircle,
+  Mic, MicOff, Eye, EyeOff, Copy, Shield, AlertCircle, Globe,
   Bold, Italic, Strikethrough, List, ListOrdered, Quote, Code
 } from 'lucide-react';
 import { Danger, MagicStar, Setting2, ClipboardText, Gps, Cpu, Warning2, TickCircle, DocumentText, NoteText, type Icon as IconsaxIcon } from 'iconsax-react';
@@ -40,6 +40,22 @@ interface HistoryItem {
   time: string;
   status: 'success' | 'error';
   response?: unknown;
+  // Autoria vinda do servidor na resposta da criação. Opcionais porque entradas antigas
+  // do localStorage (gravadas antes disso existir) não têm os campos.
+  criadoPor?: string;
+  ip?: string;
+}
+
+// "pedro.cerqueira@movingpay.com.br" -> "Pedro Cerqueira". O e-mail completo continua no
+// title do elemento, que é o que serve para auditoria.
+function nomeDoEmail(email: string): string {
+  if (!email.includes('@')) return email;
+  return email
+    .split('@')[0]
+    .split(/[._-]/)
+    .filter(Boolean)
+    .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1))
+    .join(' ');
 }
 
 interface PreviewData extends IssueLike {
@@ -633,7 +649,7 @@ export default function NovaDemandaPage() {
       const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       if (res.ok) {
         setResult({ success: true, data });
-        const newHistory = [{ texto: texto.trim().slice(0, 120), nomeCliente, referencia, prioridade, urgencia, time: now, status: 'success' as const, response: data }, ...history];
+        const newHistory = [{ texto: texto.trim().slice(0, 120), nomeCliente, referencia, prioridade, urgencia, time: now, status: 'success' as const, response: data, criadoPor: data.criado_por, ip: data.ip }, ...history];
         setHistory(newHistory);
         saveHistory(newHistory);
         setTexto(''); setNomeCliente(''); setUrlsImagens([]); setReferencia('CONSOLE'); setPrioridade(''); setUrgencia(''); setShowMeta(false);
@@ -1149,6 +1165,29 @@ export default function NovaDemandaPage() {
                             <button type="button" onClick={() => duplicateFromHistory(h)} className="nd-history-action" title="Reutilizar esta demanda">
                               <Copy size={12} /> Duplicar
                             </button>
+                            {/* Autoria ao lado do Duplicar. Só aparece em entradas gravadas
+                                depois desta mudança — as antigas do localStorage não têm os
+                                campos, e mostrar "desconhecido" seria pior que omitir. */}
+                            {(h.criadoPor || h.ip) && (
+                              <span className="nd-history-meta">
+                                {h.criadoPor && (
+                                  <span className="nd-history-meta-item" title={h.criadoPor}>
+                                    <User size={11} aria-hidden="true" />
+                                    {nomeDoEmail(h.criadoPor)}
+                                  </span>
+                                )}
+                                {h.ip && (
+                                  <span className="nd-history-meta-item" title={`IP de origem: ${h.ip}`}>
+                                    <Globe size={11} aria-hidden="true" />
+                                    {h.ip}
+                                  </span>
+                                )}
+                                <span className="nd-history-meta-item" title="Horário da criação">
+                                  <Clock size={11} aria-hidden="true" />
+                                  {h.time}
+                                </span>
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1709,7 +1748,16 @@ export default function NovaDemandaPage() {
         .nd-progress-step.current { color: var(--accent-blue); background: var(--accent-blue-light); border-color: var(--accent-blue-light); }
 
         /* History actions */
-        .nd-history-actions { display: flex; gap: 6px; margin-top: 8px; }
+        /* align-items:center alinha a autoria com o botão; flex-wrap evita que IP e horário
+           vazem da caixa em tela estreita. */
+        .nd-history-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; }
+        .nd-history-meta {
+          display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px;
+          font-size: 10px; color: var(--text-tertiary);
+        }
+        .nd-history-meta-item { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+        /* tabular-nums: IP e horário não "dançam" de largura entre entradas do histórico. */
+        .nd-history-meta-item { font-variant-numeric: tabular-nums; }
         .nd-history-action {
           display: flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 6px;
           font-size: 10px; font-weight: 700; color: var(--accent-blue);
