@@ -10,6 +10,7 @@ import {
   TOTP_TRUST_TTL_SECONDS,
 } from '@/lib/session';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { getRedisClient } from '@/lib/redis';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
 
@@ -17,6 +18,67 @@ import QRCode from 'qrcode';
 // tentar adivinhar por força bruta. 8 tentativas / 5 min por e-mail.
 function checkTotpAttempts(email: string) {
   return checkRateLimit(`totp-code:${email}`, 8, 5 * 60_000);
+}
+
+// ── Cadastro de TOTP em andamento ──
+// Guarda o segredo enquanto a pessoa escaneia o QR e digita o primeiro código, para que
+// recarregar a página não troque o segredo debaixo dela. Vida curta (10 min, o mesmo prazo
+// do setupToken) e apagado assim que o cadastro conclui. Redis com queda para memória:
+// em dev local sem Upstash, ainda funciona dentro da mesma instância.
+const SETUP_PENDENTE_TTL_S = 10 * 60;
+const GLOBAL_SETUP_PENDENTE = '__jiraops_totp_setup_pendente__';
+
+function chaveSetupPendente(email: string) {
+  return `jiraops:totp-setup-pendente:${TOTP_STORE.hash(email)}`;
+}
+
+function memPendentes(): Map<string, { secret: string; exp: number }> {
+  const g = globalThis as Record<string, unknown>;
+  if (!g[GLOBAL_SETUP_PENDENTE]) g[GLOBAL_SETUP_PENDENTE] = new Map();
+  return g[GLOBAL_SETUP_PENDENTE] as Map<string, { secret: string; exp: number }>;
+}
+
+async function lerSetupPendente(email: string): Promise<string | null> {
+  const chave = chaveSetupPendente(email);
+
+  const local = memPendentes().get(chave);
+  if (local && local.exp > Date.now()) return local.secret;
+
+  const redis = getRedisClient();
+  if (!redis) return null;
+  try {
+    const s = await redis.get<string>(chave);
+    return typeof s === 'string' && s.length > 0 ? s : null;
+  } catch (e) {
+    console.error('[TOTP] Falha ao ler cadastro pendente:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function gravarSetupPendente(email: string, secretBase32: string): Promise<void> {
+  const chave = chaveSetupPendente(email);
+  memPendentes().set(chave, { secret: secretBase32, exp: Date.now() + SETUP_PENDENTE_TTL_S * 1000 });
+
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.set(chave, secretBase32, { ex: SETUP_PENDENTE_TTL_S });
+  } catch (e) {
+    console.error('[TOTP] Falha ao gravar cadastro pendente:', e instanceof Error ? e.message : e);
+  }
+}
+
+async function limparSetupPendente(email: string): Promise<void> {
+  const chave = chaveSetupPendente(email);
+  memPendentes().delete(chave);
+
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.del(chave);
+  } catch {
+    // TTL de 10 min limpa sozinho; falhar aqui não é problema.
+  }
 }
 
 // ── POST: Setup / Verify / Confirm TOTP ──
@@ -141,14 +203,27 @@ export async function POST(request: NextRequest) {
       }
 
       // Generate new secret
+      // Reaproveita o segredo de um cadastro em andamento, em vez de sortear um novo a
+      // cada chamada. Sem isso, recarregar a página (ou refazer o login) gerava OUTRO
+      // segredo e OUTRO QR: quem já tinha escaneado o primeiro ficava com uma entrada no
+      // Authenticator que o servidor não valida mais — e, como o rótulo é idêntico
+      // ("JiraOps Dashboard: email"), a pessoa não tem como saber qual das entradas é a
+      // atual. O sintoma era "Código incorreto" para sempre, com o código certo na tela.
+      const segredoPendente = await lerSetupPendente(normalized);
+      const secret = segredoPendente
+        ? OTPAuth.Secret.fromBase32(segredoPendente)
+        : new OTPAuth.Secret({ size: 20 });
+
       const totp = new OTPAuth.TOTP({
         issuer: 'JiraOps Dashboard',
         label: normalized,
         algorithm: 'SHA1',
         digits: 6,
         period: 30,
-        secret: new OTPAuth.Secret({ size: 20 }),
+        secret,
       });
+
+      if (!segredoPendente) await gravarSetupPendente(normalized, secret.base32);
 
       const qrDataUrl = await QRCode.toDataURL(totp.toString(), {
         width: 280,
@@ -199,13 +274,25 @@ export async function POST(request: NextRequest) {
         secret: OTPAuth.Secret.fromBase32(tokenData.secret),
       });
 
-      const delta = totp.validate({ token: code.trim(), window: 1 });
+      // window: 2 = tolera ±60s de diferença entre o relógio do celular e o do servidor.
+      // Com ±30s, um celular levemente adiantado falhava com o código correto na tela.
+      const delta = totp.validate({ token: code.trim(), window: 2 });
       if (delta === null) {
-        return NextResponse.json({ error: 'Código incorreto. Tente novamente.' }, { status: 401 });
+        // A mensagem diz o que fazer: a causa mais comum aqui não é digitar errado, é o
+        // Authenticator ter uma entrada "JiraOps Dashboard" de uma tentativa anterior. Como
+        // o rótulo é idêntico, a pessoa lê o código da entrada velha sem perceber.
+        return NextResponse.json(
+          {
+            error: 'Código incorreto. Se você já havia escaneado um QR code antes, apague a entrada antiga "JiraOps Dashboard" do Authenticator e escaneie o QR que está nesta tela.',
+          },
+          { status: 401 }
+        );
       }
 
       // Save the secret using centralized store (persisted a arquivo + Redis)
       await TOTP_STORE.set(normalized, encrypt({ secret: tokenData.secret }));
+      // Cadastro concluído: o segredo pendente não serve mais para nada.
+      await limparSetupPendente(normalized);
 
       // Record IP
       await IP_TRACKER.record(normalized, clientIP);
@@ -347,5 +434,9 @@ export async function DELETE(request: NextRequest) {
   if (!email) return NextResponse.json({ error: 'Email obrigatório' }, { status: 400 });
   const normalized = email.trim().toLowerCase();
   const removed = await TOTP_STORE.remove(normalized);
+  // Também descarta um cadastro em andamento: resetar significa "comece de zero", e
+  // reaproveitar o segredo pendente faria a pessoa receber o MESMO QR de antes.
+  await limparSetupPendente(normalized);
+  console.log(`[TOTP] Reset administrativo para ${normalized} (havia cadastro: ${removed})`);
   return NextResponse.json({ success: removed, message: removed ? `TOTP resetado para ${normalized}` : 'Nenhum TOTP encontrado' });
 }
