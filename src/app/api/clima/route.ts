@@ -26,6 +26,17 @@ const CACHE_KEY = 'jiraops:clima:marilia';
 
 export type TipoTempo = 'sol' | 'nuvem' | 'chuva' | 'tempestade' | 'neve' | 'nevoeiro';
 
+export interface HoraPrevista {
+  /** "HH:MM" em hora de Marília. */
+  hora: string;
+  temperatura: number;
+  /** Probabilidade de chuva, 0..100. */
+  chuva: number;
+}
+// Sem `tipo` aqui de propósito: o is_day da Open-Meteo vale só para o "agora", então a
+// condição por hora sairia como "sol" às 22h. Guardar dado errado é pior que não guardar; a
+// probabilidade de chuva já responde o que a dica precisa dizer.
+
 export interface Clima {
   cidade: string;
   temperatura: number;
@@ -35,7 +46,20 @@ export interface Clima {
   /** Dia ou noite, para o ícone de céu limpo virar lua em vez de sol. */
   dia: boolean;
   medidoEm: string;
+  vento: number | null;
+  umidade: number | null;
+  minima: number | null;
+  maxima: number | null;
+  /** Próximas horas, para avisar antes de a chuva chegar. */
+  horas: HoraPrevista[];
+  /** Primeira hora à frente com chance relevante de chuva; null quando não há. */
+  alertaChuva: { hora: string; probabilidade: number } | null;
 }
+
+/** A partir de quantos % a chuva deixa de ser curiosidade e passa a mudar uma decisão. */
+const LIMIAR_CHUVA = 50;
+/** Quantas horas à frente olhar. */
+const HORAS_A_FRENTE = 6;
 
 /**
  * Código WMO -> tipo + descrição. A tabela é a do padrão WMO usada pela Open-Meteo; os
@@ -72,11 +96,51 @@ async function lerCache(): Promise<CacheClima | undefined> {
   }
 }
 
+interface HourlyOpenMeteo {
+  time?: unknown[];
+  temperature_2m?: unknown[];
+  precipitation_probability?: unknown[];
+}
+
+/**
+ * As próximas HORAS_A_FRENTE horas a partir de `agora`.
+ *
+ * O corte usa a hora que a PRÓPRIA API devolve em current.time, nunca new Date(): os horários
+ * vêm em hora de São Paulo e SEM fuso ("2026-08-17T17:00"), e na Vercel, que roda em UTC,
+ * comparar com new Date() erraria 3 horas — a lista mostraria horas já passadas. Como as duas
+ * pontas são strings ISO no mesmo formato e fuso, comparar texto já ordena corretamente, e
+ * ainda atravessa a meia-noite sem caso especial.
+ */
+function proximasHoras(agora: unknown, hourly: HourlyOpenMeteo | undefined): HoraPrevista[] {
+  const corte = typeof agora === 'string' ? agora : '';
+  const t = hourly?.time;
+  if (!corte || !Array.isArray(t)) return [];
+
+  const saida: HoraPrevista[] = [];
+  for (let i = 0; i < t.length && saida.length < HORAS_A_FRENTE; i++) {
+    const quando = String(t[i]);
+    if (quando <= corte) continue;
+    const temp = hourly?.temperature_2m?.[i];
+    if (typeof temp !== 'number') continue;
+    const prob = hourly?.precipitation_probability?.[i];
+    saida.push({
+      hora: quando.slice(11, 16),
+      temperatura: Math.round(temp),
+      chuva: typeof prob === 'number' ? prob : 0,
+    });
+  }
+  return saida;
+}
+
 async function buscar(): Promise<Clima> {
+  // forecast_days=2 e não 1: às 22h as "próximas 6 horas" atravessam a meia-noite, e com um
+  // dia só a lista terminaria vazia justamente à noite.
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
-    `&current=temperature_2m,apparent_temperature,weather_code,is_day` +
-    `&timezone=America%2FSao_Paulo`;
+    `&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m` +
+    `&hourly=temperature_2m,weather_code,precipitation_probability` +
+    `&daily=temperature_2m_min,temperature_2m_max` +
+    `&forecast_days=2&timezone=America%2FSao_Paulo`;
 
   // Timeout curto: isto enfeita o cabeçalho do dashboard. Se a Open-Meteo estiver lenta, é
   // melhor a tela ficar sem o clima do que a requisição pendurar.
@@ -90,14 +154,26 @@ async function buscar(): Promise<Clima> {
   }
 
   const { tipo, descricao } = traduzir(atual.weather_code);
+
+  const horas = proximasHoras(atual.time, dados?.hourly);
+  const comChuva = horas.find((x) => x.chuva >= LIMIAR_CHUVA);
+  const diario = dados?.daily;
+  const num = (v: unknown) => (typeof v === 'number' ? Math.round(v) : null);
+
   return {
     cidade: CIDADE,
     temperatura: Math.round(atual.temperature_2m),
-    sensacao: typeof atual.apparent_temperature === 'number' ? Math.round(atual.apparent_temperature) : null,
+    sensacao: num(atual.apparent_temperature),
     tipo,
     descricao,
     dia: atual.is_day === 1,
-    medidoEm: atual.time || new Date().toISOString(),
+    medidoEm: typeof atual.time === 'string' ? atual.time : new Date().toISOString(),
+    vento: num(atual.wind_speed_10m),
+    umidade: num(atual.relative_humidity_2m),
+    minima: num(diario?.temperature_2m_min?.[0]),
+    maxima: num(diario?.temperature_2m_max?.[0]),
+    horas,
+    alertaChuva: comChuva ? { hora: comChuva.hora, probabilidade: comChuva.chuva } : null,
   };
 }
 
