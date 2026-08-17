@@ -22,6 +22,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import { getSessionEmail } from '../auth/_admin';
 import { resolveJiraAccountId } from '@/lib/jira-account';
 import { getRedisClient } from '@/lib/redis';
+import { chaveDono, lerDispensadas, dispensar, restaurar } from '@/lib/notification-dismiss';
 
 export const dynamic = 'force-dynamic';
 
@@ -214,7 +215,13 @@ export async function GET(request: NextRequest) {
       paraMim: !!meuAccountId && !!n.destinatarioId && n.destinatarioId === meuAccountId,
     }));
 
-    return montarResposta(comMarca, email, meuAccountId);
+    // As dispensadas saem da lista. É por pessoa: a lista crua no cache é compartilhada, o
+    // "já resolvi isto" não.
+    const dono = chaveDono(meuAccountId, email);
+    const dispensadas = await lerDispensadas(dono);
+    const visiveis = comMarca.filter(n => !dispensadas.has(n.id));
+
+    return montarResposta(visiveis, email, meuAccountId, dispensadas.size);
   } catch (error) {
     console.error('[Notificações] Falha:', error);
     return NextResponse.json(
@@ -357,7 +364,12 @@ async function montarLista(): Promise<Notificacao[]> {
   return notificacoes;
 }
 
-function montarResposta(notificacoes: Notificacao[], email: string | null, meuAccountId: string | null) {
+function montarResposta(
+  notificacoes: Notificacao[],
+  email: string | null,
+  meuAccountId: string | null,
+  totalDispensadas = 0
+) {
   // As pessoais NUNCA são cortadas pelo limite. Um simples slice(200) por data podia
   // descartar uma menção sua de 10 dias atrás porque 200 comentários de outras pessoas
   // vieram depois — justo o oposto do que a tela existe para fazer. Então mandamos todas as
@@ -381,6 +393,120 @@ function montarResposta(notificacoes: Notificacao[], email: string | null, meuAc
       atribuicoes: notificacoes.filter(n => n.type === 'assigned').length,
     },
     notifications: enviadas,
+    dispensadas: totalDispensadas,
     janelaDias: JANELA_DIAS,
   });
+}
+
+// ── POST: comentar e tirar da lista ──────────────────────────────────────────
+//
+// Uma ação só, porque é assim que a tela usa: você responde a menção e ela sai da caixa.
+// A dispensa é gravada mesmo que o comentário seja o único efeito visível no Jira.
+
+/** Limite defensivo: o campo é um textarea livre e vai para uma API externa. */
+const COMENTARIO_MAX = 5000;
+
+export async function POST(request: NextRequest) {
+  const email = await getSessionEmail(request);
+  if (!email) {
+    return NextResponse.json({ error: 'Sessão necessária para comentar' }, { status: 401 });
+  }
+
+  let corpo: {
+    id?: string;
+    issueKey?: string;
+    comentario?: string;
+    apenasDispensar?: boolean;
+    restaurar?: boolean;
+  };
+  try {
+    corpo = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+
+  const { id, issueKey, comentario, apenasDispensar, restaurar: pedeRestaurar } = corpo;
+  if (!id) return NextResponse.json({ error: 'id da notificação é obrigatório' }, { status: 400 });
+
+  const meuAccountId = await resolveJiraAccountId(email);
+  const dono = chaveDono(meuAccountId, email);
+  if (!dono) {
+    return NextResponse.json({ error: 'Não foi possível identificar você para guardar a ação' }, { status: 400 });
+  }
+
+  // Desfazer: traz de volta um item dispensado. Existe porque dispensar é um clique só e
+  // sem volta seria uma armadilha — some da lista e não há como reencontrar.
+  if (pedeRestaurar) {
+    const ok = await restaurar(dono, id);
+    return ok
+      ? NextResponse.json({ success: true, restaurada: true, id })
+      : NextResponse.json({ error: 'Falha ao restaurar (Redis indisponível?)' }, { status: 500 });
+  }
+
+  // Dispensar sem comentar ("já vi isto") usa o mesmo caminho.
+  if (apenasDispensar) {
+    const ok = await dispensar(dono, id);
+    return ok
+      ? NextResponse.json({ success: true, dispensada: true, id })
+      : NextResponse.json({ error: 'Falha ao guardar a ação (Redis indisponível?)' }, { status: 500 });
+  }
+
+  const texto = (comentario || '').trim();
+  if (!texto) return NextResponse.json({ error: 'Escreva um comentário' }, { status: 400 });
+  if (texto.length > COMENTARIO_MAX) {
+    return NextResponse.json({ error: `Comentário acima de ${COMENTARIO_MAX} caracteres` }, { status: 400 });
+  }
+  if (!issueKey || !/^[A-Z][A-Z0-9]*-\d+$/.test(issueKey)) {
+    return NextResponse.json({ error: 'issueKey inválida' }, { status: 400 });
+  }
+
+  // Prefixo de autoria porque o Jira Cloud NÃO permite comentar como outra pessoa via API
+  // token (impersonação existe só para apps Connect). Sem isso, um comentário da Fabiana
+  // apareceria no Jira assinado pela conta de serviço, atribuindo a fala à pessoa errada.
+  const marcado = `${email} (via JiraOps):\n${texto}`;
+
+  try {
+    // API v2 com string simples, o mesmo esquema já usado em /api/demanda/[issueKey].
+    const res = await fetch(`https://${JIRA_DOMAIN}/rest/api/2/issue/${issueKey}/comment`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ body: marcado }),
+    });
+
+    if (!res.ok) {
+      const detalhe = (await res.text().catch(() => '')).slice(0, 300);
+      console.error(`[Notificações] Comentário em ${issueKey} falhou (HTTP ${res.status}):`, detalhe);
+      return NextResponse.json(
+        { error: `Jira recusou o comentário (HTTP ${res.status})`, detalhe, success: false },
+        { status: 502 }
+      );
+    }
+
+    // Dispensa só DEPOIS de o Jira aceitar: tirar da lista sem o comentário ter sido postado
+    // esconderia uma cobrança que ninguém respondeu.
+    const guardou = await dispensar(dono, id);
+
+    // O comentário novo muda a lista crua, então o cache compartilhado ficou velho.
+    after(async () => {
+      try { await gravarCache(await montarLista()); }
+      catch (e) { console.error('[Notificações] Revalidação pós-comentário falhou:', e instanceof Error ? e.message : e); }
+    });
+
+    return NextResponse.json({
+      success: true,
+      id,
+      issueKey,
+      dispensada: guardou,
+      // Quando o Redis está fora, o comentário foi postado mas o item volta no próximo
+      // refresh. A tela precisa poder dizer isso em vez de deixar a pessoa achar que sumiu.
+      aviso: guardou ? undefined : 'Comentário publicado, mas não foi possível guardar a dispensa — o item pode reaparecer.',
+      message: `Comentário publicado em ${issueKey}`,
+    });
+  } catch (error) {
+    console.error('[Notificações] Erro ao comentar:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Erro ao comentar', success: false },
+      { status: 500 }
+    );
+  }
 }

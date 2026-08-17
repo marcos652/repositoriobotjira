@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowRight, AtSign, Bell, CheckCircle2, ExternalLink, Loader2, MessageCircle, RefreshCw, UserPlus, WifiOff } from 'lucide-react';
+import { ArrowRight, AtSign, Bell, Check, CheckCircle2, ExternalLink, Loader2, MessageCircle, RefreshCw, Send, UserPlus, WifiOff } from 'lucide-react';
 
 interface Notification {
   id?: string;
@@ -144,6 +144,12 @@ export default function NotificacoesPage() {
   const [filterType, setFilterType] = useState('paraMim');
   const [identidade, setIdentidade] = useState<Identidade | null>(null);
   const [janelaDias, setJanelaDias] = useState(14);
+  const [respondendo, setRespondendo] = useState<string | null>(null);
+  const [texto, setTexto] = useState('');
+  const [enviando, setEnviando] = useState<string | null>(null);
+  // Guarda o id junto do aviso para oferecer o desfazer: some da lista sem volta seria uma
+  // armadilha, porque não há como reencontrar o item depois.
+  const [aviso, setAviso] = useState<{ texto: string; tipo: 'ok' | 'erro'; idDesfazer?: string } | null>(null);
 
   async function fetchData(isRefresh = false) {
     try {
@@ -160,6 +166,50 @@ export default function NotificacoesPage() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }
+
+  // Some da lista na hora em que a API confirma. Otimista NÃO: se o Jira recusar o
+  // comentário, o item tem que continuar aí — esconder uma cobrança não respondida é pior
+  // do que um clique que não fez nada.
+  async function agir(n: Notification, corpo: Record<string, unknown>, sucesso: string) {
+    setEnviando(n.id || n.issueKey);
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: n.id, issueKey: n.issueKey, ...corpo }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAviso({ texto: data.error || `Falha (HTTP ${res.status})`, tipo: 'erro' });
+        return;
+      }
+      setNotifications((atual) => atual.filter((x) => x.id !== n.id));
+      setRespondendo(null);
+      setTexto('');
+      setAviso({ texto: data.aviso || sucesso, tipo: data.aviso ? 'erro' : 'ok', idDesfazer: n.id });
+    } catch (e) {
+      setAviso({ texto: e instanceof Error ? e.message : 'Erro de conexão', tipo: 'erro' });
+    } finally {
+      setEnviando(null);
+    }
+  }
+
+  async function desfazer(id: string) {
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, restaurar: true }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setAviso(null);
+      // Recarrega em vez de reinserir na memória: o item precisa voltar na posição certa por
+      // data, e a lista já vem ordenada do servidor.
+      await fetchData(true);
+    } catch (e) {
+      setAviso({ texto: e instanceof Error ? e.message : 'Falha ao desfazer', tipo: 'erro' });
     }
   }
 
@@ -247,6 +297,18 @@ export default function NotificacoesPage() {
         ))}
       </nav>
 
+      {aviso && (
+        <div className={`nt-feedback ${aviso.tipo}`} role="status">
+          <span>{aviso.texto}</span>
+          <div className="nt-feedback-acoes">
+            {aviso.idDesfazer && (
+              <button onClick={() => void desfazer(aviso.idDesfazer!)}>Desfazer</button>
+            )}
+            <button onClick={() => setAviso(null)} aria-label="Fechar aviso">Fechar</button>
+          </div>
+        </div>
+      )}
+
       <section className="nt-surface" aria-labelledby="nt-activity-title">
         <div className="nt-surface-header">
           <div>
@@ -298,6 +360,65 @@ export default function NotificacoesPage() {
                       </a>
                       {notification.summary && <span>{notification.summary}</span>}
                     </div>
+
+                    {respondendo === notification.id ? (
+                      <div className="nt-responder">
+                        <textarea
+                          value={texto}
+                          onChange={(e) => setTexto(e.target.value)}
+                          placeholder={`Responder em ${notification.issueKey}...`}
+                          rows={3}
+                          autoFocus
+                          maxLength={5000}
+                          onKeyDown={(e) => {
+                            // Ctrl/Cmd+Enter envia; Enter sozinho quebra linha, porque
+                            // comentário de uma linha é a exceção, não a regra.
+                            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && texto.trim()) {
+                              void agir(notification, { comentario: texto }, `Comentário publicado em ${notification.issueKey}`);
+                            }
+                            if (e.key === 'Escape') { setRespondendo(null); setTexto(''); }
+                          }}
+                        />
+                        <div className="nt-responder-rodape">
+                          <span className="nt-responder-dica">Ctrl+Enter envia · Esc cancela</span>
+                          <div className="nt-responder-botoes">
+                            <button
+                              className="nt-btn-ghost"
+                              onClick={() => { setRespondendo(null); setTexto(''); }}
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              className="nt-btn-primary"
+                              disabled={!texto.trim() || enviando === notification.id}
+                              onClick={() => void agir(notification, { comentario: texto }, `Comentário publicado em ${notification.issueKey}`)}
+                            >
+                              {enviando === notification.id
+                                ? <><Loader2 size={12} className="animate-spin" /> Enviando</>
+                                : <><Send size={12} /> Comentar e resolver</>}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="nt-acoes">
+                        <button
+                          className="nt-btn-ghost"
+                          onClick={() => { setRespondendo(notification.id || null); setTexto(''); setAviso(null); }}
+                        >
+                          <MessageCircle size={12} /> Responder
+                        </button>
+                        <button
+                          className="nt-btn-ghost"
+                          disabled={enviando === notification.id}
+                          onClick={() => void agir(notification, { apenasDispensar: true }, 'Notificação dispensada')}
+                        >
+                          {enviando === notification.id
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <Check size={12} />} Já vi
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </article>
               );
@@ -458,6 +579,94 @@ export default function NotificacoesPage() {
         }
         .nt-aviso svg { flex: 0 0 auto; margin-top: 1px; color: #F59E0B; }
         .nt-aviso strong { color: var(--text-primary); }
+
+        .nt-feedback {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 11px 14px;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        .nt-feedback.ok {
+          border: 1px solid var(--accent-emerald-light);
+          background: var(--accent-emerald-light);
+          color: var(--accent-emerald);
+        }
+        .nt-feedback.erro {
+          border: 1px solid var(--accent-rose-light);
+          background: var(--accent-rose-light);
+          color: var(--accent-rose);
+        }
+        .nt-feedback-acoes { display: flex; flex: 0 0 auto; gap: 7px; }
+        .nt-feedback-acoes button {
+          padding: 4px 10px;
+          border: 1px solid currentColor;
+          border-radius: 6px;
+          background: transparent;
+          color: inherit;
+          cursor: pointer;
+          font: inherit;
+          font-size: 11px;
+        }
+
+        .nt-acoes { display: flex; gap: 8px; margin-top: 10px; }
+        .nt-btn-ghost, .nt-btn-primary {
+          display: inline-flex;
+          min-height: 30px;
+          align-items: center;
+          gap: 6px;
+          padding: 0 11px;
+          border-radius: 7px;
+          cursor: pointer;
+          font: inherit;
+          font-size: 11px;
+          font-weight: 650;
+          transition: background .15s, color .15s, border-color .15s;
+        }
+        .nt-btn-ghost {
+          border: 1px solid var(--border-primary);
+          background: transparent;
+          color: var(--text-tertiary);
+        }
+        .nt-btn-ghost:hover:not(:disabled) { background: var(--bg-secondary); color: var(--text-primary); }
+        .nt-btn-primary {
+          border: 1px solid var(--accent-blue);
+          background: var(--accent-blue);
+          color: #fff;
+        }
+        .nt-btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+        .nt-btn-ghost:disabled, .nt-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+        .nt-responder { margin-top: 10px; }
+        .nt-responder textarea {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1px solid var(--border-primary);
+          border-radius: 8px;
+          background: var(--bg-secondary);
+          color: var(--text-primary);
+          font: inherit;
+          font-size: 12px;
+          line-height: 18px;
+          resize: vertical;
+        }
+        .nt-responder textarea:focus {
+          outline: none;
+          border-color: var(--accent-blue);
+        }
+        .nt-responder-rodape {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+        .nt-responder-dica { color: var(--text-tertiary); font-size: 11px; }
+        .nt-responder-botoes { display: flex; gap: 7px; }
         .nt-type-icon {
           display: flex;
           width: 36px;
