@@ -44,7 +44,11 @@ export async function GET() {
         jql: 'project = DSMM AND updated >= -30d ORDER BY updated DESC',
         fields: ['summary', 'status', 'assignee', 'updated', 'comment', 'issuetype', 'priority'],
         maxResults: 50,
-        expand: ['changelog'],
+        // STRING, não array: com `expand: ['changelog']` o Jira responde 400 "Invalid
+        // request payload", e o `if (recentRes.ok)` abaixo engolia o erro em silêncio —
+        // activityLog e notifications ficavam SEMPRE vazios, e a tela de notificações
+        // aparecia sem nada como se não houvesse novidade.
+        expand: 'changelog',
       }),
     });
 
@@ -52,6 +56,9 @@ export async function GET() {
     if (recentRes.ok) {
       const data = await recentRes.json();
       recentIssues = data.issues || [];
+    } else {
+      // Falha alto no log: era a falta disto que escondia o problema.
+      console.error(`[Team] Busca de changelog falhou (HTTP ${recentRes.status}):`, (await recentRes.text()).slice(0, 300));
     }
 
     // Build team stats

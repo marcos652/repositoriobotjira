@@ -4,9 +4,10 @@
 
 import React, { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowRight, Bell, CheckCircle2, ExternalLink, Loader2, MessageCircle, RefreshCw, WifiOff } from 'lucide-react';
+import { ArrowRight, AtSign, Bell, CheckCircle2, ExternalLink, Loader2, MessageCircle, RefreshCw, UserPlus, WifiOff } from 'lucide-react';
 
 interface Notification {
+  id?: string;
   type: string;
   issueKey: string;
   summary: string;
@@ -14,6 +15,18 @@ interface Notification {
   authorAvatar: string | null;
   date: string;
   message: string;
+  /** Para quem a notificação é dirigida (menção/atribuição). */
+  destinatario?: string;
+  /** true quando o destinatário é quem está logado. */
+  paraMim?: boolean;
+  /** Trecho do comentário, para não precisar abrir o Jira. */
+  trecho?: string;
+}
+
+interface Identidade {
+  email: string | null;
+  accountId: string | null;
+  reconhecido: boolean;
 }
 
 function timeAgo(date: string) {
@@ -26,16 +39,27 @@ function timeAgo(date: string) {
 }
 
 const typeConfig: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
+  mention: { icon: AtSign, color: '#F59E0B', bg: 'rgba(245,158,11,0.10)' },
+  assigned: { icon: UserPlus, color: '#10B981', bg: 'rgba(16,185,129,0.10)' },
   comment: { icon: MessageCircle, color: '#3B82F6', bg: 'rgba(59,130,246,0.08)' },
   status: { icon: ArrowRight, color: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
 };
 
+// /api/notifications, e não /api/jira/team: é a rota que resolve o accountId de quem está
+// logado e marca cada item com paraMim, além de detectar @menção e atribuição.
 async function requestNotifications() {
-  const response = await fetch('/api/jira/team');
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const response = await fetch('/api/notifications');
+  if (!response.ok) {
+    const corpo = await response.json().catch(() => ({}));
+    throw new Error(corpo.error || `HTTP ${response.status}`);
+  }
 
   const data = await response.json();
-  return (data.notifications || []) as Notification[];
+  return {
+    notifications: (data.notifications || []) as Notification[],
+    identidade: (data.identidade || { email: null, accountId: null, reconhecido: false }) as Identidade,
+    janelaDias: (data.janelaDias || 14) as number,
+  };
 }
 
 function NotificationState({ mode, onRetry }: { mode: 'loading' | 'error'; onRetry?: () => void }) {
@@ -117,7 +141,9 @@ export default function NotificacoesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [filterType, setFilterType] = useState('all');
+  const [filterType, setFilterType] = useState('paraMim');
+  const [identidade, setIdentidade] = useState<Identidade | null>(null);
+  const [janelaDias, setJanelaDias] = useState(14);
 
   async function fetchData(isRefresh = false) {
     try {
@@ -125,7 +151,9 @@ export default function NotificacoesPage() {
       else setLoading(true);
 
       const data = await requestNotifications();
-      setNotifications(data);
+      setNotifications(data.notifications);
+      setIdentidade(data.identidade);
+      setJanelaDias(data.janelaDias);
       setError(null);
     } catch (fetchError) {
       setError(String(fetchError));
@@ -141,7 +169,9 @@ export default function NotificacoesPage() {
     void requestNotifications()
       .then((data) => {
         if (!active) return;
-        setNotifications(data);
+        setNotifications(data.notifications);
+        setIdentidade(data.identidade);
+        setJanelaDias(data.janelaDias);
         setError(null);
       })
       .catch((fetchError) => {
@@ -154,9 +184,12 @@ export default function NotificacoesPage() {
     return () => { active = false; };
   }, []);
 
-  const filtered = notifications.filter((notification) => filterType === 'all' || notification.type === filterType);
-  const commentCount = notifications.filter((notification) => notification.type === 'comment').length;
-  const statusCount = notifications.filter((notification) => notification.type === 'status').length;
+  // "paraMim" não é um tipo, é um recorte: reúne menções e atribuições dirigidas a você.
+  const filtered = notifications.filter((n) =>
+    filterType === 'all' ? true : filterType === 'paraMim' ? n.paraMim === true : n.type === filterType
+  );
+  const conta = (tipo: string) => notifications.filter((n) => n.type === tipo).length;
+  const paraMimCount = notifications.filter((n) => n.paraMim === true).length;
 
   if (loading) {
     return <NotificationState mode="loading" />;
@@ -167,9 +200,12 @@ export default function NotificacoesPage() {
   }
 
   const tabs = [
+    { id: 'paraMim', label: `Para mim (${paraMimCount})` },
+    { id: 'mention', label: `Menções (${conta('mention')})` },
+    { id: 'assigned', label: `Atribuições (${conta('assigned')})` },
+    { id: 'comment', label: `Comentários (${conta('comment')})` },
+    { id: 'status', label: `Status (${conta('status')})` },
     { id: 'all', label: `Todas (${notifications.length})` },
-    { id: 'comment', label: `Comentários (${commentCount})` },
-    { id: 'status', label: `Status (${statusCount})` },
   ];
 
   return (
@@ -178,12 +214,25 @@ export default function NotificacoesPage() {
         <div className="nt-heading">
           <div className="nt-kicker"><Bell size={15} /> Central de atividades</div>
           <h1>Notificações</h1>
-          <p>{notifications.length} atividades nos últimos 7 dias</p>
+          <p>{notifications.length} atividades nos últimos {janelaDias} dias · {paraMimCount} para você</p>
         </div>
         <button className="nt-refresh" onClick={() => void fetchData(true)} disabled={refreshing}>
           <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Atualizar
         </button>
       </header>
+
+      {/* Sem accountId, nada pode ser marcado como seu, e a aba "Para mim" ficaria vazia
+          parecendo defeito. Dizer o motivo é melhor que uma lista vazia silenciosa. */}
+      {identidade && !identidade.reconhecido && (
+        <div className="nt-aviso">
+          <AtSign size={14} />
+          <span>
+            {identidade.email
+              ? <>Não encontrei uma conta ativa no Jira para <strong>{identidade.email}</strong>, então não é possível saber o que é dirigido a você. As menções e atribuições das outras pessoas continuam listadas.</>
+              : <>Sessão sem e-mail reconhecido — não é possível separar o que é dirigido a você.</>}
+          </span>
+        </div>
+      )}
 
       <nav className="nt-tabs" aria-label="Filtrar notificações">
         {tabs.map((tab) => (
@@ -220,7 +269,10 @@ export default function NotificacoesPage() {
               const Icon = config.icon;
 
               return (
-                <article key={`${notification.issueKey}-${notification.date}-${index}`} className="nt-row">
+                <article
+                  key={notification.id || `${notification.issueKey}-${notification.date}-${index}`}
+                  className={`nt-row ${notification.paraMim ? 'nt-row-mine' : ''}`}
+                >
                   <div className="nt-type-icon" style={{ background: config.bg, color: config.color }}>
                     <Icon size={16} />
                   </div>
@@ -234,7 +286,12 @@ export default function NotificacoesPage() {
                       </div>
                       <time dateTime={notification.date}>{timeAgo(notification.date)}</time>
                     </div>
-                    <p className="nt-message">{notification.message}</p>
+                    <p className="nt-message">
+                      {notification.message}
+                      {notification.paraMim && <span className="nt-badge-mine">para você</span>}
+                    </p>
+                    {/* O trecho existe para a pessoa decidir se precisa abrir o Jira. */}
+                    {notification.trecho && <p className="nt-trecho">{notification.trecho}</p>}
                     <div className="nt-issue-row">
                       <a href={`https://movingpay.atlassian.net/browse/${notification.issueKey}`} target="_blank" rel="noopener noreferrer">
                         {notification.issueKey} <ExternalLink size={10} />
@@ -363,6 +420,44 @@ export default function NotificacoesPage() {
         }
         .nt-row:last-child { border-bottom: 0; }
         .nt-row:hover { background: var(--bg-card-hover); }
+        /* Barra na lateral, e não fundo colorido: na aba "Para mim" TODAS as linhas são
+           suas, e um fundo colorido em tudo viraria ruído em vez de destaque. */
+        .nt-row-mine { border-left: 3px solid #F59E0B; padding-left: 21px; }
+        .nt-badge-mine {
+          margin-left: 8px;
+          padding: 2px 7px;
+          border: 1px solid rgba(245,158,11,0.28);
+          border-radius: 999px;
+          background: rgba(245,158,11,0.12);
+          color: #F59E0B;
+          font-size: 10px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        .nt-trecho {
+          margin: 0 0 8px;
+          padding: 8px 11px;
+          border-left: 2px solid var(--border-primary);
+          border-radius: 0 8px 8px 0;
+          background: var(--bg-secondary);
+          color: var(--text-tertiary);
+          font-size: 12px;
+          line-height: 18px;
+        }
+        .nt-aviso {
+          display: flex;
+          align-items: flex-start;
+          gap: 9px;
+          padding: 11px 14px;
+          border: 1px solid rgba(245,158,11,0.25);
+          border-radius: 8px;
+          background: rgba(245,158,11,0.09);
+          color: var(--text-secondary);
+          font-size: 12px;
+          line-height: 18px;
+        }
+        .nt-aviso svg { flex: 0 0 auto; margin-top: 1px; color: #F59E0B; }
+        .nt-aviso strong { color: var(--text-primary); }
         .nt-type-icon {
           display: flex;
           width: 36px;
