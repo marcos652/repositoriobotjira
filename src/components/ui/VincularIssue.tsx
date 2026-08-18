@@ -28,12 +28,24 @@ const TIPOS = [
   { id: 'escalation', label: 'É escalação de' },
 ];
 
+/**
+ * Escolha que dispensa o vínculo. Fica no MESMO seletor dos tipos porque é a mesma pergunta
+ * respondida de outra forma: "de onde veio esta demanda?" — de tal ticket, ou de lugar nenhum.
+ * Separar num checkbox faria a pessoa ter que entender dois controles para uma decisão.
+ */
+export const SEM_VINCULO = 'naoNecessario';
+
 export default function VincularIssue({
   vinculos,
   onChange,
+  dispensado,
+  onDispensadoChange,
 }: {
   vinculos: IssueVinculada[];
   onChange: (v: IssueVinculada[]) => void;
+  /** true quando a pessoa marcou que não há ticket de origem. */
+  dispensado: boolean;
+  onDispensadoChange: (v: boolean) => void;
 }) {
   const [termo, setTermo] = useState('');
   const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
@@ -41,6 +53,21 @@ export default function VincularIssue({
   const [aberto, setAberto] = useState(false);
   const [chaveInexistente, setChaveInexistente] = useState(false);
   const [tipoVinculo, setTipoVinculo] = useState('relates');
+
+  // "Não necessário" LIMPA os vínculos: manter uma pill de SUP-123 embaixo de "não há ticket de
+  // origem" seria a tela afirmando duas coisas contrárias, e a demanda sairia com o vínculo que
+  // a pessoa acabou de dizer que não existe.
+  const trocarTipo = (valor: string) => {
+    if (valor === SEM_VINCULO) {
+      onDispensadoChange(true);
+      if (vinculos.length > 0) onChange([]);
+      setTermo('');
+      setAberto(false);
+      return;
+    }
+    onDispensadoChange(false);
+    setTipoVinculo(valor);
+  };
   const caixaRef = useRef<HTMLDivElement>(null);
 
   // Espera 350ms depois da última tecla. Sem isso cada tecla dispara uma busca no Jira, que
@@ -101,18 +128,20 @@ export default function VincularIssue({
 
       <div className="vi-linha">
         <select
-          value={tipoVinculo}
-          onChange={(e) => setTipoVinculo(e.target.value)}
+          value={dispensado ? SEM_VINCULO : tipoVinculo}
+          onChange={(e) => trocarTipo(e.target.value)}
           className="vi-tipo"
           aria-label="Tipo de vínculo"
         >
           {TIPOS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          <option value={SEM_VINCULO}>Não necessário</option>
         </select>
 
-        <div className="vi-campo">
+        <div className={`vi-campo ${dispensado ? 'vi-campo-off' : ''}`}>
           <Search size={13} aria-hidden="true" />
           <input
-            value={termo}
+            disabled={dispensado}
+            value={dispensado ? '' : termo}
             onChange={(e) => setTermo(e.target.value)}
             onFocus={() => { if (sugestoesVisiveis.length > 0) setAberto(true); }}
             onKeyDown={(e) => {
@@ -124,14 +153,14 @@ export default function VincularIssue({
               }
               if (e.key === 'Escape') setAberto(false);
             }}
-            placeholder="SUP-21193, ou parte do texto do ticket..."
+            placeholder={dispensado ? 'Sem ticket de origem' : 'SUP-21193, ou parte do texto do ticket...'}
             autoComplete="off"
           />
           {buscando && <Loader2 size={13} className="vi-spin" aria-hidden="true" />}
         </div>
       </div>
 
-      {aberto && (sugestoesVisiveis.length > 0 || chaveInexistente) && (
+      {!dispensado && aberto && (sugestoesVisiveis.length > 0 || chaveInexistente) && (
         <div className="vi-lista" role="listbox">
           {chaveInexistente && (
             <p className="vi-vazio">Nenhuma issue com essa chave. Confira o número.</p>
@@ -153,6 +182,18 @@ export default function VincularIssue({
             </button>
           ))}
         </div>
+      )}
+
+      {dispensado && (
+        <p className="vi-dispensado">
+          Marcado como sem ticket de origem. A demanda será criada sem vínculo.
+        </p>
+      )}
+
+      {!dispensado && vinculos.length === 0 && (
+        <p className="vi-exigido">
+          Vincule o ticket que originou esta demanda, ou escolha <strong>Não necessário</strong>.
+        </p>
       )}
 
       {vinculos.length > 0 && (
@@ -192,6 +233,11 @@ export default function VincularIssue({
         .vi-tipo { flex: 0 0 auto; padding: 0 8px; cursor: pointer; outline: none; }
         .vi-campo { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 0 10px; }
         .vi-campo input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 12px; outline: none; }
+        .vi-campo input:disabled { cursor: not-allowed; }
+        .vi-campo-off { opacity: .5; }
+        .vi-dispensado { margin: 0; font-size: 10px; color: var(--text-tertiary); }
+        .vi-exigido { margin: 0; font-size: 10px; color: var(--accent-amber); }
+        .vi-exigido strong { font-weight: 700; }
         .vi-spin { animation: viSpin 1s linear infinite; }
         @keyframes viSpin { to { transform: rotate(360deg); } }
         .vi-lista {

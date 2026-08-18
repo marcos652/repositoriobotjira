@@ -200,6 +200,9 @@ export default function NovaDemandaPage() {
   const [activeView, setActiveView] = useState<'editor' | 'history'>('editor');
   const [showMeta, setShowMeta] = useState(true);
   const [vinculos, setVinculos] = useState<IssueVinculada[]>([]);
+  // Vínculo dispensado explicitamente ("Não necessário"). É uma decisão registrada, não a
+  // ausência de decisão: por isso começa false e o envio exige uma das duas coisas.
+  const [semVinculo, setSemVinculo] = useState(false);
   const [focusEditor, setFocusEditor] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -537,6 +540,14 @@ export default function NovaDemandaPage() {
     if (!nomeCliente.trim() || !referencia.trim()) {
       setShowMeta(true);
       setValidationWarn('É obrigatório preencher Cliente e Referência.');
+      return;
+    }
+
+    // Vínculo: ou tem ticket de origem, ou a pessoa declarou que não tem. O que não pode é
+    // passar batido — era justamente o ponto de existir a opção "Não necessário".
+    if (vinculos.length === 0 && !semVinculo) {
+      setValidationWarn('Vincule o ticket que originou a demanda, ou marque "Não necessário" no campo de vínculo.');
+      setShowMeta(true); // o campo mora nos detalhes; se estiverem fechados, o aviso não teria onde apontar
       return;
     }
 
@@ -1093,7 +1104,12 @@ export default function NovaDemandaPage() {
                   {/* Vínculo com issue existente. Fica aqui, junto dos outros detalhes, porque
                       é opcional: a maioria das demandas não vem de um ticket. */}
                   <div style={{ marginTop: '12px' }}>
-                    <VincularIssue vinculos={vinculos} onChange={setVinculos} />
+                    <VincularIssue
+                      vinculos={vinculos}
+                      onChange={setVinculos}
+                      dispensado={semVinculo}
+                      onDispensadoChange={setSemVinculo}
+                    />
                   </div>
 
                   {urlsImagens.length > 0 && (
