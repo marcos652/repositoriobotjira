@@ -151,13 +151,34 @@ const URGENCIES = [
   { value: 'critico', label: 'Crítico — parou produção' },
 ];
 
+// Os estágios continuam existindo como RÓTULO — o que saiu foi a fileira de cinco caixinhas.
+// `ate` é a fração da barra em que cada etapa deixa de ser a atual; os valores vêm da duração
+// relativa observada (a IA é de longe a parte mais demorada).
 const PROGRESS_STEPS = [
-  { label: 'Validando dados...', icon: Shield },
-  { label: 'Analisando com IA...', icon: Sparkles },
-  { label: 'Criando no Jira...', icon: Zap },
-  { label: 'Enviando anexos...', icon: Upload },
-  { label: 'Notificando Slack...', icon: MessageSquare },
+  { label: 'Validando dados...',   icon: Shield,         ate: 0.10 },
+  { label: 'Analisando com IA...', icon: Sparkles,       ate: 0.65 },
+  { label: 'Criando no Jira...',   icon: Zap,            ate: 0.85 },
+  { label: 'Enviando anexos...',   icon: Upload,         ate: 0.95 },
+  { label: 'Notificando Slack...', icon: MessageSquare,  ate: 1.00 },
 ];
+
+// Duração típica de referência para a barra andar. NÃO é promessa: a barra desacelera e para em
+// 92% até a resposta chegar de verdade.
+const DURACAO_ESTIMADA_MS = 14000;
+const TETO_ANTES_DA_RESPOSTA = 92;
+
+/**
+ * Porcentagem a partir do tempo REAL decorrido, com curva desacelerando.
+ *
+ * Uma barra linear no relógio é pior que os estágios: se a demanda demora mais que o previsto,
+ * ela bate 100% e fica lá parada — dizendo que acabou quando não acabou. Aqui ela avança rápido
+ * no começo, vai freando, e nunca passa de 92%; o 100% só acontece quando a requisição responde.
+ */
+function pctPorTempo(decorridoMs: number): number {
+  const t = Math.max(0, decorridoMs) / DURACAO_ESTIMADA_MS;
+  const curva = 1 - Math.exp(-1.9 * t); // ~85% da curva em uma duração estimada
+  return Math.min(TETO_ANTES_DA_RESPOSTA, Math.round(curva * 100));
+}
 
 interface UploadedImage {
   url: string;
@@ -191,6 +212,7 @@ export default function NovaDemandaPage() {
   const [novaUrl, setNovaUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
+  const [progressPct, setProgressPct] = useState(0);
   const [result, setResult] = useState<DemandaResult | null>(null);
   // Começa vazio, IGUAL ao que o servidor renderiza, e só carrega o localStorage depois de
   // montar (no efeito de restauração abaixo). Iniciar o estado com loadHistory() fazia o
@@ -618,10 +640,18 @@ export default function NovaDemandaPage() {
       return;
     }
 
-    // Simulate progress steps
+    // Um timer só: a porcentagem e a etapa saem do MESMO tempo decorrido, então o rótulo nunca
+    // diz "Criando no Jira" com a barra em 20%. 120ms é suficiente para o movimento parecer
+    // contínuo sem renderizar a tela 60 vezes por segundo.
+    const inicio = Date.now();
+    setProgressPct(0);
     const stepInterval = setInterval(() => {
-      setProgressStep(prev => (prev < PROGRESS_STEPS.length - 1 ? prev + 1 : prev));
-    }, 2500);
+      const pct = pctPorTempo(Date.now() - inicio);
+      setProgressPct(pct);
+      const fracao = pct / 100;
+      const etapa = PROGRESS_STEPS.findIndex((e) => fracao <= e.ate);
+      setProgressStep(etapa === -1 ? PROGRESS_STEPS.length - 1 : etapa);
+    }, 120);
 
     try {
       const res = await fetch('/api/criar-demanda', {
@@ -631,6 +661,8 @@ export default function NovaDemandaPage() {
       });
       const data = await res.json();
       clearInterval(stepInterval);
+      // 100% só aqui: a barra representa "terminou", e terminar é a resposta ter chegado.
+      setProgressPct(100);
 
       if (res.ok && data.success && data.issueData) {
         setPreviewData(data.issueData);
@@ -656,10 +688,18 @@ export default function NovaDemandaPage() {
     const finalPreviewData = { ...previewData, description: buildDescription(previewData) };
     setPreviewData(null);
 
-    // Simulate progress steps for actual creation
+    // Um timer só: a porcentagem e a etapa saem do MESMO tempo decorrido, então o rótulo nunca
+    // diz "Criando no Jira" com a barra em 20%. 120ms é suficiente para o movimento parecer
+    // contínuo sem renderizar a tela 60 vezes por segundo.
+    const inicio = Date.now();
+    setProgressPct(0);
     const stepInterval = setInterval(() => {
-      setProgressStep(prev => (prev < PROGRESS_STEPS.length - 1 ? prev + 1 : prev));
-    }, 2000);
+      const pct = pctPorTempo(Date.now() - inicio);
+      setProgressPct(pct);
+      const fracao = pct / 100;
+      const etapa = PROGRESS_STEPS.findIndex((e) => fracao <= e.ate);
+      setProgressStep(etapa === -1 ? PROGRESS_STEPS.length - 1 : etapa);
+    }, 120);
 
     try {
       const bodyFinal = { ...currentBodyParams, issueDataPreGerado: finalPreviewData };
@@ -670,6 +710,8 @@ export default function NovaDemandaPage() {
       });
       const data = await res.json();
       clearInterval(stepInterval);
+      // 100% só aqui: a barra representa "terminou", e terminar é a resposta ter chegado.
+      setProgressPct(100);
 
       const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       if (res.ok) {
@@ -1129,16 +1171,38 @@ export default function NovaDemandaPage() {
               {/* Action bar */}
               <div className="nd-action-bar">
                 {loading ? (
-                  <div className="nd-progress">
-                    {PROGRESS_STEPS.map((step, i) => {
-                      const StepIcon = step.icon;
-                      return (
-                        <div key={i} className={`nd-progress-step ${i <= progressStep ? 'active' : ''} ${i === progressStep ? 'current' : ''}`}>
-                          <StepIcon size={12} className={i === progressStep ? 'animate-spin' : ''} />
-                          <span>{step.label}</span>
-                        </div>
-                      );
-                    })}
+                  <div className="nd-progress" role="status" aria-live="polite">
+                    <div className="nd-progress-top">
+                      {(() => {
+                        const etapa = PROGRESS_STEPS[Math.min(progressStep, PROGRESS_STEPS.length - 1)];
+                        const EtapaIcon = etapa.icon;
+                        // No teto (92%) a barra empaca esperando a resposta, e aí não sabemos
+                        // mais em que etapa o servidor está. Continuar dizendo "Enviando
+                        // anexos..." seria inventar — "Finalizando" é o que de fato sabemos.
+                        const noTeto = progressPct >= TETO_ANTES_DA_RESPOSTA && progressPct < 100;
+                        return (
+                          <span className="nd-progress-etapa">
+                            <EtapaIcon size={12} className={progressPct < 100 ? 'animate-spin' : ''} />
+                            {progressPct >= 100 ? 'Concluído' : noTeto ? 'Finalizando...' : etapa.label}
+                          </span>
+                        );
+                      })()}
+                      <span className="nd-progress-pct">{progressPct}%</span>
+                    </div>
+
+                    <div
+                      className="nd-progress-track"
+                      role="progressbar"
+                      aria-valuenow={progressPct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
+                      <div className="nd-progress-fill" style={{ width: `${progressPct}%` }}>
+                        {/* Brilho correndo: mostra que ainda está trabalhando mesmo quando a barra
+                            desacelera e quase não anda perto dos 92%. */}
+                        <span className="nd-progress-brilho" aria-hidden="true" />
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="nd-tips">
@@ -1774,7 +1838,26 @@ export default function NovaDemandaPage() {
         .nd-select option { background: var(--bg-card); color: var(--text-primary); }
 
         /* Progress steps */
-        .nd-progress { display: flex; gap: 6px; flex-wrap: wrap; }
+        .nd-progress { display: flex; flex-direction: column; gap: 7px; width: 100%; min-width: 200px; }
+        .nd-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .nd-progress-etapa { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+        .nd-progress-pct { font-size: 12px; font-weight: 800; color: var(--accent-blue); font-variant-numeric: tabular-nums; }
+        .nd-progress-track { height: 6px; border-radius: 999px; background: var(--bg-secondary); overflow: hidden; }
+        .nd-progress-fill {
+          position: relative;
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-violet) 100%);
+          /* A largura muda a cada 120ms; a transição costura os saltos num movimento contínuo. */
+          transition: width .18s linear;
+          overflow: hidden;
+        }
+        .nd-progress-brilho {
+          position: absolute; inset: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+          animation: ndBrilho 1.2s linear infinite;
+        }
+        @keyframes ndBrilho { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
         .nd-progress-step {
           display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;
           font-size: 10px; font-weight: 600; color: var(--text-tertiary);
