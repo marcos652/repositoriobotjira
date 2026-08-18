@@ -226,6 +226,8 @@ export default function NovaDemandaPage() {
   // ausência de decisão: por isso começa false e o envio exige uma das duas coisas.
   const [semVinculo, setSemVinculo] = useState(false);
   const [demandaPai, setDemandaPai] = useState<DemandaPai | null>(null);
+  const [paiCarregando, setPaiCarregando] = useState(false);
+  const [paiErro, setPaiErro] = useState<string | null>(null);
   const [focusEditor, setFocusEditor] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -308,6 +310,38 @@ export default function NovaDemandaPage() {
       }
     }, 500);
   }, [texto, nomeCliente, referencia, prioridade, urgencia]);
+
+  // Pai vindo da URL (?pai=DSMM-202), usado pelo botão "Criar item filho" da tela de consulta.
+  //
+  // A chave é CONFERIDA no servidor antes de virar pai, e não aceita de olhos fechados: a URL é
+  // editável por qualquer um, e um pai inválido só apareceria como erro no fim, depois de a
+  // demanda inteira ter sido escrita. A mesma rota de busca já sabe recusar subtarefa e issue de
+  // outro projeto, então a checagem é a mesma da digitação manual.
+  /* eslint-disable react-hooks/set-state-in-effect -- parâmetro de URL é entrada externa espelhada no estado */
+  useEffect(() => {
+    const chave = new URLSearchParams(window.location.search).get('pai');
+    if (!chave) return;
+
+    let vivo = true;
+    setPaiCarregando(true);
+    void fetch(`/api/jira/buscar-issue?q=${encodeURIComponent(chave)}&alvo=pai`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!vivo) return;
+        const achada = j?.sugestoes?.find((x: { key: string }) => x.key === chave.toUpperCase());
+        if (achada) {
+          setDemandaPai({ key: achada.key, summary: achada.summary, tipo: achada.tipo });
+          setShowMeta(true); // o campo mora nos detalhes: escondido, o pai passaria despercebido
+        } else {
+          setPaiErro(j?.motivoRecusa || `Não foi possível usar ${chave} como demanda pai.`);
+        }
+      })
+      .catch(() => { if (vivo) setPaiErro('Não foi possível conferir a demanda pai no Jira.'); })
+      .finally(() => { if (vivo) setPaiCarregando(false); });
+
+    return () => { vivo = false; };
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Restore draft on mount
   /* eslint-disable react-hooks/set-state-in-effect -- restores the browser-backed draft on first client render */
@@ -1158,7 +1192,12 @@ export default function NovaDemandaPage() {
                   </div>
 
                   <div style={{ marginTop: '12px' }}>
-                    <VincularPai pai={demandaPai} onChange={setDemandaPai} />
+                    <VincularPai
+                      pai={demandaPai}
+                      onChange={(p) => { setDemandaPai(p); setPaiErro(null); }}
+                      carregando={paiCarregando}
+                      erro={paiErro}
+                    />
                   </div>
 
                   {urlsImagens.length > 0 && (

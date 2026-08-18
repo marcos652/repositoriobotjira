@@ -360,10 +360,35 @@ export interface DemandaPai {
 export function VincularPai({
   pai,
   onChange,
+  carregando,
+  erro,
 }: {
   pai: DemandaPai | null;
   onChange: (p: DemandaPai | null) => void;
+  /** true enquanto um pai vindo da URL está sendo conferido no Jira. */
+  carregando?: boolean;
+  /** Motivo de um pai vindo da URL ter sido recusado. */
+  erro?: string | null;
 }) {
+  if (carregando) {
+    return (
+      <div className="vp-root">
+        <label className="vp-label"><GitBranch size={11} /> Demanda pai (opcional)</label>
+        <div className="vp-carregando">
+          <Loader2 size={12} className="vi-spin" aria-hidden="true" />
+          Conferindo a demanda pai no Jira...
+        </div>
+        <style jsx>{`
+          .vp-root { display: flex; flex-direction: column; gap: 6px; }
+          .vp-label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em; }
+          .vp-carregando { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 10px; border: 1px solid var(--border-primary); border-radius: 8px; font-size: 11px; color: var(--text-tertiary); }
+          .vi-spin { animation: viSpin 1s linear infinite; }
+          @keyframes viSpin { to { transform: rotate(360deg); } }
+        `}</style>
+      </div>
+    );
+  }
+
   return (
     <div className="vp-root">
       <label className="vp-label"><GitBranch size={11} /> Demanda pai (opcional)</label>
@@ -386,6 +411,10 @@ export function VincularPai({
           onEscolher={(s) => onChange({ key: s.key, summary: s.summary, tipo: s.tipo })}
         />
       )}
+
+      {/* Recusa de um pai vindo da URL: sem isso a tela abriria sem pai e sem explicação, e a
+          pessoa acharia que o botão "Criar item filho" não funcionou. */}
+      {erro && <p className="vp-erro">{erro}</p>}
 
       {pai && (
         <p className="vp-aviso">
@@ -410,6 +439,7 @@ export function VincularPai({
         .vp-escolhida button:hover { opacity: 1; }
         .vp-aviso { margin: 0; font-size: 10px; line-height: 15px; color: var(--text-tertiary); }
         .vp-aviso strong { color: var(--accent-violet); }
+        .vp-erro { margin: 0; font-size: 10px; line-height: 15px; color: var(--accent-rose); }
       `}</style>
     </div>
   );

@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Search, Loader2, CheckCircle2, AlertTriangle, X,
   FileText, User, Tag, Clock, Edit3, Save, ArrowUpRight,
   Sparkles, Building2, MessageCircle, GitBranch,
   GitPullRequest, GitMerge, Send, Copy, Link2,
   Paperclip, ListTree, ArrowRight, Timer, ChevronDown,
-  Activity, Shield, Calendar, Trash2
+  Activity, Shield, Calendar, Trash2, Plus
 } from 'lucide-react';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
@@ -119,7 +120,7 @@ export default function ConsultarDemandaPage() {
   const [commentDragOver, setCommentDragOver] = useState(false);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
   const [transitioning, setTransitioning] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'activity' | 'dev'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'comments' | 'activity' | 'filhos' | 'dev'>('details');
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -518,7 +519,8 @@ export default function ConsultarDemandaPage() {
               { id: 'details' as const, label: 'Detalhes', icon: <FileText size={13} /> },
               { id: 'comments' as const, label: `Comentários (${demanda.comments.length})`, icon: <MessageCircle size={13} /> },
               { id: 'activity' as const, label: `Atividade (${demanda.changelog.length})`, icon: <Activity size={13} /> },
-              { id: 'dev' as const, label: `Dev (${demanda.pullRequests.length + demanda.subtasks.length})`, icon: <GitBranch size={13} /> },
+              { id: 'filhos' as const, label: `Itens filhos (${demanda.subtasks.length})`, icon: <ListTree size={13} /> },
+              { id: 'dev' as const, label: `Dev (${demanda.pullRequests.length})`, icon: <GitBranch size={13} /> },
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ ...S.tab(activeTab === tab.id), display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {tab.icon} {tab.label}
@@ -948,6 +950,58 @@ export default function ConsultarDemandaPage() {
             )}
 
             {/* ═══ DEV TAB ═══ */}
+            {activeTab === 'filhos' && (
+              <div style={{ padding: '24px' }}>
+                {/* O botão fica ANTES da lista e aparece mesmo sem filho nenhum: quando não há
+                    nenhum é justamente quando alguém quer criar o primeiro. */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                  <label style={{ ...S.label, marginBottom: 0 }}>
+                    <ListTree size={12} /> Itens filhos ({demanda.subtasks.length})
+                  </label>
+                  {/* Leva a chave DESTA demanda para a tela de criação, que já abre com ela como
+                      pai. É o mesmo caminho de criar manualmente, só sem a pessoa ter que
+                      digitar a chave de novo e sem risco de errar o número. */}
+                  <Link
+                    href={`/dashboard/nova-demanda?pai=${demanda.issue_key}`}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '7px', minHeight: '36px',
+                      padding: '0 14px', borderRadius: '8px', border: '1px solid var(--accent-violet)',
+                      background: 'var(--accent-violet)', color: '#fff', fontSize: '12px',
+                      fontWeight: 700, textDecoration: 'none',
+                    }}
+                  >
+                    <Plus size={13} /> Criar item filho
+                  </Link>
+                </div>
+
+                {demanda.subtasks.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {demanda.subtasks.map((st, i) => (
+                      <a
+                        key={i}
+                        href={`https://movingpay.atlassian.net/browse/${st.key}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none' }}
+                      >
+                        <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--accent-indigo-soft)' }}>{st.key}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.summary}</span>
+                        <span style={S.badge('var(--accent-amber-light)', 'var(--accent-amber-soft)', 'var(--accent-amber-light)')}>{st.status}</span>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-tertiary)' }}>
+                    <ListTree size={28} style={{ opacity: 0.3, marginBottom: '8px' }} />
+                    <p style={{ fontSize: '13px', fontWeight: 600 }}>Nenhum item filho ainda</p>
+                    <p style={{ fontSize: '11px', marginTop: '4px' }}>
+                      Criar um item filho abre a tela de nova demanda já com {demanda.issue_key} como pai.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'dev' && (
               <>
                 {/* Resumo — mesmos números do painel "Desenvolvimento" do Jira */}
@@ -1048,23 +1102,7 @@ export default function ConsultarDemandaPage() {
                   </div>
                 )}
 
-                {/* Subtasks */}
-                {demanda.subtasks.length > 0 && (
-                  <div style={{ marginBottom: '24px' }}>
-                    <label style={S.label}><ListTree size={12} /> Subtasks ({demanda.subtasks.length})</label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {demanda.subtasks.map((st, i) => (
-                        <a key={i} href={`https://movingpay.atlassian.net/browse/${st.key}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border-secondary)', textDecoration: 'none' }}>
-                          <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--accent-indigo-soft)' }}>{st.key}</span>
-                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{st.summary}</span>
-                          <span style={S.badge('var(--accent-amber-light)', 'var(--accent-amber-soft)', 'var(--accent-amber-light)')}>{st.status}</span>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {demanda.pullRequests.length === 0 && demanda.subtasks.length === 0 && demanda.branches.length === 0 && demanda.builds.length === 0 && (
+                {demanda.pullRequests.length === 0 && demanda.branches.length === 0 && demanda.builds.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-tertiary)' }}>
                     <GitBranch size={28} style={{ opacity: 0.3, marginBottom: '8px' }} />
                     <p style={{ fontSize: '13px', fontWeight: 600 }}>Nenhuma info de desenvolvimento</p>
