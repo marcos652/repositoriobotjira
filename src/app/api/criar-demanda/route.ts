@@ -142,6 +142,76 @@ async function resolveJiraAccountId(email: string): Promise<string | null> {
   }
 }
 
+// ─── Vínculo com outra issue (ex: a demanda nasceu de um ticket do suporte) ───
+//
+// Os ids saem de /rest/api/3/issueLinkType da instância. Só estes três são aceitos: uma lista
+// fechada impede que um id inválido chegue ao Jira e derrube a criação por causa de um vínculo.
+const TIPOS_DE_VINCULO: Record<string, { id: string; rotulo: string }> = {
+  relates:   { id: '10003', rotulo: 'relaciona-se com' },
+  causedBy:  { id: '10006', rotulo: 'é causada por' },
+  escalation:{ id: '10043', rotulo: 'é escalação de' },
+};
+const VINCULO_PADRAO = 'relates';
+
+const CHAVE_ISSUE = /^[A-Z][A-Z0-9]*-\d+$/;
+
+interface VinculoPedido { key?: string; tipo?: string }
+
+/**
+ * Cria os vínculos DEPOIS de a issue existir, um por um.
+ *
+ * Por que depois e não no create: um vínculo com chave errada faria o Jira recusar a criação
+ * inteira, e perder a demanda por causa de um vínculo é troca ruim. Aqui cada vínculo falha
+ * sozinho, a demanda sobrevive, e a resposta diz quais não entraram.
+ */
+async function criarVinculos(
+  issueKey: string,
+  pedidos: VinculoPedido[]
+): Promise<{ criados: string[]; falhas: { key: string; motivo: string }[] }> {
+  const criados: string[] = [];
+  const falhas: { key: string; motivo: string }[] = [];
+
+  // Sem duplicar: pedir o mesmo vínculo duas vezes criaria duas linhas iguais no Jira.
+  const vistos = new Set<string>();
+
+  for (const pedido of pedidos) {
+    const alvo = String(pedido?.key || '').trim().toUpperCase();
+    if (!alvo) continue;
+    if (!CHAVE_ISSUE.test(alvo)) { falhas.push({ key: alvo, motivo: 'chave inválida' }); continue; }
+    if (alvo === issueKey) { falhas.push({ key: alvo, motivo: 'não faz sentido vincular a issue a ela mesma' }); continue; }
+    if (vistos.has(alvo)) continue;
+    vistos.add(alvo);
+
+    const tipo = TIPOS_DE_VINCULO[pedido?.tipo || VINCULO_PADRAO] || TIPOS_DE_VINCULO[VINCULO_PADRAO];
+
+    try {
+      const res = await fetch(`${JIRA_BASE_URL}/rest/api/3/issueLink`, {
+        method: 'POST',
+        headers: getJiraHeaders(),
+        body: JSON.stringify({
+          type: { id: tipo.id },
+          // inward = a issue nova; outward = o ticket de origem. Com "é causada por", a leitura
+          // no Jira fica "DSMM-x é causada por SUP-y", que é o sentido real.
+          inwardIssue: { key: issueKey },
+          outwardIssue: { key: alvo },
+        }),
+      });
+      if (res.ok) {
+        criados.push(alvo);
+        console.log(`[Vinculo] ${issueKey} ${tipo.rotulo} ${alvo}`);
+      } else {
+        const detalhe = (await res.text().catch(() => '')).slice(0, 160);
+        falhas.push({ key: alvo, motivo: `Jira recusou (HTTP ${res.status})` });
+        console.error(`[Vinculo] Falha ${issueKey} -> ${alvo}: ${res.status} ${detalhe}`);
+      }
+    } catch (e) {
+      falhas.push({ key: alvo, motivo: e instanceof Error ? e.message : 'erro de rede' });
+    }
+  }
+
+  return { criados, falhas };
+}
+
 const REFINAMENTO_TRANSITION_ID = '13';
 
 // ─── Claude ───
@@ -535,7 +605,7 @@ export async function POST(request: NextRequest) {
   let demandaSlotReserved = false;
   try {
     const body = await request.json();
-    const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado, prioridade, urgencia } = body;
+    const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado, prioridade, urgencia, vinculos = [] } = body;
 
     if (!JIRA_EMAIL || !JIRA_TOKEN) {
       return NextResponse.json({ error: 'Servidor mal configurado — variáveis de ambiente faltando', success: false }, { status: 500 });
@@ -628,6 +698,12 @@ export async function POST(request: NextRequest) {
       incrementar('dev:abertos', 1),
     ]);
 
+    // Fora do allSettled acima porque o resultado vai na resposta: a tela precisa dizer se
+    // algum vínculo não entrou.
+    const vinculoResultado = Array.isArray(vinculos) && vinculos.length > 0
+      ? await criarVinculos(issueKey, vinculos)
+      : { criados: [], falhas: [] };
+
     return NextResponse.json({
       success: true,
       issue_key: issueKey,
@@ -642,6 +718,8 @@ export async function POST(request: NextRequest) {
       // requisição — o navegador não conhece o próprio IP público.
       criado_por: criadorEmail || 'jirabot (token de serviço)',
       ip: getClientIP(request),
+      vinculos_criados: vinculoResultado.criados,
+      vinculos_falhos: vinculoResultado.falhas,
     });
   } catch (error: any) {
     console.error('Erro ao criar demanda:', error);

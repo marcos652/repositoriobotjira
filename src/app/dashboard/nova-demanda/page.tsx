@@ -14,6 +14,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import ImageExtension from '@tiptap/extension-image';
 import { CLIENTS } from '@/lib/clients';
+import VincularIssue, { type IssueVinculada } from '@/components/ui/VincularIssue';
 import { buildDescription, getSectionConfig, type IssueLike, type PanelType } from '@/lib/issuePanels';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
@@ -198,6 +199,7 @@ export default function NovaDemandaPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [activeView, setActiveView] = useState<'editor' | 'history'>('editor');
   const [showMeta, setShowMeta] = useState(true);
+  const [vinculos, setVinculos] = useState<IssueVinculada[]>([]);
   const [focusEditor, setFocusEditor] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -583,6 +585,11 @@ export default function NovaDemandaPage() {
     }
     if (prioridade) body.prioridade = prioridade;
     if (urgencia) body.urgencia = urgencia;
+    // Só chave e tipo: o resumo que a tela guarda serve para mostrar a pill, e mandá-lo
+    // engordaria o payload sem uso nenhum do outro lado.
+    if (vinculos.length > 0) {
+      body.vinculos = vinculos.map((v) => ({ key: v.key, tipo: v.tipoVinculo }));
+    }
 
     // A Vercel corta requisição acima de 4,5 MB e devolve 413
     // FUNCTION_PAYLOAD_TOO_LARGE — um erro de plataforma, sem pista do motivo. Se
@@ -1083,6 +1090,12 @@ export default function NovaDemandaPage() {
                     </div>
                     <div />
                   </div>
+                  {/* Vínculo com issue existente. Fica aqui, junto dos outros detalhes, porque
+                      é opcional: a maioria das demandas não vem de um ticket. */}
+                  <div style={{ marginTop: '12px' }}>
+                    <VincularIssue vinculos={vinculos} onChange={setVinculos} />
+                  </div>
+
                   {urlsImagens.length > 0 && (
                     <div className="nd-img-pills">
                       {urlsImagens.map((u, i) => (
