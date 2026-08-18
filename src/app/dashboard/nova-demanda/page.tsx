@@ -14,7 +14,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import ImageExtension from '@tiptap/extension-image';
 import { CLIENTS } from '@/lib/clients';
-import VincularIssue, { type IssueVinculada } from '@/components/ui/VincularIssue';
+import VincularIssue, { VincularPai, type IssueVinculada, type DemandaPai } from '@/components/ui/VincularIssue';
 import { buildDescription, getSectionConfig, type IssueLike, type PanelType } from '@/lib/issuePanels';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
@@ -225,6 +225,7 @@ export default function NovaDemandaPage() {
   // Vínculo dispensado explicitamente ("Não necessário"). É uma decisão registrada, não a
   // ausência de decisão: por isso começa false e o envio exige uma das duas coisas.
   const [semVinculo, setSemVinculo] = useState(false);
+  const [demandaPai, setDemandaPai] = useState<DemandaPai | null>(null);
   const [focusEditor, setFocusEditor] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -623,6 +624,7 @@ export default function NovaDemandaPage() {
     if (vinculos.length > 0) {
       body.vinculos = vinculos.map((v) => ({ key: v.key, tipo: v.tipoVinculo }));
     }
+    if (demandaPai) body.paiKey = demandaPai.key;
 
     // A Vercel corta requisição acima de 4,5 MB e devolve 413
     // FUNCTION_PAYLOAD_TOO_LARGE — um erro de plataforma, sem pista do motivo. Se
@@ -720,6 +722,7 @@ export default function NovaDemandaPage() {
         setHistory(newHistory);
         saveHistory(newHistory);
         setTexto(''); setNomeCliente(''); setUrlsImagens([]); setReferencia('CONSOLE'); setPrioridade(''); setUrgencia(''); setShowMeta(false);
+        setVinculos([]); setSemVinculo(false); setDemandaPai(null);
         clearDraft();
         setCurrentBodyParams(null);
       } else {
@@ -1152,6 +1155,10 @@ export default function NovaDemandaPage() {
                       dispensado={semVinculo}
                       onDispensadoChange={setSemVinculo}
                     />
+                  </div>
+
+                  <div style={{ marginTop: '12px' }}>
+                    <VincularPai pai={demandaPai} onChange={setDemandaPai} />
                   </div>
 
                   {urlsImagens.length > 0 && (

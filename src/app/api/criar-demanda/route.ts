@@ -142,6 +142,18 @@ async function resolveJiraAccountId(email: string): Promise<string | null> {
   }
 }
 
+// ─── Hierarquia: a demanda criada como FILHA de outra ───
+//
+// No DSMM a única hierarquia que existe é Subtarefa (nível -1) sob um item de nível 0. Medido
+// contra o projeto: 35 filhas, TODAS subtarefas, e nenhum tipo Épico (nível 1) disponível na
+// tela de criação. Então, para a demanda nascer com pai, ela precisa ser Subtarefa — o tipo que
+// a IA escolheu (Bug, Tarefa, História) é sobrescrito. É uma troca real e a tela avisa.
+// Por ID, não por nome: nesta instância a resolução de nomes já falhou duas vezes (status
+// "Resolvido" e issuetype "Subtarefa" em JQL devolvem zero). O id 10010 saiu do createmeta do
+// DSMM. O nome fica só para a tela mostrar.
+const TIPO_SUBTAREFA_ID = '10010';
+const TIPO_SUBTAREFA_NOME = 'Subtarefa';
+
 // ─── Vínculo com outra issue (ex: a demanda nasceu de um ticket do suporte) ───
 //
 // Os ids saem de /rest/api/3/issueLinkType da instância. Só estes três são aceitos: uma lista
@@ -360,7 +372,7 @@ const VALID_PRIORITIES = new Set(['Altíssima', 'Alta', 'Médio', 'Baixa', 'Baix
 
 async function createJiraIssue(
   issueData: any,
-  meta: { prioridade?: string; urgencia?: string; reporterAccountId?: string | null } = {}
+  meta: { prioridade?: string; urgencia?: string; reporterAccountId?: string | null; paiKey?: string | null } = {}
 ) {
   const jiraHeaders = getJiraHeaders();
 
@@ -375,6 +387,14 @@ async function createJiraIssue(
     customfield_10004: { id: DEFAULT_IMPACTO_ID }, // Impacto
     customfield_10333: { id: DEFAULT_SAUDE_ID }, // Saude
   };
+
+  // Com pai, o tipo VIRA Subtarefa: no DSMM só esse nível aceita um item comum como pai.
+  // Sobrescrever o que a IA decidiu é deliberado — sem isso o Jira recusaria a criação inteira,
+  // e uma demanda recusada é pior que uma demanda com o tipo trocado.
+  if (meta.paiKey) {
+    fields.parent = { key: meta.paiKey };
+    fields.issuetype = { id: TIPO_SUBTAREFA_ID };
+  }
 
   // Relator = quem criou a demanda no JiraOps, e não a conta de serviço. O campo não
   // aparece no createmeta do projeto (está fora da tela de criação), mas a API aceita
@@ -605,11 +625,37 @@ export async function POST(request: NextRequest) {
   let demandaSlotReserved = false;
   try {
     const body = await request.json();
-    const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado, prioridade, urgencia, vinculos = [] } = body;
+    const { texto, nome_cliente, referencia = 'CONSOLE', urls_imagens = [], arquivos = [], previewOnly, issueDataPreGerado, prioridade, urgencia, vinculos = [], paiKey } = body;
 
     if (!JIRA_EMAIL || !JIRA_TOKEN) {
       return NextResponse.json({ error: 'Servidor mal configurado — variáveis de ambiente faltando', success: false }, { status: 500 });
     }
+
+    // O pai é conferido AQUI, antes da reserva de vaga, antes da IA e antes do retorno do
+    // preview. Já estava mais abaixo e não valia para o preview: o erro só aparecia depois de a
+    // pessoa escrever a demanda inteira e confirmar — exatamente o que essa checagem evita.
+    let paiValidado: string | null = null;
+    if (paiKey) {
+      const chave = String(paiKey).trim().toUpperCase();
+      if (!CHAVE_ISSUE.test(chave)) {
+        return NextResponse.json({ error: `Chave de pai inválida: ${paiKey}`, success: false }, { status: 400 });
+      }
+      const resPai = await fetch(`${JIRA_BASE_URL}/rest/api/3/issue/${chave}?fields=issuetype,project`, {
+        headers: getJiraHeaders(),
+      });
+      if (!resPai.ok) {
+        return NextResponse.json({ error: `A demanda pai ${chave} não foi encontrada no Jira.`, success: false }, { status: 400 });
+      }
+      const pai = await resPai.json();
+      if (pai?.fields?.project?.key !== 'DSMM') {
+        return NextResponse.json({ error: `${chave} é do projeto ${pai?.fields?.project?.key}. O pai precisa ser uma demanda do DSMM.`, success: false }, { status: 400 });
+      }
+      if (pai?.fields?.issuetype?.subtask) {
+        return NextResponse.json({ error: `${chave} é uma subtarefa e não pode ser pai de outra.`, success: false }, { status: 400 });
+      }
+      paiValidado = chave;
+    }
+
 
     // Limite diário GLOBAL de criação (painel + bot somados, não por usuário) —
     // reserva a vaga atomicamente antes de gastar IA gerando a demanda; preview
@@ -667,7 +713,7 @@ export async function POST(request: NextRequest) {
     const reporterAccountId = criadorEmail ? await resolveJiraAccountId(criadorEmail) : null;
     if (reporterAccountId) console.log(`[Relator] ${criadorEmail} -> ${reporterAccountId}`);
 
-    const { issueKey, issueUrl } = await createJiraIssue(issueData, { prioridade, urgencia, reporterAccountId });
+    const { issueKey, issueUrl } = await createJiraIssue(issueData, { prioridade, urgencia, reporterAccountId, paiKey: paiValidado });
 
     // Step 3: Upload Attachments (se houver)
     // Se "arquivos" estiver presente (novo formato), use-os. Senão, mapeie as urls_imagens (legacy)
@@ -720,6 +766,9 @@ export async function POST(request: NextRequest) {
       ip: getClientIP(request),
       vinculos_criados: vinculoResultado.criados,
       vinculos_falhos: vinculoResultado.falhas,
+      pai: paiValidado,
+      // A tela precisa poder explicar por que o tipo saiu diferente do que a IA sugeriu.
+      tipo_forcado: paiValidado ? TIPO_SUBTAREFA_NOME : null,
     });
   } catch (error: any) {
     console.error('Erro ao criar demanda:', error);

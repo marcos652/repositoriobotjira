@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link2, Loader2, Search, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { GitBranch, Link2, Loader2, Search, X } from 'lucide-react';
 
 // Campo para vincular a demanda nova a uma issue que já existe — o caso de uso é "esta demanda
 // nasceu de um ticket do suporte": digita SUP-211, ele sugere, você escolhe.
@@ -35,6 +35,145 @@ const TIPOS = [
  */
 export const SEM_VINCULO = 'naoNecessario';
 
+/**
+ * Caixa de busca de issue com sugestões. Compartilhada pelos dois usos da tela — vincular um
+ * ticket de origem e escolher a demanda pai — porque a mecânica é idêntica: digita, espera,
+ * escolhe. O que muda é o `alvo`, que diz ao servidor quais issues podem aparecer.
+ */
+export function BuscaIssue({
+  alvo,
+  placeholder,
+  desabilitado,
+  onEscolher,
+}: {
+  alvo?: 'pai';
+  placeholder: string;
+  desabilitado?: boolean;
+  onEscolher: (s: Sugestao) => void;
+}) {
+  const [termo, setTermo] = useState('');
+  const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [aberto, setAberto] = useState(false);
+  const [chaveInexistente, setChaveInexistente] = useState(false);
+  const [motivoRecusa, setMotivoRecusa] = useState<string | null>(null);
+  const caixaRef = useRef<HTMLDivElement>(null);
+
+  const termoLimpo = termo.trim();
+  const visiveis = termoLimpo.length < 2 ? [] : sugestoes;
+
+  useEffect(() => {
+    const q = termoLimpo;
+    if (q.length < 2) return;
+
+    let vivo = true;
+    const t = setTimeout(() => {
+      setBuscando(true);
+      const url = `/api/jira/buscar-issue?q=${encodeURIComponent(q)}${alvo ? `&alvo=${alvo}` : ''}`;
+      void fetch(url)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!vivo || !j?.success) return;
+          setSugestoes(j.sugestoes || []);
+          setChaveInexistente(!!j.chaveInexistente);
+          setMotivoRecusa(j.motivoRecusa || null);
+          setAberto(true);
+        })
+        .catch(() => { /* a busca é auxiliar: falhar não pode travar o formulário */ })
+        .finally(() => { if (vivo) setBuscando(false); });
+    }, 350);
+
+    return () => { vivo = false; clearTimeout(t); };
+  }, [termoLimpo, alvo]);
+
+  useEffect(() => {
+    const fora = (e: MouseEvent) => {
+      if (!caixaRef.current?.contains(e.target as Node)) setAberto(false);
+    };
+    document.addEventListener('mousedown', fora);
+    return () => document.removeEventListener('mousedown', fora);
+  }, []);
+
+  const escolher = (s: Sugestao) => {
+    onEscolher(s);
+    setTermo('');
+    setSugestoes([]);
+    setAberto(false);
+  };
+
+  return (
+    <div className="vi-busca" ref={caixaRef}>
+      <div className={`vi-campo ${desabilitado ? 'vi-campo-off' : ''}`}>
+        <Search size={13} aria-hidden="true" />
+        <input
+          disabled={desabilitado}
+          value={desabilitado ? '' : termo}
+          onChange={(e) => setTermo(e.target.value)}
+          onFocus={() => { if (visiveis.length > 0) setAberto(true); }}
+          onKeyDown={(e) => {
+            // Enter escolhe a primeira sugestão. Sem interceptar, enviaria o formulário e
+            // criaria a demanda no meio da busca.
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (visiveis[0]) escolher(visiveis[0]);
+            }
+            if (e.key === 'Escape') setAberto(false);
+          }}
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        {buscando && <Loader2 size={13} className="vi-spin" aria-hidden="true" />}
+      </div>
+
+      {!desabilitado && aberto && (visiveis.length > 0 || chaveInexistente || motivoRecusa) && (
+        <div className="vi-lista" role="listbox">
+          {/* Motivo da recusa vem antes: dizer "essa é subtarefa e não pode ser pai" é mais útil
+              que uma lista vazia. */}
+          {motivoRecusa && <p className="vi-vazio">{motivoRecusa}</p>}
+          {chaveInexistente && !motivoRecusa && <p className="vi-vazio">Nenhuma issue com essa chave. Confira o número.</p>}
+          {visiveis.map((s) => (
+            <button key={s.key} type="button" className="vi-item" onClick={() => escolher(s)} role="option" aria-selected={false}>
+              <span className="vi-item-key">{s.key}</span>
+              <span className="vi-item-sum">{s.summary || '(sem título)'}</span>
+              {(s.tipo || s.status) && <span className="vi-item-status">{s.tipo || s.status}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <style jsx>{`
+        .vi-busca { position: relative; flex: 1; min-width: 0; }
+        .vi-campo {
+          min-height: 38px; display: flex; align-items: center; gap: 7px; padding: 0 10px;
+          border: 1px solid var(--border-primary); border-radius: 8px;
+          background: var(--bg-primary); color: var(--text-primary); font-size: 12px;
+        }
+        .vi-campo input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 12px; outline: none; }
+        .vi-campo input:disabled { cursor: not-allowed; }
+        .vi-campo-off { opacity: .5; }
+        .vi-spin { animation: viSpin 1s linear infinite; }
+        @keyframes viSpin { to { transform: rotate(360deg); } }
+        .vi-lista {
+          position: absolute; top: 100%; left: 0; right: 0; z-index: 40; margin-top: 4px;
+          max-height: 260px; overflow-y: auto; border: 1px solid var(--border-primary);
+          border-radius: 10px; background: var(--bg-card-solid); box-shadow: 0 12px 28px rgba(0,0,0,.28);
+        }
+        .vi-vazio { margin: 0; padding: 12px 14px; font-size: 11px; color: var(--accent-amber); }
+        .vi-item {
+          width: 100%; display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 9px;
+          align-items: center; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--border-secondary);
+          background: transparent; text-align: left; cursor: pointer; font: inherit;
+        }
+        .vi-item:last-child { border-bottom: 0; }
+        .vi-item:hover { background: var(--bg-secondary); }
+        .vi-item-key { font-size: 11px; font-weight: 800; color: var(--accent-blue); }
+        .vi-item-sum { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vi-item-status { font-size: 9px; font-weight: 700; color: var(--text-tertiary); white-space: nowrap; }
+      `}</style>
+    </div>
+  );
+}
+
 export default function VincularIssue({
   vinculos,
   onChange,
@@ -47,11 +186,6 @@ export default function VincularIssue({
   dispensado: boolean;
   onDispensadoChange: (v: boolean) => void;
 }) {
-  const [termo, setTermo] = useState('');
-  const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
-  const [buscando, setBuscando] = useState(false);
-  const [aberto, setAberto] = useState(false);
-  const [chaveInexistente, setChaveInexistente] = useState(false);
   const [tipoVinculo, setTipoVinculo] = useState('relates');
 
   // "Não necessário" LIMPA os vínculos: manter uma pill de SUP-123 embaixo de "não há ticket de
@@ -61,69 +195,22 @@ export default function VincularIssue({
     if (valor === SEM_VINCULO) {
       onDispensadoChange(true);
       if (vinculos.length > 0) onChange([]);
-      setTermo('');
-      setAberto(false);
       return;
     }
     onDispensadoChange(false);
     setTipoVinculo(valor);
   };
-  const caixaRef = useRef<HTMLDivElement>(null);
 
-  // Espera 350ms depois da última tecla. Sem isso cada tecla dispara uma busca no Jira, que
-  // leva ~700ms: digitar "SUP-211" abriria sete chamadas e as respostas chegariam fora de
-  // ordem, fazendo a lista piscar resultados de termos antigos.
-  const termoLimpo = termo.trim();
-  // Curto demais: some da lista SEM mexer em estado. Zerar as sugestões dentro do efeito
-  // dispararia renderização em cascata (a regra set-state-in-effect do projeto), e o resultado
-  // é o mesmo — derivar na renderização é mais simples e mais barato.
-  const sugestoesVisiveis = termoLimpo.length < 2 ? [] : sugestoes;
-
-  useEffect(() => {
-    const q = termoLimpo;
-    if (q.length < 2) return;
-
-    let vivo = true;
-    const t = setTimeout(() => {
-      // setBuscando entra aqui, e não no corpo do efeito: o giro só deve aparecer quando a
-      // chamada de fato começa, depois dos 350ms de espera.
-      setBuscando(true);
-      void fetch(`/api/jira/buscar-issue?q=${encodeURIComponent(q)}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          if (!vivo || !j?.success) return;
-          setSugestoes(j.sugestoes || []);
-          setChaveInexistente(!!j.chaveInexistente);
-          setAberto(true);
-        })
-        .catch(() => { /* a busca é auxiliar: falhar não pode travar o formulário */ })
-        .finally(() => { if (vivo) setBuscando(false); });
-    }, 350);
-
-    return () => { vivo = false; clearTimeout(t); };
-  }, [termoLimpo]);
-
-  useEffect(() => {
-    const fora = (e: MouseEvent) => {
-      if (!caixaRef.current?.contains(e.target as Node)) setAberto(false);
-    };
-    document.addEventListener('mousedown', fora);
-    return () => document.removeEventListener('mousedown', fora);
-  }, []);
-
-  const adicionar = useCallback((s: Sugestao) => {
+  const adicionar = (s: Sugestao) => {
     // Já vinculada: não duplica nem mostra erro — o resultado desejado (a issue está
-    // vinculada) já está valendo, então só limpa o campo.
+    // vinculada) já está valendo.
     if (!vinculos.some((v) => v.key === s.key)) {
       onChange([...vinculos, { key: s.key, summary: s.summary, tipoVinculo }]);
     }
-    setTermo('');
-    setSugestoes([]);
-    setAberto(false);
-  }, [vinculos, onChange, tipoVinculo]);
+  };
 
   return (
-    <div className="vi-root" ref={caixaRef}>
+    <div className="vi-root">
       <label className="vi-label"><Link2 size={11} /> Vincular a um ticket ou demanda</label>
 
       <div className="vi-linha">
@@ -137,52 +224,12 @@ export default function VincularIssue({
           <option value={SEM_VINCULO}>Não necessário</option>
         </select>
 
-        <div className={`vi-campo ${dispensado ? 'vi-campo-off' : ''}`}>
-          <Search size={13} aria-hidden="true" />
-          <input
-            disabled={dispensado}
-            value={dispensado ? '' : termo}
-            onChange={(e) => setTermo(e.target.value)}
-            onFocus={() => { if (sugestoesVisiveis.length > 0) setAberto(true); }}
-            onKeyDown={(e) => {
-              // Enter escolhe a primeira sugestão. Sem interceptar, o Enter enviaria o
-              // formulário e criaria a demanda no meio da busca.
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                if (sugestoesVisiveis[0]) adicionar(sugestoesVisiveis[0]);
-              }
-              if (e.key === 'Escape') setAberto(false);
-            }}
-            placeholder={dispensado ? 'Sem ticket de origem' : 'SUP-21193, ou parte do texto do ticket...'}
-            autoComplete="off"
-          />
-          {buscando && <Loader2 size={13} className="vi-spin" aria-hidden="true" />}
-        </div>
+        <BuscaIssue
+          placeholder={dispensado ? 'Sem ticket de origem' : 'SUP-21193, ou parte do texto do ticket...'}
+          desabilitado={dispensado}
+          onEscolher={adicionar}
+        />
       </div>
-
-      {!dispensado && aberto && (sugestoesVisiveis.length > 0 || chaveInexistente) && (
-        <div className="vi-lista" role="listbox">
-          {chaveInexistente && (
-            <p className="vi-vazio">Nenhuma issue com essa chave. Confira o número.</p>
-          )}
-          {sugestoesVisiveis.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              className="vi-item"
-              onClick={() => adicionar(s)}
-              role="option"
-              aria-selected={false}
-            >
-              <span className="vi-item-key">{s.key}</span>
-              <span className="vi-item-sum">{s.summary || '(sem título)'}</span>
-              {/* O status só existe na busca por chave exata: o autocompletar do Jira devolve
-                  apenas chave e resumo, e inventar um status seria pior que não mostrar. */}
-              {s.status && <span className="vi-item-status">{s.status}</span>}
-            </button>
-          ))}
-        </div>
-      )}
 
       {dispensado && (
         <p className="vi-dispensado">
@@ -289,6 +336,80 @@ export default function VincularIssue({
         .vi-pill-tipo { font-weight: 500; opacity: .75; }
         .vi-pill button { display: flex; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; opacity: .7; }
         .vi-pill button:hover { opacity: 1; }
+      `}</style>
+    </div>
+  );
+}
+
+// ─── Demanda pai ───────────────────────────────────────────────────────────────
+
+export interface DemandaPai {
+  key: string;
+  summary: string;
+  tipo: string | null;
+}
+
+/**
+ * Escolhe a demanda PAI da que está sendo criada.
+ *
+ * O aviso sobre virar Subtarefa não é enfeite: no DSMM a única hierarquia existente é Subtarefa
+ * (nível -1) sob um item de nível 0 — o projeto não tem tipo Épico. Então escolher um pai
+ * SOBRESCREVE o tipo que a IA sugeriu, e quem cria precisa saber disso antes de enviar, não
+ * depois de ver a demanda no board como subtarefa.
+ */
+export function VincularPai({
+  pai,
+  onChange,
+}: {
+  pai: DemandaPai | null;
+  onChange: (p: DemandaPai | null) => void;
+}) {
+  return (
+    <div className="vp-root">
+      <label className="vp-label"><GitBranch size={11} /> Demanda pai (opcional)</label>
+
+      {pai ? (
+        <div className="vp-escolhida">
+          <GitBranch size={12} aria-hidden="true" />
+          <div className="vp-info">
+            <span className="vp-key">{pai.key}{pai.tipo ? ` · ${pai.tipo}` : ''}</span>
+            <span className="vp-sum">{pai.summary || '(sem título)'}</span>
+          </div>
+          <button type="button" onClick={() => onChange(null)} aria-label="Remover demanda pai">
+            <X size={11} />
+          </button>
+        </div>
+      ) : (
+        <BuscaIssue
+          alvo="pai"
+          placeholder="DSMM-202, ou parte do título da demanda pai..."
+          onEscolher={(s) => onChange({ key: s.key, summary: s.summary, tipo: s.tipo })}
+        />
+      )}
+
+      {pai && (
+        <p className="vp-aviso">
+          Esta demanda será criada como <strong>Subtarefa</strong> de {pai.key} — é o único nível
+          do DSMM que aceita uma demanda comum como pai, então o tipo sugerido pela IA é
+          substituído.
+        </p>
+      )}
+
+      <style jsx>{`
+        .vp-root { display: flex; flex-direction: column; gap: 6px; }
+        .vp-label { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em; }
+        .vp-escolhida {
+          display: flex; align-items: center; gap: 9px; min-height: 38px; padding: 6px 10px;
+          border: 1px solid var(--accent-violet-light); border-radius: 8px;
+          background: var(--accent-violet-light); color: var(--accent-violet);
+        }
+        .vp-info { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+        .vp-key { font-size: 11px; font-weight: 800; }
+        .vp-sum { font-size: 10px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vp-escolhida button { display: flex; margin-left: auto; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; opacity: .7; }
+        .vp-escolhida button:hover { opacity: 1; }
+        .vp-aviso { margin: 0; font-size: 10px; line-height: 15px; color: var(--text-tertiary); }
+        .vp-aviso strong { color: var(--accent-violet); }
       `}</style>
     </div>
   );
