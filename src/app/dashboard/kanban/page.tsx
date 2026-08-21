@@ -1,11 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Loader2, WifiOff, RefreshCw, Trash2, Users, Calendar, ChevronDown
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import IssueDetailPanel from '@/components/ui/IssueDetailPanel';
 
 interface JiraIssue {
   key: string;
@@ -47,6 +47,8 @@ export default function KanbanPage() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd]   = useState('');
   const [showCustomPicker, setShowCustomPicker] = useState(false);
+  // Card abre a demanda aqui mesmo, num painel sobreposto, em vez de trocar de tela.
+  const [selectedIssue, setSelectedIssue] = useState<string | null>(null);
 
   const fetchKanban = useCallback(async (isRefresh = false, overrideDateRange?: typeof dateRange, overrideStart?: string, overrideEnd?: string) => {
     try {
@@ -445,7 +447,10 @@ export default function KanbanPage() {
                                 <Draggable key={issue.key} draggableId={issue.key} index={cardIndex}>
                                   {(providedCard, snapshot) => (
                                     <div ref={providedCard.innerRef} {...providedCard.draggableProps} {...providedCard.dragHandleProps} style={{ ...providedCard.draggableProps.style, opacity: snapshot.isDragging ? 0.8 : 1 }}>
-                                      <Link href={`/dashboard/consultar-demanda?key=${issue.key}`}
+                                      <div
+                                        role="button"
+                                        aria-label={`Abrir ${issue.key}`}
+                                        onClick={() => setSelectedIssue(issue.key)}
                                         style={{ padding: '16px', borderRadius: '16px', background: 'var(--bg-card-solid)', border: `1px solid ${snapshot.isDragging ? 'var(--accent-indigo)' : 'var(--border-primary)'}`, textDecoration: 'none', cursor: 'grab', display: 'block' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -470,7 +475,7 @@ export default function KanbanPage() {
                                           )}
                                           <span style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px', borderRadius: '4px', background: 'var(--accent-amber-light)', color: 'var(--accent-amber-soft)' }}>{issue.fields.priority.name}</span>
                                         </div>
-                                      </Link>
+                                      </div>
                                     </div>
                                   )}
                                 </Draggable>
@@ -495,6 +500,10 @@ export default function KanbanPage() {
           )}
         </Droppable>
       </DragDropContext>
+
+      {selectedIssue && (
+        <IssueDetailPanel issueKey={selectedIssue} onClose={() => setSelectedIssue(null)} />
+      )}
     </div>
   );
 }

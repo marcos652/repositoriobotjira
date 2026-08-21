@@ -1950,3 +1950,207 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================
+   HTML vindo do Jira (descricao e comentarios)
+   ============================================
+   Vivia num <style jsx global> da tela de Consultar Demanda, o que deixava as regras
+   disponiveis so enquanto AQUELA pagina estava montada. O painel de detalhe do Kanban usa
+   a mesma classe, entao as regras subiram para ca. */
+
+/* Jira description rich formatting */
+.jira-description { font-size: 13px; line-height: 1.8; color: var(--text-secondary); word-break: break-word; }
+.jira-description h1 { font-size: 20px; font-weight: 800; color: var(--text-primary); margin: 20px 0 10px; }
+.jira-description h2 { font-size: 17px; font-weight: 700; color: var(--text-primary); margin: 18px 0 8px; }
+.jira-description h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 16px 0 6px; }
+.jira-description h4, .jira-description h5, .jira-description h6 { font-size: 13px; font-weight: 700; color: var(--text-primary); margin: 14px 0 4px; }
+.jira-description p { margin: 8px 0; }
+.jira-description ul, .jira-description ol { margin: 8px 0; padding-left: 24px; }
+.jira-description li { margin: 4px 0; }
+.jira-description ul li { list-style: disc; }
+.jira-description ol li { list-style: decimal; }
+.jira-description a { color: var(--accent-indigo-soft); text-decoration: none; font-weight: 600; }
+.jira-description a:hover { text-decoration: underline; }
+.jira-description strong, .jira-description b { font-weight: 700; color: var(--text-primary); }
+.jira-description em, .jira-description i { font-style: italic; }
+/* Keep Jira's own panel colors (igual ao Jira) — só garante texto escuro legível no fundo claro */
+.jira-description .panel { border-radius: 6px; overflow: hidden; margin: 12px 0; border: none !important; }
+.jira-description .panelHeader { padding: 8px 12px; font-weight: 700; }
+.jira-description .panelContent { padding: 10px 12px; }
+.jira-description .panelContent > :first-child { margin-top: 0; }
+.jira-description .panelContent > :last-child { margin-bottom: 0; }
+.jira-description [style*="background-color"],
+.jira-description [style*="background-color"] p,
+.jira-description [style*="background-color"] li,
+.jira-description [style*="background-color"] strong,
+.jira-description [style*="background-color"] b,
+.jira-description .confluence-information-macro { color: var(--bg-sidebar) !important; }
+
+.jira-description code { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 2px 6px; border-radius: 4px; background-color: var(--accent-violet-light) !important; color: var(--accent-violet-soft); }
+.jira-description pre { background-color: var(--bg-primary) !important; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 14px 18px; overflow-x: auto; margin: 12px 0; }
+.jira-description pre code { background-color: transparent !important; padding: 0; color: var(--text-secondary); }
+.jira-description blockquote { margin: 12px 0; padding: 10px 16px; border-left: 3px solid var(--accent-indigo-soft); background-color: var(--accent-violet-light) !important; border-radius: 0 8px 8px 0; }
+
+.jira-description table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; border: 1px solid var(--border-secondary) !important; }
+.jira-description th { padding: 10px 14px; text-align: left; font-weight: 700; color: var(--text-primary); border: 1px solid var(--border-secondary) !important; border-bottom: 2px solid var(--border-secondary) !important; }
+.jira-description td { padding: 8px 14px; border: 1px solid var(--border-secondary) !important; color: var(--text-secondary); }
+.jira-description img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+.jira-description hr { border: none; border-top: 1px solid var(--border-secondary); margin: 16px 0; }
+
+.jira-description .user-hover { color: var(--accent-indigo-soft); font-weight: 600; }
+
+/* ============================================
+   IssueDetailPanel — quadro da demanda (modal)
+   ============================================
+   Mesmo arranjo do painel do Jira: descricao a esquerda, campos a direita. */
+
+.idp-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(2px);
+  animation: idp-fade .15s ease-out;
+}
+
+.idp-modal {
+  position: fixed; z-index: 101;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(1180px, calc(100vw - 48px));
+  height: min(860px, calc(100vh - 64px));
+  display: flex; flex-direction: column;
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border-primary);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .38);
+  overflow: hidden;
+  animation: idp-pop .18s ease-out;
+}
+
+@keyframes idp-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes idp-pop {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(.985) }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1) }
+}
+
+.idp-head {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+}
+.idp-key { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 800; color: var(--accent-indigo-soft); }
+.idp-head-acoes { display: flex; align-items: center; gap: 6px; }
+.idp-icon-btn {
+  width: 30px; height: 30px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent;
+  color: var(--text-tertiary); cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.idp-icon-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+
+.idp-estado {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+}
+.idp-estado p { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+
+/* Corpo em duas colunas; cada uma rola por conta propria. */
+.idp-corpo { flex: 1; display: flex; min-height: 0; }
+.idp-esq {
+  flex: 1; min-width: 0; overflow-y: auto;
+  padding: 22px 24px 32px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+.idp-dir {
+  flex-shrink: 0; width: 340px; overflow-y: auto;
+  padding: 22px 20px 32px;
+  border-left: 1px solid var(--border-secondary);
+  background: var(--bg-secondary);
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.idp-titulo { margin: 0; font-size: 21px; font-weight: 800; line-height: 1.3; color: var(--text-primary); }
+
+.idp-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.idp-badge { padding: 4px 10px; border-radius: 7px; font-size: 11px; font-weight: 700; }
+.idp-badge-tipo { background: var(--accent-violet-light); color: var(--accent-violet-soft); text-transform: uppercase; }
+.idp-badge-prio { background: var(--accent-amber-light); color: var(--accent-amber-soft); }
+
+.idp-secao {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 0 10px; font-size: 11px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--text-tertiary);
+}
+.idp-desc {
+  padding: 16px 18px; border-radius: 12px;
+  background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+}
+
+.idp-lista { display: flex; flex-direction: column; gap: 8px; }
+
+.idp-subtarefa {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+}
+.idp-sub-key { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--accent-indigo-soft); flex-shrink: 0; }
+.idp-sub-sum { flex: 1; min-width: 0; font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idp-sub-status { font-size: 10px; font-weight: 700; color: var(--text-tertiary); flex-shrink: 0; }
+
+.idp-comentario {
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--bg-secondary); border: 1px solid var(--border-secondary);
+}
+.idp-com-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.idp-com-autor { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.idp-com-data { font-size: 10px; color: var(--text-tertiary); }
+.idp-com-body { margin: 0; font-size: 13px; line-height: 1.7; color: var(--text-secondary); white-space: pre-wrap; }
+
+.idp-vazio-bloco { margin: 0; padding: 18px 0; text-align: center; font-size: 12px; font-style: italic; color: var(--text-tertiary); }
+
+/* ── barra lateral ── */
+.idp-bloco {
+  background: var(--bg-card-solid);
+  border: 1px solid var(--border-secondary);
+  border-radius: 14px;
+  padding: 6px 14px 12px;
+}
+.idp-bloco-titulo {
+  margin: 10px 0 8px; font-size: 12px; font-weight: 800; color: var(--text-primary);
+}
+.idp-campo {
+  display: grid; grid-template-columns: 108px 1fr;
+  gap: 10px; align-items: start;
+  padding: 7px 0;
+  border-top: 1px solid var(--border-secondary);
+}
+.idp-campo:first-of-type { border-top: none; }
+.idp-campo-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); line-height: 1.5; }
+.idp-campo-valor { font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.5; min-width: 0; word-break: break-word; }
+.idp-vazio { color: var(--text-tertiary); font-weight: 500; }
+
+.idp-pessoa { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.idp-pessoa-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.idp-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.idp-avatar-fallback {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-indigo); color: var(--text-inverse);
+  font-size: 9px; font-weight: 800;
+}
+
+.idp-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.idp-tag {
+  padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700;
+  background: var(--accent-violet-light); color: var(--accent-violet-soft);
+  text-transform: uppercase;
+}
+
+.idp-rodape { margin: 0; padding: 0 4px; font-size: 10px; line-height: 1.7; color: var(--text-tertiary); }
+
+@media (max-width: 900px) {
+  .idp-modal { width: calc(100vw - 20px); height: calc(100vh - 24px); }
+  .idp-corpo { flex-direction: column; }
+  .idp-dir { width: auto; border-left: none; border-top: 1px solid var(--border-secondary); }
+  .idp-campo { grid-template-columns: 96px 1fr; }
+}

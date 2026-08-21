@@ -48,6 +48,11 @@ export async function PUT(
     }
     if (body.priority) jiraPayload.fields.priority = { name: body.priority };
     if (body.assignee) jiraPayload.fields.assignee = { accountId: body.assignee };
+    // Developer (customfield_10602): userpicker, aceita apenas `set`. String vazia limpa o
+    // campo, por isso o teste e `!== undefined` — `if (body.developer)` nunca deixaria limpar.
+    if (body.developer !== undefined) {
+      jiraPayload.fields.customfield_10602 = body.developer ? { accountId: body.developer } : null;
+    }
     if (body.labels) {
       jiraPayload.fields.labels = body.labels.map((label: string) => 
         label.replace(/\s+/g, '-')

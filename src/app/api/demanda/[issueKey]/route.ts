@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchDevSummary, fetchDevDetail, enrichWithConflictStatus, type DevCounts } from '@/lib/jira-dev-status';
+import { adfToText } from '@/lib/adf';
 
 const JIRA_EMAIL = process.env.JIRA_EMAIL;
 const JIRA_TOKEN = process.env.JIRA_TOKEN;
@@ -7,21 +8,6 @@ const JIRA_BASE_URL = 'https://movingpay.atlassian.net';
 
 function getJiraAuth() {
   return Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
-}
-
-function adfToText(node: any): string {
-  if (!node) return '';
-  if (typeof node === 'string') return node;
-  if (node.type === 'text') return node.text || '';
-  if (node.type === 'hardBreak') return '\n';
-  if (node.type === 'mention') return node.attrs?.text || '@user';
-  let text = '';
-  if (Array.isArray(node.content)) {
-    text = node.content.map((child: any) => adfToText(child)).join('');
-  }
-  if (['paragraph', 'heading', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'rule'].includes(node.type)) text += '\n';
-  if (node.type === 'listItem') text = '• ' + text;
-  return text;
 }
 
 // ─── GET: Consultar demanda com tudo ───
@@ -205,6 +191,9 @@ export async function GET(
       // "Mais campos" do painel do Jira. Vêm mesmo vazios: assim que alguém preencher no Jira,
       // a tela reflete sem precisar de outra alteração aqui.
       developer: f.customfield_10602?.displayName || null,
+      // accountId junto do nome: o seletor da tela precisa do id para gravar de volta.
+      developerId: f.customfield_10602?.accountId || null,
+      developerAvatar: f.customfield_10602?.avatarUrls?.['24x24'] || null,
       plannedEnd: f.customfield_10061 || null,
       implementationPlan: f.customfield_10062
         ? (typeof f.customfield_10062 === 'string' ? f.customfield_10062 : adfToText(f.customfield_10062).trim())

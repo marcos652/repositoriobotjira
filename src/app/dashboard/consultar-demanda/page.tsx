@@ -55,6 +55,7 @@ interface DemandaData {
   tempoGastoSegundos: number | null;
   implementationPlan: string | null;
   developer: string | null;
+  developerId: string | null;
   plannedEnd: string | null;
 }
 
@@ -129,6 +130,12 @@ export default function ConsultarDemandaPage() {
   const [jiraUsers, setJiraUsers] = useState<{ accountId: string; displayName: string }[]>([]);
   const [userSearch, setUserSearch] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  // Developer tem busca e dropdown proprios: compartilhar com o Responsavel faria os dois
+  // abrirem juntos e filtrarem com o mesmo texto.
+  const [editDeveloper, setEditDeveloper] = useState('');
+  const [editDeveloperId, setEditDeveloperId] = useState('');
+  const [devSearch, setDevSearch] = useState('');
+  const [showDevDropdown, setShowDevDropdown] = useState(false);
 
   // Fetch Jira users when editing starts
   useEffect(() => {
@@ -164,6 +171,9 @@ export default function ConsultarDemandaPage() {
           setEditPriority(data.priority || '');
           setEditAssignee(data.assignee || '');
           setEditAssigneeId(data.assigneeId || '');
+          setEditDeveloper(data.developer || '');
+          setEditDeveloperId(data.developerId || '');
+          setDevSearch('');
           setEditReporter(data.reporter || '');
           setEditCliente(data.nome_cliente || '');
           setEditProduto(data.produto?.map((p: { id: string }) => p.id) || []);
@@ -215,6 +225,7 @@ export default function ConsultarDemandaPage() {
     if (editSummary !== (demanda.summary || '')) body.summary = editSummary;
     if (editPriority !== (demanda.priority || '')) body.priority = editPriority;
     if (editAssigneeId !== (demanda.assigneeId || '')) body.assignee = editAssigneeId;
+    if (editDeveloperId !== (demanda.developerId || '')) body.developer = editDeveloperId;
     if (editCliente !== (demanda.nome_cliente || '')) body.cliente = editCliente;
     if (editLabels !== (demanda.labels?.join(', ') || '')) body.labels = editLabels.split(',').map(s=>s.trim()).filter(Boolean);
     if (JSON.stringify(editProduto) !== JSON.stringify(demanda.produto?.map(p=>p.id)||[])) body.produto = editProduto;
@@ -723,13 +734,48 @@ export default function ConsultarDemandaPage() {
                     </div>
                   )}
 
-                  {/* Estes três só aparecem quando preenchidos: o Jira os esconde atrás de
+                  {/* Estes campos só aparecem quando preenchidos: o Jira os esconde atrás de
                       "Mais campos", e um card "—" para cada um empurraria os campos que
-                      importam para fora da tela. */}
-                  {demanda.developer && (
-                    <div style={S.card}>
+                      importam para fora da tela. Developer é a exceção: em modo de edição ele
+                      aparece mesmo vazio, senão não haveria como definir quem é o responsável
+                      numa demanda que ainda não tem um. */}
+                  {(editing || demanda.developer) && (
+                    <div style={{ ...S.card, position: 'relative' }}>
                       <label style={S.label}><User size={11} /> Developer</label>
-                      <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.developer}</p>
+                      {editing ? (
+                        <>
+                          <input
+                            value={devSearch || editDeveloper}
+                            onChange={e => { setDevSearch(e.target.value); setShowDevDropdown(true); }}
+                            onFocus={() => setShowDevDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowDevDropdown(false), 200)}
+                            placeholder="Buscar developer..."
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', color: 'var(--text-primary)', outline: 'none' }}
+                          />
+                          {showDevDropdown && jiraUsers.length > 0 && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: 'var(--bg-card-solid)', border: '1px solid var(--border-primary)', borderRadius: '16px', maxHeight: '200px', overflow: 'auto', marginTop: '4px' }}>
+                              {editDeveloperId && (
+                                <button onMouseDown={() => { setEditDeveloper(''); setEditDeveloperId(''); setDevSearch(''); setShowDevDropdown(false); }}
+                                  style={{ display: 'block', width: '100%', padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: 'var(--accent-rose-soft, #FB7185)', background: 'none', border: 'none', borderBottom: '1px solid var(--border-primary)', cursor: 'pointer', textAlign: 'left' }}>
+                                  Remover developer
+                                </button>
+                              )}
+                              {jiraUsers
+                                .filter(u => !devSearch || u.displayName.toLowerCase().includes(devSearch.toLowerCase()))
+                                .map(u => (
+                                  <button key={u.accountId} onMouseDown={() => { setEditDeveloper(u.displayName); setEditDeveloperId(u.accountId); setDevSearch(''); setShowDevDropdown(false); }}
+                                    style={{ display: 'block', width: '100%', padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                                    {u.displayName}
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{demanda.developer}</p>
+                      )}
                     </div>
                   )}
 
@@ -1145,46 +1191,6 @@ export default function ConsultarDemandaPage() {
         @media (max-width: 900px) { .cd-info-grid { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 640px) { .cd-search-row { flex-direction: column; } .cd-info-grid { grid-template-columns: 1fr; gap: 16px; } }
 
-        /* Jira description rich formatting */
-        .jira-description { font-size: 13px; line-height: 1.8; color: var(--text-secondary); word-break: break-word; }
-        .jira-description h1 { font-size: 20px; font-weight: 800; color: var(--text-primary); margin: 20px 0 10px; }
-        .jira-description h2 { font-size: 17px; font-weight: 700; color: var(--text-primary); margin: 18px 0 8px; }
-        .jira-description h3 { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 16px 0 6px; }
-        .jira-description h4, .jira-description h5, .jira-description h6 { font-size: 13px; font-weight: 700; color: var(--text-primary); margin: 14px 0 4px; }
-        .jira-description p { margin: 8px 0; }
-        .jira-description ul, .jira-description ol { margin: 8px 0; padding-left: 24px; }
-        .jira-description li { margin: 4px 0; }
-        .jira-description ul li { list-style: disc; }
-        .jira-description ol li { list-style: decimal; }
-        .jira-description a { color: var(--accent-indigo-soft); text-decoration: none; font-weight: 600; }
-        .jira-description a:hover { text-decoration: underline; }
-        .jira-description strong, .jira-description b { font-weight: 700; color: var(--text-primary); }
-        .jira-description em, .jira-description i { font-style: italic; }
-/* Keep Jira's own panel colors (igual ao Jira) — só garante texto escuro legível no fundo claro */
-        .jira-description .panel { border-radius: 6px; overflow: hidden; margin: 12px 0; border: none !important; }
-        .jira-description .panelHeader { padding: 8px 12px; font-weight: 700; }
-        .jira-description .panelContent { padding: 10px 12px; }
-        .jira-description .panelContent > :first-child { margin-top: 0; }
-        .jira-description .panelContent > :last-child { margin-bottom: 0; }
-        .jira-description [style*="background-color"],
-        .jira-description [style*="background-color"] p,
-        .jira-description [style*="background-color"] li,
-        .jira-description [style*="background-color"] strong,
-        .jira-description [style*="background-color"] b,
-        .jira-description .confluence-information-macro { color: var(--bg-sidebar) !important; }
-
-        .jira-description code { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 2px 6px; border-radius: 4px; background-color: var(--accent-violet-light) !important; color: var(--accent-violet-soft); }
-        .jira-description pre { background-color: var(--bg-primary) !important; border: 1px solid var(--border-secondary); border-radius: 8px; padding: 14px 18px; overflow-x: auto; margin: 12px 0; }
-        .jira-description pre code { background-color: transparent !important; padding: 0; color: var(--text-secondary); }
-        .jira-description blockquote { margin: 12px 0; padding: 10px 16px; border-left: 3px solid var(--accent-indigo-soft); background-color: var(--accent-violet-light) !important; border-radius: 0 8px 8px 0; }
-        
-        .jira-description table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; border: 1px solid var(--border-secondary) !important; }
-        .jira-description th { padding: 10px 14px; text-align: left; font-weight: 700; color: var(--text-primary); border: 1px solid var(--border-secondary) !important; border-bottom: 2px solid var(--border-secondary) !important; }
-        .jira-description td { padding: 8px 14px; border: 1px solid var(--border-secondary) !important; color: var(--text-secondary); }
-        .jira-description img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
-        .jira-description hr { border: none; border-top: 1px solid var(--border-secondary); margin: 16px 0; }
-        
-        .jira-description .user-hover { color: var(--accent-indigo-soft); font-weight: 600; }
       `}</style>
     </div>
   );
