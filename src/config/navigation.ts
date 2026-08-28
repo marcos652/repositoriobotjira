@@ -8,6 +8,7 @@ import {
   CalendarDays,
   ClipboardList,
   Code2,
+  CreditCard,
   FileBarChart,
   GitBranch,
   Globe,
@@ -50,6 +51,7 @@ export const navigationSections: NavigationSection[] = [
       { label: 'Desenvolvimento', href: '/dashboard/dev', icon: Code2, description: 'Engenharia e sprint' },
       { label: 'Slack', href: '/dashboard/slack', icon: MessageSquare, description: 'Mensagens e canais' },
       { label: 'Webmail', href: '/dashboard/webmail', icon: Mail, description: 'E-mail corporativo' },
+      { label: 'Faker Transações', href: '/dashboard/faker-transacoes', icon: CreditCard, description: 'Gerador de transações fake para QA', keywords: ['faker', 'teste', 'transacao', 'gateway', 'qa', 'movingpay'] },
     ],
   },
   {

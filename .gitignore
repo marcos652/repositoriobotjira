@@ -42,3 +42,7 @@ next-env.d.ts
 
 # runtime data store (contains real secrets/PII, not source)
 /data/*.json
+
+# Claude Code local settings — pode conter tokens em regras de permissão (ex: comandos
+# com credenciais coladas). settings.json (compartilhado) continua versionado normalmente.
+.claude/settings.local.json
